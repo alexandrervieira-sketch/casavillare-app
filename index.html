@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#1E1D1D"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Villare"/>
+<title>Casa Villare</title>
+<link rel="manifest" href="manifest.json"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;600;700&family=Sora:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{--p:#A78B6D;--dark:#1E1D1D;--mid:#736B5E;--gold:#BFA87D;--cream:#F2E1C3;--gray:#595957;--gl:#A5A198;--bg:#F2F2F2;--ok:#4CAF50;--fail:#E53935;--warn:#F59E0B;}
+html,body{height:100%;overflow:hidden;font-family:'Barlow',sans-serif;background:var(--bg);color:var(--dark);}
+#app{height:100vh;overflow:hidden;position:relative;max-width:430px;margin:0 auto;}
+.scr{display:none;flex-direction:column;height:100vh;position:absolute;width:100%;top:0;left:0;background:var(--bg);}
+.scr.active{display:flex;}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.hdr{background:var(--dark);padding:14px 16px;padding-top:calc(env(safe-area-inset-top,0px)+14px);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.hdr-title{font-family:'Sora',sans-serif;font-size:14px;font-weight:500;color:var(--cream);}
+.hdr-sub{font-size:11px;color:var(--gl);margin-top:1px;}
+.back{background:none;border:none;color:var(--gold);font-size:24px;cursor:pointer;padding:0 6px 0 0;}
+.body{padding:16px;}
+.btn{width:100%;padding:13px;border-radius:12px;font-family:'Sora',sans-serif;font-size:14px;font-weight:500;cursor:pointer;border:none;margin-bottom:8px;display:block;}
+.btn-p{background:var(--p);color:#fff;}
+.btn-s{background:transparent;color:var(--p);border:1.5px solid var(--p);}
+.card{background:#fff;border-radius:12px;border:.5px solid #E8E0D6;margin-bottom:10px;padding:14px 16px;}
+.sec{font-family:'Sora',sans-serif;font-size:10px;font-weight:600;color:var(--mid);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;}
+.badge{display:inline-flex;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;font-family:'Sora',sans-serif;}
+.b-ok{background:#E8F5E9;color:#2E7D32;}.b-fail{background:#FFEBEE;color:#C62828;}.b-pend{background:#FFF8E1;color:#E65100;}.b-wait{background:#F2E1C3;color:#736B5E;}
+.form-lbl{font-size:11px;color:var(--mid);font-weight:700;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.5px;}
+.form-inp{width:100%;padding:12px 14px;border:.5px solid #E0D8D0;border-radius:10px;font-family:'Barlow',sans-serif;font-size:14px;color:var(--dark);background:#fff;outline:none;margin-bottom:14px;-webkit-appearance:none;}
+.form-inp:focus{border-color:var(--p);}
+.xpbar{background:#252220;padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.xp-track{flex:1;height:4px;background:#3a3330;border-radius:2px;overflow:hidden;}
+.xp-fill{height:100%;background:linear-gradient(90deg,var(--p),var(--gold));border-radius:2px;transition:width .6s;}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.stat{background:#fff;border-radius:12px;padding:14px;border:.5px solid #E8E0D6;text-align:center;}
+.stat-n{font-family:'Sora',sans-serif;font-size:26px;font-weight:600;color:var(--p);}
+.stat-l{font-size:11px;color:var(--gl);margin-top:3px;}
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.mod{background:#fff;border-radius:14px;padding:18px 14px;border:.5px solid #E8E0D6;text-align:center;cursor:pointer;}
+.mod-icon{font-size:26px;margin-bottom:6px;}
+.mod-name{font-family:'Sora',sans-serif;font-size:13px;font-weight:500;}
+.mod-desc{font-size:11px;color:var(--gl);margin-top:2px;}
+.et-card{background:#fff;border-radius:12px;border:.5px solid #E8E0D6;margin-bottom:8px;cursor:pointer;}
+.et-inner{padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.et-num{width:38px;height:38px;border-radius:50%;background:var(--cream);display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;color:var(--mid);flex-shrink:0;}
+.et-num.done{background:var(--ok);color:#fff;}.et-num.curr{background:var(--p);color:#fff;}
+.et-title{font-family:'Sora',sans-serif;font-size:13px;font-weight:500;}
+.et-resp{font-size:11px;color:var(--gl);margin-top:2px;}
+.prog-strip{display:flex;gap:3px;padding:10px 16px;background:var(--dark);flex-shrink:0;}
+.ps{flex:1;height:3px;background:#3a3330;border-radius:2px;}
+.ps.done{background:var(--ok);}.ps.curr{background:var(--p);}
+.ci{background:#fff;border-radius:12px;border:.5px solid #E8E0D6;margin-bottom:8px;}
+.ci.ck{border-color:var(--ok);}.ci.fl{border-color:var(--fail);}.ci.na{border-color:var(--gl);opacity:.75;}
+.ci-top{padding:12px 14px;display:flex;align-items:flex-start;gap:10px;}
+.cc{width:24px;height:24px;border-radius:50%;border:2px solid #E0D8D0;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;}
+.ci.ck .cc{background:var(--ok);border-color:var(--ok);color:#fff;}
+.ci.fl .cc{background:var(--fail);border-color:var(--fail);color:#fff;}
+.ci.na .cc{background:var(--gl);border-color:var(--gl);color:#fff;}
+.cl{font-size:13px;line-height:1.4;flex:1;}.cs{font-size:11px;color:var(--gl);margin-top:2px;}
+.ci-btm{padding:0 14px 12px;display:flex;flex-direction:column;gap:6px;}
+.trow{display:flex;gap:5px;}
+.tbtn{flex:1;padding:7px 4px;font-size:11px;font-family:'Barlow',sans-serif;font-weight:600;border-radius:8px;border:.5px solid #E0D8D0;background:#fff;cursor:pointer;color:var(--gray);}
+.tbtn.tok{background:var(--ok);color:#fff;border-color:var(--ok);}
+.tbtn.tfl{background:var(--fail);color:#fff;border-color:var(--fail);}
+.tbtn.tna{background:var(--gl);color:#fff;border-color:var(--gl);}
+.obs{width:100%;padding:8px 10px;border:.5px solid #E0D8D0;border-radius:8px;font-family:'Barlow',sans-serif;font-size:12px;background:#FAFAFA;resize:none;outline:none;}
+.ring{width:100px;height:100px;border-radius:50%;border:6px solid var(--cream);display:flex;align-items:center;justify-content:center;flex-direction:column;margin:0 auto 12px;}
+.ring-n{font-family:'Sora',sans-serif;font-size:26px;font-weight:600;color:var(--p);}
+.ir{display:flex;justify-content:space-between;padding:8px 0;border-bottom:.5px solid #F0EBE3;}
+.ir:last-child{border-bottom:none;}
+.ik{font-size:12px;color:var(--gray);}.iv{font-size:12px;font-weight:700;}
+.wa-btn{background:#25D366;color:#fff;border:none;border-radius:12px;padding:13px;width:100%;font-family:'Sora',sans-serif;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;}
+.meta-bar{height:8px;background:#E8E0D6;border-radius:4px;overflow:hidden;margin:6px 0;}
+.meta-fill{height:100%;border-radius:4px;transition:width .8s;}
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--dark);color:var(--cream);padding:10px 20px;border-radius:10px;font-size:12px;font-family:'Sora',sans-serif;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;}
+input[type=file]{display:none;}
+.foto-area{border:.5px dashed #C8BFB2;border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px;cursor:pointer;background:#FAFAFA;}
+.ped-card{background:#fff;border-radius:12px;border:.5px solid #E8E0D6;padding:14px 16px;margin-bottom:10px;cursor:pointer;}
+.vend-card{background:#fff;border-radius:12px;border:.5px solid #E8E0D6;padding:14px 16px;margin-bottom:10px;}
+.ferias-item{background:#fff;border-radius:10px;border:.5px solid #E8E0D6;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+.odo-reg{background:#fff;border-radius:12px;border:.5px solid #E8E0D6;padding:14px 16px;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="toast" class="toast"></div>
+
+<!-- LOGIN -->
+<div id="s-login" class="scr active" style="background:var(--bg);">
+  <div style="background:var(--dark);padding:36px 20px 28px;text-align:center;flex-shrink:0;padding-top:calc(env(safe-area-inset-top,0px)+36px);">
+    <div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:600;color:var(--cream);letter-spacing:2.5px;">CASA VILLARE</div>
+    <div style="width:40px;height:2px;background:var(--p);margin:10px auto;"></div>
+    <div style="font-size:12px;color:var(--gl);font-weight:300;">Sistema de Gestão</div>
+  </div>
+  <div style="flex:1;padding:24px 20px;display:flex;flex-direction:column;justify-content:center;gap:14px;">
+    <button onclick="selArea('obras')" class="btn" style="background:var(--p);border-radius:16px;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:0;">
+      <span style="font-size:28px;line-height:1;">🏗️</span>
+      <span style="font-family:'Sora',sans-serif;font-size:15px;font-weight:600;color:#fff;">Gestão de Obras</span>
+      <span id="sub-obras" style="font-size:11px;color:rgba(255,255,255,.75);">Rodrigo · Jullyane</span>
+    </button>
+    <button onclick="selArea('comercial')" class="btn" style="background:var(--gold);border-radius:16px;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:0;">
+      <span style="font-size:28px;line-height:1;">💼</span>
+      <span style="font-family:'Sora',sans-serif;font-size:15px;font-weight:600;color:#fff;">Comercial</span>
+      <span id="sub-comercial" style="font-size:11px;color:rgba(255,255,255,.75);">Paula · Isadora</span>
+    </button>
+    <button onclick="selArea('gestor')" class="btn" style="background:var(--dark);border-radius:16px;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:0;">
+      <span style="font-size:28px;line-height:1;">👔</span>
+      <span style="font-family:'Sora',sans-serif;font-size:15px;font-weight:600;color:var(--cream);">Gestor</span>
+      <span id="sub-gestor" style="font-size:11px;color:var(--gl);">Alexandre · Carlos</span>
+    </button>
+  </div>
+  <div style="padding:14px;text-align:center;flex-shrink:0;padding-bottom:calc(env(safe-area-inset-bottom,0px)+14px);">
+    <div style="font-size:10px;color:var(--gl);">Desenvolvido por Alexandre &amp; Charlie · Casa Villare © 2025</div>
+  </div>
+</div>
+
+<!-- QUEM É VOCÊ -->
+<div id="s-quem" class="scr" style="background:var(--bg);">
+  <div class="hdr">
+    <button class="back" onclick="goTo('s-login')">‹</button>
+    <div><div class="hdr-title">Quem é você?</div><div class="hdr-sub" id="quem-sub"></div></div>
+  </div>
+  <div style="flex:1;padding:24px 20px;display:flex;flex-direction:column;justify-content:center;gap:14px;" id="quem-list"></div>
+  <div style="padding:14px;text-align:center;flex-shrink:0;">
+    <div style="font-size:10px;color:var(--gl);">Desenvolvido por Alexandre &amp; Charlie · Casa Villare © 2025</div>
+  </div>
+</div>
+
+<!-- HOME -->
+<div id="s-home" class="scr">
+  <div style="background:var(--dark);padding:20px;text-align:center;padding-top:calc(env(safe-area-inset-top,0px)+20px);flex-shrink:0;">
+    <div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:600;color:var(--cream);letter-spacing:2px;">CASA VILLARE</div>
+    <div style="font-size:12px;color:var(--gl);margin-top:4px;" id="h-welcome"></div>
+  </div>
+  <div class="xpbar">
+    <span style="font-size:11px;color:var(--gold);font-family:'Sora',sans-serif;">XP</span>
+    <div class="xp-track"><div class="xp-fill" id="h-xp" style="width:0%"></div></div>
+    <span style="font-size:12px;color:var(--cream);font-family:'Sora',sans-serif;" id="h-pts">0 pts</span>
+  </div>
+  <div class="scroll"><div class="body">
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="h-ativos">0</div><div class="stat-l">Ativos</div></div>
+      <div class="stat"><div class="stat-n" id="h-concl">0</div><div class="stat-l">Concluídos</div></div>
+    </div>
+    <div class="sec">Módulos</div>
+    <div class="mod-grid" id="mods"></div>
+    <button class="btn btn-s" onclick="sair()">Sair</button>
+  </div></div>
+</div>
+
+<!-- OBRAS -->
+<div id="s-obras" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Obras</div></div></div>
+  <div class="scroll"><div class="body">
+    <button class="btn btn-p" onclick="goTo('s-novo')">+ Novo pedido</button>
+    <button class="btn btn-s" onclick="goTo('s-pedidos')">Ver pedidos</button>
+    <div id="btn-mont-obras" style="display:none;"><button class="btn btn-s" onclick="goTo('s-mont')" style="background:var(--cream);border-color:var(--p);color:var(--p);">👥 Equipe e comissões</button></div>
+  </div></div>
+</div>
+
+<!-- NOVO PEDIDO -->
+<div id="s-novo" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-obras')">‹</button><div><div class="hdr-title">Novo Pedido</div></div></div>
+  <div class="scroll"><div class="body">
+    <label class="form-lbl">Cliente</label><input class="form-inp" id="f-cl" placeholder="Nome do cliente" autocomplete="off"/>
+    <label class="form-lbl">Nº do pedido</label><input class="form-inp" id="f-num" placeholder="PED-2025-001" autocomplete="off"/>
+    <label class="form-lbl">Ambiente</label>
+    <select class="form-inp" id="f-amb"><option value="">Selecionar...</option><option>Cozinha</option><option>Dormitório</option><option>Sala</option><option>Banheiro</option><option>Home office</option><option>Área de serviço</option><option>Multiambiente</option></select>
+    <label class="form-lbl">Endereço</label><input class="form-inp" id="f-end" placeholder="Rua, nº, cidade" autocomplete="off"/>
+    <button class="btn btn-p" onclick="criarPedido()">Criar pedido ›</button>
+  </div></div>
+</div>
+
+<!-- PEDIDOS -->
+<div id="s-pedidos" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-obras')">‹</button><div><div class="hdr-title">Pedidos</div><div class="hdr-sub" id="ped-sub"></div></div></div>
+  <div class="scroll"><div class="body" id="ped-list"></div></div>
+</div>
+
+<!-- ETAPAS -->
+<div id="s-etapas" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-pedidos')">‹</button><div style="flex:1"><div class="hdr-title" id="et-titulo"></div><div class="hdr-sub" id="et-sub"></div></div></div>
+  <div class="prog-strip" id="et-prog"></div>
+  <div class="scroll"><div class="body" id="et-list"></div></div>
+</div>
+
+<!-- CHECKLIST -->
+<div id="s-check" class="scr">
+  <div class="hdr">
+    <button class="back" onclick="goTo('s-etapas')">‹</button>
+    <div style="flex:1"><div class="hdr-title" id="ck-titulo"></div><div class="hdr-sub" id="ck-resp"></div></div>
+    <span style="font-family:'Sora',sans-serif;font-size:12px;color:var(--gold);" id="ck-prog">0/0</span>
+  </div>
+  <div class="xpbar">
+    <span style="font-size:11px;color:var(--gold);font-family:'Sora',sans-serif;">Progresso</span>
+    <div class="xp-track"><div class="xp-fill" id="ck-bar" style="width:0%"></div></div>
+    <span style="font-size:12px;color:var(--cream);font-family:'Sora',sans-serif;" id="ck-xp">+0 pts</span>
+  </div>
+  <div class="scroll"><div class="body" id="ck-body"></div></div>
+</div>
+
+<!-- RESULTADO -->
+<div id="s-result" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-etapas')">‹</button><div><div class="hdr-title" id="r-titulo"></div><div class="hdr-sub" id="r-sub"></div></div></div>
+  <div class="scroll"><div class="body">
+    <div style="text-align:center;padding:20px 0 12px;">
+      <div class="ring" id="r-ring"><div class="ring-n" id="r-pct">0%</div><div style="font-size:10px;color:var(--gl);" id="r-ok-l">aprovados</div></div>
+      <div style="font-family:'Sora',sans-serif;font-size:15px;font-weight:500;" id="r-status"></div>
+      <div style="font-size:12px;color:var(--gl);margin-top:4px;" id="r-pts"></div>
+    </div>
+    <div class="card" id="r-info" style="margin-bottom:16px;"></div>
+    <div id="r-wa"></div>
+    <div class="sec">Resumo</div>
+    <div id="r-summary"></div>
+  </div></div>
+</div>
+
+<!-- COMERCIAL -->
+<div id="s-comercial" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Comercial</div><div class="hdr-sub" id="com-mes"></div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="sec">Meta da loja</div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">Meta mensal</div>
+        <span class="badge b-pend" id="ml-pct">0%</span>
+      </div>
+      <div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:600;color:var(--p);" id="ml-val">R$ 0</div>
+      <div style="font-size:11px;color:var(--gl);margin-bottom:4px;" id="ml-sub">de R$ 0</div>
+      <div class="meta-bar"><div class="meta-fill" id="ml-bar" style="width:0%;background:var(--p);"></div></div>
+    </div>
+    <div id="vend-list"></div>
+    <div class="sec">Tabela de comissão</div>
+    <div class="card" id="tabela-com-display"></div>
+    <div class="sec">Lançar venda</div>
+    <label class="form-lbl">Vendedora</label>
+    <select class="form-inp" id="vsel"></select>
+    <label class="form-lbl">Valor (R$)</label>
+    <input class="form-inp" id="vval" type="number" placeholder="Ex: 8500"/>
+    <button class="btn btn-p" onclick="lancarVenda()">Lançar venda</button>
+    <div id="btn-meta" style="display:none;"><button class="btn btn-s" onclick="goTo('s-meta')">⚙️ Definir metas</button></div>
+  </div></div>
+</div>
+
+<!-- METAS -->
+<div id="s-meta" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-comercial')">‹</button><div><div class="hdr-title">Definir Metas</div><div class="hdr-sub">Apenas gestores</div></div></div>
+  <div class="scroll"><div class="body">
+    <label class="form-lbl">Meta da loja (R$)</label><input class="form-inp" id="sm-loja" type="number" placeholder="100000"/>
+    <div class="sec">Vendedoras e metas individuais</div>
+    <div id="sm-vendedoras"></div>
+    <button class="btn btn-s" onclick="addVendedora()" style="margin-bottom:14px;">+ Adicionar vendedora</button>
+    <button class="btn btn-p" onclick="salvarMetas()">Salvar metas</button>
+  </div></div>
+</div>
+
+<!-- EQUIPE & COMISSÕES -->
+<div id="s-mont" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-obras')">‹</button><div style="flex:1"><div class="hdr-title">Equipe & Comissões</div><div class="hdr-sub" id="mont-sub">Montador, supervisor e projetista</div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="mont-tot">R$ 0</div><div class="stat-l">Total pago</div></div>
+      <div class="stat"><div class="stat-n" id="mont-qtd">0</div><div class="stat-l">Comissões</div></div>
+    </div>
+    <button class="btn btn-p" onclick="goTo('s-mont-novo')">+ Lançar comissão</button>
+    <div class="sec">Equipe</div>
+    <div id="mont-equipe"></div>
+    <button class="btn btn-s" onclick="addMontador()" style="margin-bottom:14px;">+ Adicionar pessoa</button>
+    <div class="sec">Histórico</div>
+    <div id="mont-hist"></div>
+  </div></div>
+</div>
+
+<!-- NOVO LANÇAMENTO COMISSÃO MONTADOR -->
+<div id="s-mont-novo" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-mont')">‹</button><div><div class="hdr-title">Lançar Comissão</div><div class="hdr-sub">Equipe</div></div></div>
+  <div class="scroll"><div class="body">
+    <label class="form-lbl">Pessoa</label>
+    <select class="form-inp" id="mn-montador"></select>
+    <label class="form-lbl">Tipo de obra</label>
+    <select class="form-inp" id="mn-tipo" onchange="toggleMontPedido()">
+      <option value="vinc">Vincular a pedido existente</option>
+      <option value="avulso">Lançamento avulso</option>
+    </select>
+    <div id="mn-vinc-area">
+      <label class="form-lbl">Pedido</label>
+      <select class="form-inp" id="mn-pedido"></select>
+    </div>
+    <div id="mn-avulso-area" style="display:none;">
+      <label class="form-lbl">Descrição da obra</label>
+      <input class="form-inp" id="mn-desc" placeholder="Ex: Cozinha — João Silva"/>
+    </div>
+    <label class="form-lbl">Valor da comissão (R$)</label>
+    <input class="form-inp" id="mn-valor" type="number" placeholder="Ex: 800"/>
+    <label class="form-lbl">Data</label>
+    <input class="form-inp" id="mn-data" type="date"/>
+    <label class="form-lbl">Observação (opcional)</label>
+    <textarea class="form-inp" id="mn-obs" rows="2" placeholder="Detalhes do pagamento, etc."></textarea>
+    <button class="btn btn-p" onclick="salvarComissaoMont()">Salvar comissão</button>
+  </div></div>
+</div>
+
+<!-- MINHAS COMISSÕES (visão do montador) -->
+<div id="s-mont-mine" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div style="flex:1"><div class="hdr-title">Minhas Comissões</div><div class="hdr-sub" id="mine-sub"></div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="mine-tot">R$ 0</div><div class="stat-l">Total recebido</div></div>
+      <div class="stat"><div class="stat-n" id="mine-qtd">0</div><div class="stat-l">Obras</div></div>
+    </div>
+    <div class="card" id="mine-mes" style="margin-bottom:14px;"></div>
+    <div class="sec">Histórico de obras</div>
+    <div id="mine-hist"></div>
+  </div></div>
+</div>
+
+<!-- FÉRIAS -->
+<div id="s-ferias" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Férias</div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="sec">Solicitar férias</div>
+    <label class="form-lbl">Seu nome</label><input class="form-inp" id="fer-nome" placeholder="Seu nome" autocomplete="off"/>
+    <label class="form-lbl">Início</label><input class="form-inp" id="fer-ini" type="date"/>
+    <label class="form-lbl">Fim</label><input class="form-inp" id="fer-fim" type="date"/>
+    <button class="btn btn-p" onclick="solicitarFerias()">Solicitar férias</button>
+    <div class="sec">Agendadas</div>
+    <div id="fer-list"></div>
+  </div></div>
+</div>
+
+<!-- FOLGA (montador) -->
+<div id="s-folga" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Folga</div><div class="hdr-sub" id="folga-sub"></div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="sec">Solicitar folga</div>
+    <label class="form-lbl">Início</label><input class="form-inp" id="folga-ini" type="date"/>
+    <label class="form-lbl">Fim (deixe igual ao início para folga de 1 dia)</label><input class="form-inp" id="folga-fim" type="date"/>
+    <label class="form-lbl">Motivo (opcional)</label><input class="form-inp" id="folga-motivo" placeholder="Ex: consulta médica, descanso..." autocomplete="off"/>
+    <button class="btn btn-p" onclick="solicitarFolga()">Solicitar folga</button>
+    <div class="sec">Minhas folgas</div>
+    <div id="folga-list"></div>
+  </div></div>
+</div>
+
+<!-- ODÔMETRO -->
+<div id="s-odo" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Odômetro</div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="sec">Novo registro</div>
+    <label class="form-lbl">KM inicial</label><input class="form-inp" id="odo-ki" type="number" placeholder="45230"/>
+    <div class="foto-area" onclick="document.getElementById('fi-ini').click()" style="margin-bottom:14px;">
+      <div style="font-size:20px;">📷</div><div><div style="font-size:11px;color:var(--gl);">Foto KM inicial</div><div style="font-size:10px;color:var(--p);font-weight:700;" id="odo-ini-l">Obrigatória</div></div>
+    </div>
+    <input type="file" id="fi-ini" accept="image/*" capture="environment" onchange="fotoOdo('ini',this)"/>
+    <label class="form-lbl">KM final</label><input class="form-inp" id="odo-kf" type="number" placeholder="45380"/>
+    <div class="foto-area" onclick="document.getElementById('fi-fim').click()" style="margin-bottom:14px;">
+      <div style="font-size:20px;">📷</div><div><div style="font-size:11px;color:var(--gl);">Foto KM final</div><div style="font-size:10px;color:var(--p);font-weight:700;" id="odo-fim-l">Obrigatória</div></div>
+    </div>
+    <input type="file" id="fi-fim" accept="image/*" capture="environment" onchange="fotoOdo('fim',this)"/>
+    <label class="form-lbl">Combustível</label>
+    <select class="form-inp" id="odo-comb" onchange="document.getElementById('odo-abast').style.display=this.value?'block':'none'">
+      <option value="">Não abasteceu</option><option value="etanol">Etanol</option><option value="gasolina">Gasolina</option>
+    </select>
+    <div id="odo-abast" style="display:none;">
+      <label class="form-lbl">Valor (R$)</label><input class="form-inp" id="odo-val" type="number" placeholder="120.00"/>
+      <label class="form-lbl">Litros</label><input class="form-inp" id="odo-lit" type="number" placeholder="35"/>
+    </div>
+    <label class="form-lbl">Pedido vinculado (opcional)</label><input class="form-inp" id="odo-ped" placeholder="PED-2025-001" autocomplete="off"/>
+    <button class="btn btn-p" onclick="regOdo()">Registrar</button>
+    <div class="sec">Histórico</div>
+    <div id="odo-list"></div>
+  </div></div>
+</div>
+
+<!-- CONFIGURAÇÕES -->
+<div id="s-config" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Configurações</div><div class="hdr-sub">Apenas gestores</div></div></div>
+  <div class="scroll"><div class="body" id="cfg-body"></div></div>
+</div>
+
+<!-- RELATÓRIO -->
+<div id="s-rel" class="scr">
+  <div class="hdr"><button class="back" onclick="goTo('s-home')">‹</button><div><div class="hdr-title">Relatórios</div></div></div>
+  <div class="scroll"><div class="body">
+    <div class="stats" id="rel-stats"></div>
+    <div class="sec">Obras</div><div id="rel-obras"></div>
+    <div class="sec">Comercial</div><div id="rel-com"></div>
+    <div class="sec">Montadores</div><div id="rel-mont"></div>
+    <div class="sec">Férias</div><div id="rel-fer"></div>
+    <div class="sec">Folgas (Montadores)</div><div id="rel-folga"></div>
+    <div class="sec">Odômetro</div><div id="rel-odo"></div>
+  </div></div>
+</div>
+
+</div>
+<script>
+const EQ_DEF={obras:[{n:'Supervisor de Obras',p:'supervisor',i:'🔍',tel:'5519999674649'},{n:'Projetos',p:'projetista',i:'✏️',tel:'5519998361361'},{n:'Montagem',p:'montador',i:'🔧',tel:'5519994046704'}],comercial:[{n:'Consultora 1',p:'vendedor',i:'💼',tel:'5519997132654'},{n:'Consultora 2',p:'vendedor',i:'💼',tel:'5519996646672'}],gestor:[{n:'Alexandre',p:'gestor',i:'👔',tel:'5519992816070'},{n:'Carlos',p:'gestor',i:'👔',tel:'5519992728513'}]};
+const TAB_DEF=[{de:0,pct:1},{de:65000,pct:2},{de:75000,pct:3},{de:100000,pct:4}];
+function getNotif(ei){
+  const eq=ST.equipe;
+  const sup=(eq.obras||[]).filter(p=>p.p==='supervisor'&&p.tel).map(p=>({n:p.n,w:p.tel}));
+  const proj=(eq.obras||[]).filter(p=>p.p==='projetista'&&p.tel).map(p=>({n:p.n,w:p.tel}));
+  const gest=(eq.gestor||[]).filter(p=>p.tel).map(p=>({n:p.n,w:p.tel}));
+  const map={0:proj,1:sup,2:proj,3:sup,4:[...sup,...gest],5:sup,6:gest};
+  return map[ei]||[];
+}
+const ETAPAS=[
+  {n:'01',t:'Medição e conferência',r:'Medidor',p:['medidor','supervisor','gestor'],cats:[
+    {c:'Medidas',items:[{l:'Largura total conferida',s:'Em cm'},{l:'Altura do pé-direito',s:'Atenção a vigas'},{l:'Profundidade aferida',s:'Descontar acabamentos'},{l:'Vãos e recortes mapeados',s:'Portas, janelas, colunas'},{l:'Desníveis identificados',s:'Verificar com nível'}]},
+    {c:'Energia',items:[{l:'Tomadas existentes mapeadas',s:'Quantidade e posição'},{l:'Tomadas previstas conferidas',s:'Cruzar com planta'},{l:'Altura das tomadas verificada',s:'30cm ou 1,10m'},{l:'Pontos para equipamentos',s:'Forno, geladeira, cooktop'},{l:'Quadro elétrico não obstruído',s:'Acesso livre'}]},
+    {c:'LED',items:[{l:'Posição dos LEDs conferida',s:'Cruzar com projeto'},{l:'Fiação embutida ou prevista',s:'Antes da entrega'},{l:'Acionamentos posicionados',s:'Sem conflito com dobradiças'}]},
+    {c:'Civil',items:[{l:'Paredes niveladas e no prumo',s:'Tolerância máx. 3mm'},{l:'Revestimentos finalizados',s:'Azulejo, pintura ou massa'},{l:'Piso final instalado',s:'Porcelanato, laminado'},{l:'Sem obra aberta',s:'Hidráulica, elétrica, alvenaria'},{l:'Ambiente limpo',s:'Sem entulho ou móveis'}]},
+  ]},
+  {n:'02',t:'Execução do projeto',r:'Projetista',p:['projetista','gestor'],cats:[
+    {c:'Desenvolvimento',items:[{l:'Croqui aprovado pelo cliente',s:'Assinatura ou confirmação'},{l:'Medidas da vistoria aplicadas',s:'Conferir cada ambiente'},{l:'Projeto renderizado em 3D',s:'Apresentação ao cliente'},{l:'Alterações incorporadas',s:'Registrar mudanças'},{l:'Versão final aprovada',s:'Aprovação formal'}]},
+    {c:'Especificações',items:[{l:'Materiais especificados',s:'MDF, portas, puxadores'},{l:'Ferragens especificadas',s:'Blum, Hettich ou equivalente'},{l:'Acabamentos e cores definidos',s:'Referências de catálogo'},{l:'Planilha de corte gerada',s:'Detalhamento'},{l:'Compatibilidade elétrica',s:'Tomadas e LED'}]},
+  ]},
+  {n:'03',t:'Conferência do projeto',r:'Projetista + Supervisor',p:['projetista','supervisor','gestor'],cats:[
+    {c:'Técnica',items:[{l:'Medidas batem com a vistoria 1',s:'Cruzar ponto a ponto'},{l:'Altura dos módulos compatível',s:'Pé-direito, vigas'},{l:'Profundidade sem conflito',s:'Portas, passagens'},{l:'Recortes corretos',s:'Forno, micro-ondas, cooktop'},{l:'Pontos elétricos alinhados',s:'Tomadas e LED'}]},
+    {c:'Comercial',items:[{l:'Itens batem com o contrato',s:'Sem divergência'},{l:'Prazo de entrega compatível',s:'Confirmar com fábrica'},{l:'Projeto assinado pelo supervisor',s:'Liberado para pedido'}]},
+  ]},
+  {n:'04',t:'Fazer pedido',r:'Projetista',p:['projetista','gestor'],cats:[
+    {c:'Fábrica',items:[{l:'Planilha de corte enviada',s:'Formato aceito'},{l:'Lista de materiais completa',s:'MDF, ferragens, acessórios'},{l:'Quantidade conferida',s:'Sem faltantes'},{l:'Prazo confirmado',s:'Data registrada'},{l:'Nº do pedido na fábrica',s:'Para rastreamento'}]},
+    {c:'Comunicação',items:[{l:'Supervisor informado',s:'Data prevista'},{l:'Cliente informado sobre prazo',s:'Comunicação formal'},{l:'Data de montagem pré-agendada',s:'Alinhar com montador'}]},
+  ]},
+  {n:'05',t:'Conferência pré-montagem',r:'Supervisor',p:['supervisor','gestor'],cats:[
+    {c:'Material',items:[{l:'Peças recebidas conferidas',s:'Comparar com pedido'},{l:'Sem peças danificadas',s:'Fotografar avarias'},{l:'Ferragens completas',s:'Dobradiças, corrediças, puxadores'},{l:'Painéis na medida correta',s:'Amostra com trena'},{l:'Acabamentos corretos',s:'Conferir com projeto'}]},
+    {c:'Ambiente',items:[{l:'Medidas inalteradas',s:'Sem obra após vistoria 1'},{l:'Paredes ainda no prumo',s:'Reverificar'},{l:'Pontos elétricos instalados',s:'Tomadas e LED'},{l:'Piso limpo',s:'Sem poeira ou entulho'},{l:'Ambiente acessível',s:'Espaço de manobra'},{l:'Data confirmada com cliente',s:'Cliente ciente'}]},
+  ]},
+  {n:'06',t:'Início da montagem',r:'Supervisor + Montador',p:['supervisor','montador','gestor'],cats:[
+    {c:'Setup',items:[{l:'EPI e ferramentas separados',s:'Nível, parafusadeira, trena'},{l:'Proteção do piso',s:'Papelão ou manta'},{l:'Ordem de montagem definida',s:'Do fundo para frente'},{l:'Painel de fundo fixado',s:'Base para os módulos'}]},
+    {c:'Módulos',items:[{l:'Armação conferida',s:'Esquadro e nivelamento'},{l:'Corrediças e dobradiças fixadas',s:'Sem folgas'},{l:'Módulos parafusados na parede',s:'Buchas adequadas'},{l:'Pés niveladores ajustados',s:'Mesmo plano'},{l:'Tampo encaixado',s:'Sem folgas ou degraus'}]},
+    {c:'Acabamentos',items:[{l:'Portas instaladas e alinhadas',s:'Abertura suave'},{l:'Puxadores corretos',s:'Alturas iguais'},{l:'Organizadores instalados',s:'Gaveteiros, cestos'},{l:'Rodapé sem folgas',s:'Cortes limpos'}]},
+  ]},
+  {n:'07',t:'Conclusão da obra',r:'Supervisor + Montador',p:['supervisor','montador','gestor'],cats:[
+    {c:'Inspeção',items:[{l:'Módulos nivelados',s:'Toda a extensão'},{l:'Portas e gavetas OK',s:'Sem rangidos'},{l:'Dobradiças reguladas',s:'Gap uniforme'},{l:'Puxadores firmes',s:'Altura uniforme'},{l:'Rodapés sem falhas',s:'Sem espaços'},{l:'Elétrica e LED funcionando',s:'Testar tudo'}]},
+    {c:'Entrega',items:[{l:'Ambiente limpo',s:'Retirar embalagens'},{l:'Cliente aprovou',s:'Vistoria presente'},{l:'Manual entregue',s:'Higienização e manutenção'},{l:'Termo assinado',s:'Via para cliente e loja'},{l:'Fotos do resultado',s:'Para portfólio'},{l:'Avaliação solicitada',s:'Google ou formulário'}]},
+  ]},
+];
+
+let ST={xp:0,pedidos:[],atualPed:-1,atualEt:-1,nome:'',perfil:'',area:'',fotos:{},odoF:{},equipe:JSON.parse(JSON.stringify(EQ_DEF)),tabelaComissao:JSON.parse(JSON.stringify(TAB_DEF)),comercial:{metaLoja:0,metaV:[0,0],nomes:['Consultora 1','Consultora 2'],vendas:[[],[]],comissaoManual:[null,null]},montadores:{lista:[{nome:'Montagem',tel:'5519994046704',perfil:'montador'},{nome:'Supervisor de Obras',tel:'5519999674649',perfil:'supervisor'},{nome:'Projetos',tel:'5519998361361',perfil:'projetista'}],comissoes:[]},ferias:[],folgas:[],odo:[]};
+let _editandoComissaoIdx=null;
+function save(){try{localStorage.setItem('cv_st',JSON.stringify(ST));}catch(e){}}
+function load(){try{const s=localStorage.getItem('cv_st');if(s){const d=JSON.parse(s);ST={...ST,...d,fotos:d.fotos||{},odoF:d.odoF||{},montadores:d.montadores||{lista:[{nome:'Wellington',tel:'5519994046704',perfil:'montador'},{nome:'Rodrigo',tel:'',perfil:'supervisor'},{nome:'Jullyane',tel:'',perfil:'projetista'}],comissoes:[]},folgas:d.folgas||[]};if(!ST.montadores.lista)ST.montadores.lista=[{nome:'Wellington',tel:'5519994046704',perfil:'montador'},{nome:'Rodrigo',tel:'',perfil:'supervisor'},{nome:'Jullyane',tel:'',perfil:'projetista'}];if(!ST.montadores.comissoes)ST.montadores.comissoes=[];// Migrar formato antigo (strings) -> novo formato ({nome,tel,perfil})
+ST.montadores.lista=ST.montadores.lista.map(m=>typeof m==='string'?{nome:m,tel:'',perfil:'montador'}:{nome:m.nome,tel:m.tel||'',perfil:m.perfil||'montador'});
+// v19: migrar nomes pessoais → títulos de cargo (roda sempre — é idempotente)
+const migNomes={'Wellington':'Montagem','Rodrigo':'Supervisor de Obras','Jullyane':'Projetos','Paula':'Consultora 1','Isadora':'Consultora 2'};
+ST.nome=migNomes[ST.nome]||ST.nome;
+if(ST.montadores&&ST.montadores.lista)ST.montadores.lista=ST.montadores.lista.map(m=>({...m,nome:migNomes[m.nome]||m.nome}));
+if(ST.montadores&&ST.montadores.comissoes)ST.montadores.comissoes.forEach(c=>{if(migNomes[c.montador])c.montador=migNomes[c.montador];});
+if(ST.comercial&&ST.comercial.nomes)ST.comercial.nomes=ST.comercial.nomes.map(n=>migNomes[n]||n);
+['obras','comercial','gestor'].forEach(a=>{if(ST.equipe&&ST.equipe[a])ST.equipe[a]=ST.equipe[a].map(p=>({...p,n:migNomes[p.n]||p.n}));});
+// v19: garantir cargos na lista de montadores
+if(!ST.montadores.lista.some(m=>m.nome==='Supervisor de Obras'))ST.montadores.lista.push({nome:'Supervisor de Obras',tel:'5519999674649',perfil:'supervisor'});
+if(!ST.montadores.lista.some(m=>m.nome==='Projetos'))ST.montadores.lista.push({nome:'Projetos',tel:'5519998361361',perfil:'projetista'});
+if(!ST.montadores.lista.some(m=>m.nome==='Montagem'))ST.montadores.lista.push({nome:'Montagem',tel:'5519994046704',perfil:'montador'});
+if(!Array.isArray(ST.comercial.comissaoManual))ST.comercial.comissaoManual=ST.comercial.nomes.map(()=>null);
+if(!ST.equipe||!ST.equipe.obras)ST.equipe=JSON.parse(JSON.stringify(EQ_DEF));
+['obras','comercial','gestor'].forEach(a=>{if(!ST.equipe[a])ST.equipe[a]=JSON.parse(JSON.stringify(EQ_DEF[a]));ST.equipe[a].forEach(p=>{if(!p.tel)p.tel='';if(!p.i)p.i=a==='gestor'?'👔':a==='comercial'?'💼':'🔧';});});
+if(!Array.isArray(ST.tabelaComissao)||!ST.tabelaComissao.length)ST.tabelaComissao=JSON.parse(JSON.stringify(TAB_DEF));
+}}catch(e){}}
+
+function rLogin(){
+  const eq=ST.equipe||EQ_DEF;
+  const sub=(area)=>(eq[area]||[]).map(p=>p.n).join(' · ');
+  const so=document.getElementById('sub-obras');if(so)so.textContent=sub('obras');
+  const sc=document.getElementById('sub-comercial');if(sc)sc.textContent=sub('comercial');
+  const sg=document.getElementById('sub-gestor');if(sg)sg.textContent=sub('gestor');
+}
+
+function goTo(id){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id==='s-home')rHome();
+  if(id==='s-obras'){const b=document.getElementById('btn-mont-obras');if(b)b.style.display=ST.perfil==='gestor'?'block':'none';}
+  if(id==='s-pedidos')rPeds();
+  if(id==='s-comercial')rCom();
+  if(id==='s-meta')rMeta();
+  if(id==='s-mont')rMont();
+  if(id==='s-mont-novo')rMontForm();
+  if(id==='s-mont-mine')rMine();
+  if(id==='s-ferias')rFer();
+  if(id==='s-folga')rFolga();
+  if(id==='s-odo')rOdo();
+  if(id==='s-rel')rRel();
+  if(id==='s-config')rConfig();
+}
+
+function selArea(area){
+  const cor={obras:'var(--p)',comercial:'var(--gold)',gestor:'var(--dark)'}[area];
+  document.getElementById('quem-sub').textContent={obras:'Gestão de Obras',comercial:'Comercial',gestor:'Gestor'}[area];
+  document.getElementById('quem-list').innerHTML=(ST.equipe[area]||[]).map((p,i)=>
+    `<button onclick="entrar('${p.n}','${p.p}','${area}')" class="btn" style="background:${cor};border-radius:16px;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;margin-bottom:0;">
+      <span style="font-size:34px;line-height:1;">${p.i}</span>
+      <span style="font-family:'Sora',sans-serif;font-size:17px;font-weight:600;color:#fff;">${p.n}</span>
+    </button>`).join('');
+  goTo('s-quem');
+}
+
+function entrar(nome,perfil,area){ST.nome=nome;ST.perfil=perfil;ST.area=area;save();goTo('s-home');}
+function sair(){ST.nome='';ST.perfil='';ST.area='';goTo('s-login');}
+
+function rHome(){
+  document.getElementById('h-welcome').textContent='Olá, '+ST.nome+'!';
+  document.getElementById('h-ativos').textContent=ST.pedidos.filter(p=>!p.concluido).length;
+  document.getElementById('h-concl').textContent=ST.pedidos.filter(p=>p.concluido).length;
+  document.getElementById('h-xp').style.width=Math.min(100,Math.round(ST.xp/20))+'%';
+  document.getElementById('h-pts').textContent=ST.xp+' pts';
+  const a=ST.area;
+  let m='';
+  if(ST.perfil==='montador'){
+    // Montador: visão simplificada — apenas próprias comissões e folga
+    m+=`<div class="mod" onclick="goTo('s-mont-mine')"><div class="mod-icon">💰</div><div class="mod-name">Minhas Comissões</div><div class="mod-desc">Total e histórico</div></div>`;
+    m+=`<div class="mod" onclick="goTo('s-folga')"><div class="mod-icon">🌴</div><div class="mod-name">Folga</div><div class="mod-desc">Solicitar e ver</div></div>`;
+  }else{
+    if(a==='obras'||a==='gestor') m+=`<div class="mod" onclick="goTo('s-obras')"><div class="mod-icon">🏗️</div><div class="mod-name">Obras</div><div class="mod-desc">7 etapas</div></div>`;
+    if(a==='comercial'||a==='gestor') m+=`<div class="mod" onclick="goTo('s-comercial')"><div class="mod-icon">📊</div><div class="mod-name">Comercial</div><div class="mod-desc">Metas e comissões</div></div>`;
+    if(a==='gestor') m+=`<div class="mod" onclick="goTo('s-mont-novo')" style="background:linear-gradient(135deg,#fff,var(--cream));border-color:var(--p);"><div class="mod-icon">💰</div><div class="mod-name">Lançar Comissão</div><div class="mod-desc">Equipe</div></div>`;
+    // Supervisor e projetista: ganham atalho Minhas Comissões
+    if(ST.perfil==='supervisor'||ST.perfil==='projetista') m+=`<div class="mod" onclick="goTo('s-mont-mine')" style="background:linear-gradient(135deg,#fff,var(--cream));border-color:var(--p);"><div class="mod-icon">💰</div><div class="mod-name">Minhas Comissões</div><div class="mod-desc">Total e histórico</div></div>`;
+    m+=`<div class="mod" onclick="goTo('s-ferias')"><div class="mod-icon">🏖️</div><div class="mod-name">Férias</div><div class="mod-desc">Calendário</div></div>`;
+    if(a==='obras'||a==='gestor') m+=`<div class="mod" onclick="goTo('s-odo')"><div class="mod-icon">🚗</div><div class="mod-name">Odômetro</div><div class="mod-desc">KM e combustível</div></div>`;
+    if(a==='gestor') m+=`<div class="mod" onclick="goTo('s-rel')"><div class="mod-icon">📋</div><div class="mod-name">Relatórios</div><div class="mod-desc">Visão completa</div></div>`;
+    if(a==='gestor') m+=`<div class="mod" onclick="goTo('s-config')"><div class="mod-icon">⚙️</div><div class="mod-name">Configurações</div><div class="mod-desc">Equipe e comissões</div></div>`;
+  }
+  document.getElementById('mods').innerHTML=m;
+}
+
+function criarPedido(){
+  const cl=v('f-cl'),num=v('f-num'),amb=v('f-amb');
+  if(!cl||!num||!amb){toast('Preencha todos os campos');return;}
+  ST.pedidos.push({id:Date.now(),cliente:cl,num,ambiente:amb,endereco:v('f-end'),criado:new Date().toLocaleDateString('pt-BR'),concluido:false,etapas:ETAPAS.map(()=>({status:'pendente',res:{},obs:{},data:'',pts:0}))});
+  save();toast('Pedido criado!');setTimeout(()=>goTo('s-pedidos'),600);
+}
+
+function rPeds(){
+  document.getElementById('ped-sub').textContent=ST.pedidos.length+' pedido(s)';
+  if(!ST.pedidos.length){document.getElementById('ped-list').innerHTML='<div style="text-align:center;padding:40px;color:var(--gl);font-size:13px;">Nenhum pedido</div>';return;}
+  document.getElementById('ped-list').innerHTML=ST.pedidos.slice().reverse().map((p,ri)=>{
+    const i=ST.pedidos.length-1-ri,done=p.etapas.filter(e=>e.status==='concluido').length;
+    const strips=ETAPAS.map((_,ei)=>`<div style="flex:1;height:3px;border-radius:2px;background:${p.etapas[ei].status==='concluido'?'var(--ok)':ei===done?'var(--p)':'#E0D8D0'};margin:0 1px;"></div>`).join('');
+    return `<div class="ped-card" onclick="abrirPed(${i})"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;"><div><div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;">${p.cliente}</div><div style="font-size:11px;color:var(--gl);">${p.num} · ${p.ambiente}</div></div><span class="badge ${done===7?'b-ok':done>0?'b-pend':'b-wait'}">${done===7?'Concluído':done+'/7'}</span></div><div style="display:flex;gap:2px;">${strips}</div><div style="font-size:11px;color:var(--gl);margin-top:5px;">${Math.round(done/7*100)}% · ${p.criado}</div></div>`;
+  }).join('');
+}
+
+function abrirPed(i){
+  ST.atualPed=i;const p=ST.pedidos[i];
+  document.getElementById('et-titulo').textContent=p.num;
+  document.getElementById('et-sub').textContent=p.cliente+' · '+p.ambiente;
+  const done=p.etapas.filter(e=>e.status==='concluido').length;
+  document.getElementById('et-prog').innerHTML=ETAPAS.map((_,ei)=>`<div class="ps ${p.etapas[ei].status==='concluido'?'done':ei===done?'curr':''}"></div>`).join('');
+  document.getElementById('et-list').innerHTML=ETAPAS.map((et,ei)=>{
+    const es=p.etapas[ei],ok2=et.p.includes(ST.perfil),isDone=es.status==='concluido',isNext=ei===done,locked=!ok2&&!isDone;
+    return `<div class="et-card" onclick="${!locked&&(isDone||isNext)?'abrirEt('+ei+')':'toast(\"Bloqueado para seu perfil\")'}"><div class="et-inner" style="${locked?'opacity:.45':''}"><div class="et-num ${isDone?'done':isNext&&ok2?'curr':''}">${isDone?'✓':et.n}</div><div style="flex:1;"><div class="et-title">${et.t}</div><div class="et-resp">${et.r}</div>${isDone?`<div style="font-size:11px;color:var(--ok);margin-top:2px;">+${es.pts} pts · ${es.data}</div>`:''}</div><span class="badge ${isDone?'b-ok':isNext&&ok2?'b-pend':'b-wait'}">${isDone?'OK':isNext&&ok2?'Pendente':'Aguarda'}</span></div></div>`;
+  }).join('');
+  goTo('s-etapas');
+}
+
+function abrirEt(ei){
+  ST.atualEt=ei;const et=ETAPAS[ei],p=ST.pedidos[ST.atualPed],res=p.etapas[ei].res,ob=p.etapas[ei].obs;
+  document.getElementById('ck-titulo').textContent='Etapa '+et.n+' — '+et.t;
+  document.getElementById('ck-resp').textContent=et.r;
+  const total=et.cats.reduce((a,c)=>a+c.items.length,0);
+  updP(total,Object.keys(res).length,Object.values(res).filter(x=>x==='ok').length*10);
+  let html='';
+  et.cats.forEach((cat,ci)=>{
+    html+=`<div class="sec">${cat.c}</div>`;
+    cat.items.forEach((item,ii)=>{
+      const key=ci+'_'+ii,vl=res[key]||'',cls=vl==='ok'?'ck':vl==='fail'?'fl':vl==='na'?'na':'',sym=vl==='ok'?'✓':vl==='fail'?'✕':vl==='na'?'—':'';
+      const fkey=ST.atualPed+'_'+ei+'_'+key,fc=(ST.fotos[fkey]||[]).length;
+      html+=`<div class="ci ${cls}" id="ci-${key}"><div class="ci-top"><div class="cc" id="cc-${key}">${sym}</div><div style="flex:1;"><div class="cl">${item.l}</div><div class="cs">${item.s}</div></div></div><div class="ci-btm"><div class="trow"><button class="tbtn ${vl==='ok'?'tok':''}" onclick="setIt('${key}','ok',this)">✓ OK</button><button class="tbtn ${vl==='fail'?'tfl':''}" onclick="setIt('${key}','fail',this)">✕ Pend</button><button class="tbtn ${vl==='na'?'tna':''}" onclick="setIt('${key}','na',this)">— N/A</button></div><textarea class="obs" rows="1" placeholder="Observação..." onchange="saveOb('${key}',this.value)">${ob[key]||''}</textarea><div class="foto-area" onclick="document.getElementById('fi-${fkey}').click()"><div style="font-size:18px;">📷</div><div><div style="font-size:11px;color:var(--gl);">Foto</div><div style="font-size:10px;color:var(--p);font-weight:700;" id="fc-${fkey}">${fc>0?fc+' foto(s)':'Fotografar'}</div></div></div><input type="file" accept="image/*" capture="environment" id="fi-${fkey}" onchange="capF('${fkey}',this)"/></div></div>`;
+    });
+  });
+  html+=`<div style="margin-top:16px;margin-bottom:6px;"><button class="btn btn-p" onclick="finEt()">Finalizar etapa ›</button></div><div style="height:20px;"></div>`;
+  document.getElementById('ck-body').innerHTML=html;
+  goTo('s-check');
+}
+
+function setIt(key,val,btn){
+  const p=ST.pedidos[ST.atualPed],et=ETAPAS[ST.atualEt];
+  p.etapas[ST.atualEt].res[key]=val;
+  document.getElementById('ci-'+key).className='ci '+(val==='ok'?'ck':val==='fail'?'fl':'na');
+  document.getElementById('cc-'+key).textContent=val==='ok'?'✓':val==='fail'?'✕':'—';
+  btn.closest('.trow').querySelectorAll('.tbtn').forEach(b=>b.className='tbtn');
+  btn.className='tbtn '+(val==='ok'?'tok':val==='fail'?'tfl':'tna');
+  const res=p.etapas[ST.atualEt].res;
+  updP(et.cats.reduce((a,c)=>a+c.items.length,0),Object.keys(res).length,Object.values(res).filter(x=>x==='ok').length*10);
+  save();
+}
+function saveOb(key,val){ST.pedidos[ST.atualPed].etapas[ST.atualEt].obs[key]=val;save();}
+function capF(fkey,input){
+  if(!input.files||!input.files[0])return;
+  const r=new FileReader();
+  r.onload=e=>{if(!ST.fotos[fkey])ST.fotos[fkey]=[];ST.fotos[fkey].push(e.target.result);const el=document.getElementById('fc-'+fkey);if(el)el.textContent=ST.fotos[fkey].length+' foto(s)';save();toast('Foto salva!');};
+  r.readAsDataURL(input.files[0]);
+}
+function updP(total,done,pts){
+  document.getElementById('ck-bar').style.width=(total>0?Math.round(done/total*100):0)+'%';
+  document.getElementById('ck-prog').textContent=done+'/'+total;
+  document.getElementById('ck-xp').textContent='+'+pts+' pts';
+}
+function finEt(){
+  const p=ST.pedidos[ST.atualPed],et=ETAPAS[ST.atualEt],res=p.etapas[ST.atualEt].res;
+  const total=et.cats.reduce((a,c)=>a+c.items.length,0);
+  if(Object.keys(res).length<total){toast('Avalie todos os itens');return;}
+  const ok=Object.values(res).filter(x=>x==='ok').length,fail=Object.values(res).filter(x=>x==='fail').length,na=Object.values(res).filter(x=>x==='na').length,pts=ok*10;
+  p.etapas[ST.atualEt].status='concluido';p.etapas[ST.atualEt].pts=pts;p.etapas[ST.atualEt].data=new Date().toLocaleDateString('pt-BR');
+  ST.xp+=pts;if(ST.atualEt===6)p.concluido=true;save();
+  const pct=Math.round(ok/(ok+fail||1)*100);
+  document.getElementById('r-titulo').textContent='Etapa '+et.n+' — Resultado';
+  document.getElementById('r-sub').textContent=p.cliente+' · '+p.num;
+  document.getElementById('r-pct').textContent=pct+'%';
+  document.getElementById('r-ok-l').textContent=ok+' aprovados';
+  document.getElementById('r-ring').style.borderColor=pct>=80?'var(--ok)':pct>=60?'var(--warn)':'var(--fail)';
+  document.getElementById('r-status').textContent=pct>=80?'Etapa concluída!':pct>=60?'Com pendências':'Revisar';
+  document.getElementById('r-pts').textContent='+'+pts+' pontos!';
+  document.getElementById('r-info').innerHTML=`<div class="ir"><span class="ik">Cliente</span><span class="iv">${p.cliente}</span></div><div class="ir"><span class="ik">Pedido</span><span class="iv">${p.num}</span></div><div class="ir"><span class="ik">Etapa</span><span class="iv">${et.t}</span></div><div class="ir"><span class="ik">Data</span><span class="iv">${new Date().toLocaleDateString('pt-BR')}</span></div><div class="ir"><span class="ik" style="color:var(--ok)">Aprovados</span><span class="iv" style="color:var(--ok)">${ok}</span></div><div class="ir"><span class="ik" style="color:var(--fail)">Pendências</span><span class="iv" style="color:var(--fail)">${fail}</span></div>`;
+  const dest=getNotif(ST.atualEt),msg=encodeURIComponent(`✅ *Casa Villare — Etapa ${et.n} concluída*\n\n📋 ${et.t}\n👤 ${p.cliente} · ${p.num}\n✓ ${ok} aprovados · ⚠ ${fail} pendências\n\nPróxima etapa liberada.`);
+  document.getElementById('r-wa').innerHTML=dest.length?'<div class="sec">Notificar</div>'+dest.map(d=>`<a href="https://wa.me/${d.w}?text=${msg}" target="_blank" style="text-decoration:none;"><button class="wa-btn">📱 Avisar ${d.n}</button></a>`).join(''):'';
+  let sum='';
+  et.cats.forEach((cat,ci)=>{
+    sum+=`<div style="margin-bottom:12px;"><div class="sec" style="margin-top:0;">${cat.c}</div>`;
+    cat.items.forEach((item,ii)=>{
+      const key=ci+'_'+ii,vv=res[key]||'na',oo=p.etapas[ST.atualEt].obs[key]||'';
+      sum+=`<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:.5px solid #F0EBE3;"><div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;background:${vv==='ok'?'var(--ok)':vv==='fail'?'var(--fail)':'var(--gl)'};"></div><div style="flex:1;font-size:12px;">${item.l}${oo?`<br><span style="font-size:10px;color:var(--gl);">${oo}</span>`:''}</div><span style="font-size:10px;font-weight:700;color:${vv==='ok'?'var(--ok)':vv==='fail'?'var(--fail)':'var(--gl)'};">${vv==='ok'?'OK':vv==='fail'?'PEND':'N/A'}</span></div>`;
+    });
+    sum+='</div>';
+  });
+  document.getElementById('r-summary').innerHTML=sum;
+  goTo('s-result');
+}
+
+function calcCom(t){const tab=ST.tabelaComissao&&ST.tabelaComissao.length?ST.tabelaComissao:TAB_DEF;let pct=tab[0].pct;for(const tier of tab){if(t>=tier.de)pct=tier.pct;}return t*(pct/100);}
+function rCom(){
+  const c=ST.comercial;
+  document.getElementById('com-mes').textContent=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  // Garantir consistência: arrays devem ter o mesmo tamanho de nomes[]
+  while(c.vendas.length<c.nomes.length)c.vendas.push([]);
+  while(c.metaV.length<c.nomes.length)c.metaV.push(0);
+  while((c.comissaoManual||[]).length<c.nomes.length)c.comissaoManual.push(null);
+  const tot=c.vendas.reduce((a,arr)=>a+arr.reduce((x,y)=>x+y,0),0);
+  const pct=c.metaLoja>0?Math.min(100,Math.round(tot/c.metaLoja*100)):0;
+  document.getElementById('ml-val').textContent='R$ '+tot.toLocaleString('pt-BR');
+  document.getElementById('ml-sub').textContent='de R$ '+c.metaLoja.toLocaleString('pt-BR');
+  document.getElementById('ml-pct').textContent=pct+'%';
+  document.getElementById('ml-bar').style.cssText=`width:${pct}%;background:${pct>=100?'var(--ok)':pct>=80?'var(--warn)':'var(--p)'};`;
+  // Selector dinâmico de vendedoras
+  document.getElementById('vsel').innerHTML=c.nomes.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+  document.getElementById('btn-meta').style.display=ST.perfil==='gestor'?'block':'none';
+  // Tabela de comissão dinâmica
+  const tab=ST.tabelaComissao&&ST.tabelaComissao.length?ST.tabelaComissao:TAB_DEF;
+  document.getElementById('tabela-com-display').innerHTML=tab.map((tier,i)=>{
+    const prox=tab[i+1];
+    const label=prox?`A partir de R$ ${tier.de.toLocaleString('pt-BR')}`:`Acima de R$ ${tier.de.toLocaleString('pt-BR')}`;
+    return `<div class="ir"><span class="ik">${label}</span><span class="iv">${tier.pct}%</span></div>`;
+  }).join('');
+  document.getElementById('vend-list').innerHTML=c.nomes.map((nome,i)=>{
+    const vendas=c.vendas[i]||[],t=vendas.reduce((a,b)=>a+b,0);
+    const meta=c.metaV[i]||0,p2=meta>0?Math.min(100,Math.round(t/meta*100)):0;
+    const comManual=(c.comissaoManual&&c.comissaoManual[i]!=null)?c.comissaoManual[i]:null;
+    const com=comManual!==null?comManual:calcCom(t),falta=Math.max(0,meta-t);
+    const eqCom=(ST.equipe.comercial||[]);
+    const wa=(eqCom[i]&&eqCom[i].tel)?eqCom[i].tel:'';
+    const msg=encodeURIComponent(`📊 *Casa Villare*\nOlá ${nome}!\nVendas: R$ ${t.toLocaleString('pt-BR')} (${p2}%)\nMeta: R$ ${meta.toLocaleString('pt-BR')}\nComissão: R$ ${com.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+    const labelCom=comManual!==null?'Comissão (definida pelo gestor)':'Comissão (automática)';
+    return `<div class="vend-card"><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;">${nome}</div><div style="display:flex;gap:6px;align-items:center;">${ST.perfil==='gestor'?`<button onclick="trocarNome(${i})" style="background:none;border:.5px solid var(--gl);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">✏️</button>`:''}<span class="badge ${p2>=100?'b-ok':p2>=80?'b-pend':'b-wait'}">${p2}%</span></div></div><div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:600;color:var(--p);margin:4px 0;">R$ ${t.toLocaleString('pt-BR')}</div><div style="font-size:11px;color:var(--gl);margin-bottom:4px;">Meta: R$ ${meta.toLocaleString('pt-BR')} · Falta: R$ ${falta.toLocaleString('pt-BR')}</div><div class="meta-bar"><div class="meta-fill" style="width:${p2}%;background:${p2>=100?'var(--ok)':p2>=80?'var(--warn)':'var(--p)'};"></div></div><div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;"><div style="font-size:12px;color:var(--gray);">${labelCom}</div><div style="display:flex;align-items:center;gap:6px;"><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;background:var(--cream);padding:3px 10px;border-radius:10px;">R$ ${com.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>${ST.perfil==='gestor'?`<button onclick="editarComissaoComercial(${i})" style="background:none;border:.5px solid var(--p);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--p);">✏️</button>`:''}</div></div><a href="https://wa.me/${wa}?text=${msg}" target="_blank" style="text-decoration:none;display:block;margin-top:10px;"><button class="wa-btn" style="font-size:12px;padding:10px;">📱 Enviar resultado para ${nome}</button></a></div>`;
+  }).join('');
+}
+function lancarVenda(){
+  const idx=parseInt(document.getElementById('vsel').value),vl=parseFloat(document.getElementById('vval').value);
+  if(!vl||vl<=0){toast('Informe o valor');return;}
+  if(!ST.comercial.vendas[idx])ST.comercial.vendas[idx]=[];
+  ST.comercial.vendas[idx].push(vl);document.getElementById('vval').value='';save();rCom();toast('Venda lançada!');
+}
+
+// === METAS DINÂMICAS ===
+function rMeta(){
+  if(ST.perfil!=='gestor'){toast('Acesso restrito ao gestor');goTo('s-comercial');return;}
+  const c=ST.comercial;
+  document.getElementById('sm-loja').value=c.metaLoja||'';
+  document.getElementById('sm-vendedoras').innerHTML=c.nomes.map((nome,i)=>
+    `<div style="background:#fff;border:.5px solid #E8E0D6;border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <input class="form-inp" style="margin-bottom:0;flex:1;" value="${nome}" onchange="ST.comercial.nomes[${i}]=this.value.trim()||'Vendedora ${i+1}'"/>
+        ${c.nomes.length>1?`<button onclick="remVendedora(${i})" style="background:var(--fail);color:#fff;border:none;border-radius:8px;width:36px;height:36px;font-size:14px;cursor:pointer;flex-shrink:0;">✕</button>`:''}
+      </div>
+      <label class="form-lbl">Meta (R$)</label>
+      <input class="form-inp" type="number" id="sm-meta-${i}" value="${c.metaV[i]||''}" placeholder="50000"/>
+      <label class="form-lbl">Comissão (R$) — deixe vazio para cálculo automático por faixa</label>
+      <input class="form-inp" style="margin-bottom:0;" type="number" id="sm-com-${i}" value="${(c.comissaoManual&&c.comissaoManual[i]!=null)?c.comissaoManual[i]:''}" placeholder="Automática"/>
+    </div>`).join('');
+}
+function addVendedora(){
+  const n=prompt('Nome da nova vendedora:');
+  if(!n||!n.trim())return;
+  ST.comercial.nomes.push(n.trim());
+  ST.comercial.metaV.push(0);
+  ST.comercial.vendas.push([]);
+  save();rMeta();toast('Vendedora adicionada!');
+}
+function remVendedora(i){
+  if(!confirm(`Remover ${ST.comercial.nomes[i]}? Todas as vendas dela serão apagadas.`))return;
+  ST.comercial.nomes.splice(i,1);
+  ST.comercial.metaV.splice(i,1);
+  ST.comercial.vendas.splice(i,1);
+  save();rMeta();toast('Vendedora removida');
+}
+function salvarMetas(){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  ST.comercial.metaLoja=parseFloat(v('sm-loja'))||0;
+  if(!Array.isArray(ST.comercial.comissaoManual))ST.comercial.comissaoManual=[];
+  ST.comercial.nomes.forEach((_,i)=>{
+    const elM=document.getElementById('sm-meta-'+i);
+    if(elM)ST.comercial.metaV[i]=parseFloat(elM.value)||0;
+    const elC=document.getElementById('sm-com-'+i);
+    if(elC){const val=elC.value.trim();ST.comercial.comissaoManual[i]=val===''?null:(parseFloat(val)||0);}
+  });
+  save();toast('Metas salvas!');goTo('s-comercial');
+}
+function trocarNome(i){if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}const n=prompt('Novo nome:',ST.comercial.nomes[i]);if(!n||!n.trim())return;ST.comercial.nomes[i]=n.trim();save();rCom();toast('Nome atualizado!');}
+function editarComissaoComercial(i){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  const atual=ST.comercial.comissaoManual[i];
+  const entrada=prompt('Comissão de '+ST.comercial.nomes[i]+' (R$):\nDeixe em branco para usar cálculo automático por faixa.',atual!=null?atual:'');
+  if(entrada===null)return;
+  if(entrada.trim()===''){ST.comercial.comissaoManual[i]=null;save();rCom();toast('Voltou para cálculo automático');return;}
+  const val=parseFloat(entrada.replace(',','.'));
+  if(isNaN(val)||val<0){toast('Valor inválido');return;}
+  ST.comercial.comissaoManual[i]=val;save();rCom();toast('Comissão definida!');
+}
+
+// === CONFIGURAÇÕES (gestor) ===
+function rConfig(){
+  if(ST.perfil!=='gestor'){toast('Acesso restrito ao gestor');goTo('s-home');return;}
+  const eq=ST.equipe;
+  const tab=ST.tabelaComissao;
+  const iconePArea=(a)=>a==='gestor'?'👔':a==='comercial'?'💼':'🔧';
+  const renderArea=(area,label)=>{
+    const pessoas=(eq[area]||[]);
+    return `<div class="sec">${label}</div>`+
+      pessoas.map((p,i)=>`<div class="ferias-item">
+        <div style="flex:1;">
+          <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">${p.i} ${p.n} <span style="font-size:11px;color:var(--gl);font-weight:400;">· ${p.p}</span></div>
+          <div style="font-size:11px;color:var(--gl);">📱 ${p.tel?'('+p.tel.slice(2,4)+') '+p.tel.slice(4,9)+'-'+p.tel.slice(9):'sem telefone'}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="cfgEditPessoa('${area}',${i})" style="background:none;border:.5px solid var(--gl);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">✏️</button>
+          <button onclick="cfgRemPessoa('${area}',${i})" style="background:none;border:.5px solid var(--fail);color:var(--fail);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">✕</button>
+        </div>
+      </div>`).join('')+
+      `<button onclick="cfgAddPessoa('${area}')" class="btn btn-s" style="margin-bottom:6px;font-size:13px;">+ Adicionar pessoa</button>`;
+  };
+  const renderTabela=()=>`<div class="sec">Tabela de comissão (Comercial)</div>`+
+    `<div class="card" style="margin-bottom:8px;">`+
+    tab.map((tier,i)=>{
+      const prox=tab[i+1];
+      const label=prox?`A partir de R$ ${tier.de.toLocaleString('pt-BR')}`:`Acima de R$ ${tier.de.toLocaleString('pt-BR')}`;
+      return `<div class="ir"><span class="ik">${label}</span><div style="display:flex;align-items:center;gap:8px;"><span class="iv">${tier.pct}%</span><button onclick="cfgEditTier(${i})" style="background:none;border:.5px solid var(--gl);border-radius:6px;padding:2px 7px;font-size:11px;cursor:pointer;">✏️</button></div></div>`;
+    }).join('')+`</div>`+
+    `<button onclick="cfgAddTier()" class="btn btn-s" style="margin-bottom:6px;font-size:13px;">+ Adicionar faixa</button>`;
+  document.getElementById('cfg-body').innerHTML=
+    renderArea('obras','Equipe de Obras')+
+    renderArea('comercial','Equipe Comercial')+
+    renderArea('gestor','Gestores')+
+    renderTabela()+
+    `<div class="sec">App</div>`+
+    `<button onclick="verificarAtualizacao()" class="btn btn-s" style="margin-bottom:6px;">🔄 Verificar atualização</button>`+
+    `<div style="height:20px;"></div>`;
+}
+function cfgAddPessoa(area){
+  if(ST.perfil!=='gestor')return;
+  const perfis={obras:'supervisor, projetista ou montador',comercial:'vendedor',gestor:'gestor'};
+  const n=prompt('Nome:');if(!n||!n.trim())return;
+  const p=prompt('Perfil ('+perfis[area]+'):',area==='comercial'?'vendedor':area==='gestor'?'gestor':'montador');if(p===null)return;
+  const tel=prompt('WhatsApp (com DDD, ex: 19994046704). Deixe vazio se não tiver:')||'';
+  const i=area==='gestor'?'👔':area==='comercial'?'💼':'🔧';
+  ST.equipe[area].push({n:n.trim(),p:(p||'').trim()||'montador',i,tel:normalizeTel(tel)});
+  if(area==='obras'){
+    const perfil=(p||'').trim().toLowerCase()||'montador';
+    if(!ST.montadores.lista.some(m=>m.nome===n.trim()))ST.montadores.lista.push({nome:n.trim(),tel:normalizeTel(tel),perfil});
+  }
+  if(area==='comercial'){ST.comercial.nomes.push(n.trim());ST.comercial.metaV.push(0);ST.comercial.vendas.push([]);ST.comercial.comissaoManual.push(null);}
+  save();rLogin();rConfig();toast('Pessoa adicionada!');
+}
+function cfgEditPessoa(area,i){
+  if(ST.perfil!=='gestor')return;
+  const p=ST.equipe[area][i];
+  const antigo=p.n;
+  const n=prompt('Nome:',p.n);if(n===null)return;if(!n.trim()){toast('Nome inválido');return;}
+  const pf=prompt('Perfil:',p.p);if(pf===null)return;
+  const tel=prompt('WhatsApp (com DDD):',p.tel?p.tel.slice(2):'');if(tel===null)return;
+  ST.equipe[area][i]={...p,n:n.trim(),p:(pf||'').trim()||p.p,tel:normalizeTel(tel)};
+  if(area==='obras'){
+    const idx=ST.montadores.lista.findIndex(m=>m.nome===antigo);
+    if(idx>=0)ST.montadores.lista[idx]={...ST.montadores.lista[idx],nome:n.trim(),tel:normalizeTel(tel),perfil:(pf||'').trim().toLowerCase()||p.p};
+    ST.montadores.comissoes.forEach(c=>{if(c.montador===antigo)c.montador=n.trim();});
+  }
+  if(area==='comercial'){
+    const ci=ST.comercial.nomes.indexOf(antigo);
+    if(ci>=0)ST.comercial.nomes[ci]=n.trim();
+  }
+  save();rLogin();rConfig();toast('Atualizado!');
+}
+function cfgRemPessoa(area,i){
+  if(ST.perfil!=='gestor')return;
+  const nome=ST.equipe[area][i].n;
+  if(!confirm(`Remover ${nome} da área ${area}?`))return;
+  ST.equipe[area].splice(i,1);
+  if(area==='comercial'){
+    const ci=ST.comercial.nomes.indexOf(nome);
+    if(ci>=0){ST.comercial.nomes.splice(ci,1);ST.comercial.metaV.splice(ci,1);ST.comercial.vendas.splice(ci,1);ST.comercial.comissaoManual.splice(ci,1);}
+  }
+  save();rLogin();rConfig();toast('Removido');
+}
+function cfgEditTier(i){
+  if(ST.perfil!=='gestor')return;
+  const tier=ST.tabelaComissao[i];
+  const de=prompt('A partir de qual valor (R$)?',tier.de);if(de===null)return;
+  const pct=prompt('Percentual (%)?',tier.pct);if(pct===null)return;
+  const novoDE=parseFloat((de||'0').replace(',','.'));const novoPCT=parseFloat((pct||'0').replace(',','.'));
+  if(isNaN(novoDE)||isNaN(novoPCT)||novoPCT<=0){toast('Valores inválidos');return;}
+  ST.tabelaComissao[i]={de:novoDE,pct:novoPCT};
+  ST.tabelaComissao.sort((a,b)=>a.de-b.de);
+  save();rConfig();toast('Faixa atualizada!');
+}
+function cfgAddTier(){
+  if(ST.perfil!=='gestor')return;
+  const de=prompt('A partir de qual valor (R$)?');if(de===null)return;
+  const pct=prompt('Percentual (%)?');if(pct===null)return;
+  const novoDE=parseFloat((de||'').replace(',','.'));const novoPCT=parseFloat((pct||'').replace(',','.'));
+  if(isNaN(novoDE)||isNaN(novoPCT)||novoPCT<=0){toast('Valores inválidos');return;}
+  ST.tabelaComissao.push({de:novoDE,pct:novoPCT});
+  ST.tabelaComissao.sort((a,b)=>a.de-b.de);
+  save();rConfig();toast('Faixa adicionada!');
+}
+
+// === MÓDULO EQUIPE & COMISSÕES (acesso só para gestor) ===
+function iconePerfil(p){return p==='supervisor'?'🔍':p==='projetista'?'✏️':'🔧';}
+function rMont(){
+  if(ST.perfil!=='gestor'){toast('Acesso restrito ao gestor');goTo('s-obras');return;}
+  const m=ST.montadores;
+  const tot=m.comissoes.reduce((a,c)=>a+c.valor,0);
+  document.getElementById('mont-tot').textContent='R$ '+tot.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+  document.getElementById('mont-qtd').textContent=m.comissoes.length;
+  document.getElementById('mont-sub').textContent=m.lista.length+' pessoa(s) cadastrada(s)';
+  // Cards por pessoa com totais
+  document.getElementById('mont-equipe').innerHTML=m.lista.length?m.lista.map((mont,i)=>{
+    const nome=mont.nome,tel=mont.tel||'',perfil=mont.perfil||'montador';
+    const ic=iconePerfil(perfil);
+    const comissoesDoMont=m.comissoes.filter(c=>c.montador===nome);
+    const totalMont=comissoesDoMont.reduce((a,c)=>a+c.valor,0);
+    const qtdMont=comissoesDoMont.length;
+    const telFmt=tel?'('+tel.slice(2,4)+') '+tel.slice(4,9)+'-'+tel.slice(9):'sem telefone';
+    return `<div class="vend-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;">${ic} ${nome} <span style="font-size:11px;color:var(--gl);font-weight:400;text-transform:capitalize;">· ${perfil}</span></div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="editarMontador(${i})" style="background:none;border:.5px solid var(--gl);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">✏️</button>
+        <button onclick="removerMontador(${i})" style="background:none;border:.5px solid var(--fail);color:var(--fail);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">✕</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--gl);margin-bottom:4px;">📱 ${telFmt}</div>
+    <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:600;color:var(--p);">R$ ${totalMont.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+    <div style="font-size:11px;color:var(--gl);">${qtdMont} comissão(ões) · este período</div>
+    ${tel?(()=>{const msg=encodeURIComponent(`${ic} *Casa Villare*\nOlá ${nome}!\nResumo das suas comissões:\nTotal: R$ ${totalMont.toLocaleString('pt-BR',{minimumFractionDigits:2})}\nObras: ${qtdMont}`);return `<a href="https://wa.me/${tel}?text=${msg}" target="_blank" style="text-decoration:none;display:block;margin-top:10px;"><button class="wa-btn" style="font-size:12px;padding:10px;">📱 Enviar resumo para ${nome}</button></a>`;})():''}
+    </div>`;
+  }).join(''):'<div style="text-align:center;padding:20px;color:var(--gl);font-size:13px;">Nenhuma pessoa cadastrada</div>';
+  // Histórico de comissões (mais recentes primeiro)
+  document.getElementById('mont-hist').innerHTML=m.comissoes.length?m.comissoes.slice().reverse().map((c,ri)=>{
+    const i=m.comissoes.length-1-ri;
+    const mont=m.lista.find(x=>x.nome===c.montador);
+    const tel=mont?mont.tel:'';
+    const ic=mont?iconePerfil(mont.perfil||'montador'):'🔧';
+    const msgC=encodeURIComponent(`${ic} *Casa Villare — Comissão lançada*\nObra: ${c.obra}\nValor: R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}\nData: ${c.data}${c.obs?'\nObs: '+c.obs:''}`);
+    return `<div class="ferias-item">
+      <div style="flex:1;">
+        <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">${ic} ${c.montador} · R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+        <div style="font-size:11px;color:var(--gl);">${c.obra} · ${c.data}</div>
+        ${c.obs?`<div style="font-size:10px;color:var(--gray);margin-top:2px;font-style:italic;">${c.obs}</div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        ${tel?`<a href="https://wa.me/${tel}?text=${msgC}" target="_blank" style="text-decoration:none;"><button style="background:#25D366;color:#fff;border:none;border-radius:6px;width:32px;height:32px;font-size:14px;cursor:pointer;">📱</button></a>`:''}
+        <button onclick="editarComissao(${i})" style="background:none;border:.5px solid var(--gl);border-radius:6px;width:32px;height:32px;font-size:14px;cursor:pointer;">✏️</button>
+        <button onclick="removerComissao(${i})" style="background:none;border:none;color:var(--fail);font-size:18px;cursor:pointer;">✕</button>
+      </div>
+    </div>`;
+  }).join(''):'<div style="text-align:center;padding:20px;color:var(--gl);font-size:13px;">Nenhuma comissão lançada</div>';
+}
+function rMontForm(editIdx){
+  if(ST.perfil!=='gestor'){toast('Acesso restrito');goTo('s-obras');return;}
+  _editandoComissaoIdx=(editIdx!=null)?editIdx:null;
+  const editando=_editandoComissaoIdx!==null;
+  document.querySelector('#s-mont-novo .hdr-title').textContent=editando?'Editar Comissão':'Lançar Comissão';
+  document.querySelector('#s-mont-novo button.btn-p').textContent=editando?'Salvar alterações':'Salvar comissão';
+  const m=ST.montadores;
+  document.getElementById('mn-montador').innerHTML=m.lista.length?m.lista.map(x=>{const p=x.perfil||'montador';const ic=iconePerfil(p);return `<option value="${x.nome}">${ic} ${x.nome} · ${p}</option>`;}).join(''):'<option value="">Cadastre uma pessoa primeiro</option>';
+  const peds=ST.pedidos;
+  document.getElementById('mn-pedido').innerHTML=peds.length?peds.map(p=>`<option value="${p.num}">${p.num} · ${p.cliente} · ${p.ambiente}</option>`).join(''):'<option value="">Nenhum pedido cadastrado</option>';
+  if(editando){
+    const c=ST.montadores.comissoes[_editandoComissaoIdx];
+    document.getElementById('mn-montador').value=c.montador;
+    document.getElementById('mn-tipo').value=c.tipo;
+    document.getElementById('mn-valor').value=c.valor;
+    document.getElementById('mn-data').value=c.dataIso||new Date().toISOString().split('T')[0];
+    document.getElementById('mn-obs').value=c.obs||'';
+    if(c.tipo==='avulso')document.getElementById('mn-desc').value=c.obra;
+    else document.getElementById('mn-pedido').value=c.obra;
+  }else{
+    document.getElementById('mn-valor').value='';
+    document.getElementById('mn-desc').value='';
+    document.getElementById('mn-obs').value='';
+    document.getElementById('mn-data').value=new Date().toISOString().split('T')[0];
+    document.getElementById('mn-tipo').value='vinc';
+  }
+  toggleMontPedido();
+}
+function editarComissao(i){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  rMontForm(i);
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));
+  document.getElementById('s-mont-novo').classList.add('active');
+}
+function toggleMontPedido(){
+  const tipo=document.getElementById('mn-tipo').value;
+  document.getElementById('mn-vinc-area').style.display=tipo==='vinc'?'block':'none';
+  document.getElementById('mn-avulso-area').style.display=tipo==='avulso'?'block':'none';
+}
+function normalizeTel(t){if(!t)return '';let s=t.replace(/\D/g,'');if(s.length===11||s.length===10)s='55'+s;return s;}
+function addMontador(){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  const n=prompt('Nome:');
+  if(!n||!n.trim())return;
+  const p=prompt('Perfil (montador, supervisor ou projetista):','montador');
+  if(p===null)return;
+  const perfil=['montador','supervisor','projetista'].includes((p||'').trim().toLowerCase())?p.trim().toLowerCase():'montador';
+  const tel=prompt('Telefone (com DDD, ex: 19994046704). Deixe em branco se não tiver:')||'';
+  ST.montadores.lista.push({nome:n.trim(),tel:normalizeTel(tel),perfil});
+  save();rMont();toast('Pessoa adicionada!');
+}
+function editarMontador(i){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  const atual=ST.montadores.lista[i];
+  const antigo=atual.nome;
+  const n=prompt('Nome:',atual.nome);
+  if(n===null)return;
+  if(!n.trim()){toast('Nome inválido');return;}
+  const p=prompt('Perfil (montador, supervisor ou projetista):',atual.perfil||'montador');
+  if(p===null)return;
+  const perfil=['montador','supervisor','projetista'].includes((p||'').trim().toLowerCase())?p.trim().toLowerCase():(atual.perfil||'montador');
+  const tel=prompt('Telefone (com DDD):',atual.tel?atual.tel.slice(2):'');
+  if(tel===null)return;
+  ST.montadores.lista[i]={nome:n.trim(),tel:normalizeTel(tel),perfil};
+  // Atualiza nome em comissões existentes
+  if(antigo!==n.trim())ST.montadores.comissoes.forEach(c=>{if(c.montador===antigo)c.montador=n.trim();});
+  save();rMont();toast('Atualizado!');
+}
+function removerMontador(i){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  const nome=ST.montadores.lista[i].nome;
+  const tem=ST.montadores.comissoes.some(c=>c.montador===nome);
+  const msg=tem?`Remover ${nome}? As comissões registradas serão mantidas no histórico.`:`Remover ${nome}?`;
+  if(!confirm(msg))return;
+  ST.montadores.lista.splice(i,1);save();rMont();toast('Removido');
+}
+function salvarComissaoMont(){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  const montador=document.getElementById('mn-montador').value;
+  const tipo=document.getElementById('mn-tipo').value;
+  const valor=parseFloat(document.getElementById('mn-valor').value);
+  const data=document.getElementById('mn-data').value;
+  const obs=document.getElementById('mn-obs').value.trim();
+  if(!montador){toast('Selecione um montador');return;}
+  if(!valor||valor<=0){toast('Informe um valor válido');return;}
+  if(!data){toast('Informe a data');return;}
+  let obra='';
+  if(tipo==='vinc'){
+    obra=document.getElementById('mn-pedido').value;
+    if(!obra){toast('Selecione um pedido');return;}
+  }else{
+    obra=document.getElementById('mn-desc').value.trim();
+    if(!obra){toast('Descreva a obra');return;}
+  }
+  const entrada={id:_editandoComissaoIdx!==null?ST.montadores.comissoes[_editandoComissaoIdx].id:Date.now(),montador,obra,valor,data:new Date(data+'T12:00').toLocaleDateString('pt-BR'),dataIso:data,tipo,obs};
+  if(_editandoComissaoIdx!==null){ST.montadores.comissoes[_editandoComissaoIdx]=entrada;_editandoComissaoIdx=null;save();toast('Comissão atualizada!');}
+  else{ST.montadores.comissoes.push(entrada);save();toast('Comissão lançada!');}
+  setTimeout(()=>goTo('s-mont'),500);
+}
+function removerComissao(i){
+  if(ST.perfil!=='gestor'){toast('Apenas gestores');return;}
+  if(!confirm('Remover esta comissão?'))return;
+  ST.montadores.comissoes.splice(i,1);save();rMont();toast('Comissão removida');
+}
+
+// === VISÃO PESSOAL DO MONTADOR (somente leitura) ===
+function rMine(){
+  if(ST.perfil!=='montador'&&ST.perfil!=='supervisor'&&ST.perfil!=='projetista'){toast('Acesso restrito');goTo('s-home');return;}
+  const m=ST.montadores||{lista:[],comissoes:[]};
+  const minhasC=m.comissoes.filter(c=>c.montador===ST.nome);
+  const tot=minhasC.reduce((a,c)=>a+c.valor,0);
+  // Total no mês corrente
+  const hoje=new Date(),mesAtual=hoje.getMonth(),anoAtual=hoje.getFullYear();
+  const noMes=minhasC.filter(c=>{if(!c.dataIso)return false;const d=new Date(c.dataIso+'T12:00');return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;});
+  const totMes=noMes.reduce((a,c)=>a+c.valor,0);
+  document.getElementById('mine-sub').textContent='Olá, '+ST.nome+'!';
+  document.getElementById('mine-tot').textContent='R$ '+tot.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+  document.getElementById('mine-qtd').textContent=minhasC.length;
+  const mesNome=hoje.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  document.getElementById('mine-mes').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;text-transform:capitalize;">${mesNome}</div><div style="font-size:11px;color:var(--gl);margin-top:2px;">${noMes.length} obra(s) no mês</div></div><div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:600;color:var(--p);">R$ ${totMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>`;
+  document.getElementById('mine-hist').innerHTML=minhasC.length?minhasC.slice().reverse().map(c=>`<div class="card" style="padding:12px 14px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;flex:1;padding-right:8px;">${c.obra}</div><div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:600;color:var(--p);white-space:nowrap;">R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div><div style="font-size:11px;color:var(--gl);">📅 ${c.data}${c.tipo==='avulso'?' · Avulso':' · Pedido'}</div>${c.obs?`<div style="font-size:11px;color:var(--gray);margin-top:6px;font-style:italic;border-left:2px solid var(--cream);padding-left:8px;">${c.obs}</div>`:''}</div>`).join(''):'<div style="text-align:center;padding:30px;color:var(--gl);font-size:13px;">Nenhuma comissão registrada ainda.<br>Quando o gestor lançar uma comissão para você, ela aparece aqui.</div>';
+}
+
+function solicitarFerias(){
+  const nome=v('fer-nome'),ini=document.getElementById('fer-ini').value,fim=document.getElementById('fer-fim').value;
+  if(!nome||!ini||!fim){toast('Preencha todos os campos');return;}
+  if(ini>fim){toast('Data início deve ser antes do fim');return;}
+  const iniD=new Date(ini),fimD=new Date(fim),dias=Math.round((fimD-iniD)/(1000*60*60*24))+1;
+  if(dias>16){toast('Máximo 15 dias');return;}
+  const conf=ST.ferias.find(f=>f.nome!==nome&&new Date(f.ini)<=fimD&&new Date(f.fim)>=iniD);
+  if(conf){toast('Conflito com '+conf.nome+'!');return;}
+  ST.ferias.push({id:Date.now(),nome,ini,fim,dias,criado:new Date().toLocaleDateString('pt-BR')});
+  save();document.getElementById('fer-nome').value='';document.getElementById('fer-ini').value='';document.getElementById('fer-fim').value='';
+  toast('Férias solicitadas!');rFer();
+}
+function rFer(){
+  document.getElementById('fer-list').innerHTML=ST.ferias.length?ST.ferias.map((f,i)=>`<div class="ferias-item"><div><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">${f.nome}</div><div style="font-size:11px;color:var(--gl);">${new Date(f.ini+'T12:00').toLocaleDateString('pt-BR')} → ${new Date(f.fim+'T12:00').toLocaleDateString('pt-BR')} · ${f.dias} dias</div></div>${ST.perfil==='gestor'?`<button onclick="remFer(${i})" style="background:none;border:none;color:var(--fail);font-size:18px;cursor:pointer;">✕</button>`:''}</div>`).join(''):'<div style="text-align:center;padding:20px;color:var(--gl);font-size:13px;">Nenhuma férias agendada</div>';
+}
+function remFer(i){ST.ferias.splice(i,1);save();rFer();toast('Removido');}
+
+// === FOLGA (montador) ===
+function solicitarFolga(){
+  if(ST.perfil!=='montador'){toast('Apenas montadores solicitam folga');return;}
+  const ini=document.getElementById('folga-ini').value,fim=document.getElementById('folga-fim').value;
+  const motivo=document.getElementById('folga-motivo').value.trim();
+  if(!ini||!fim){toast('Informe início e fim');return;}
+  if(ini>fim){toast('Data início deve ser antes do fim');return;}
+  const iniD=new Date(ini),fimD=new Date(fim),dias=Math.round((fimD-iniD)/(1000*60*60*24))+1;
+  // Conflito com outras folgas do mesmo montador
+  const conf=ST.folgas.find(f=>f.nome===ST.nome&&new Date(f.ini)<=fimD&&new Date(f.fim)>=iniD);
+  if(conf){toast('Você já tem folga nesse período');return;}
+  ST.folgas.push({id:Date.now(),nome:ST.nome,ini,fim,dias,motivo,criado:new Date().toLocaleDateString('pt-BR')});
+  save();
+  document.getElementById('folga-ini').value='';document.getElementById('folga-fim').value='';document.getElementById('folga-motivo').value='';
+  toast('Folga solicitada!');rFolga();
+}
+function rFolga(){
+  if(ST.perfil!=='montador'&&ST.perfil!=='gestor'){toast('Acesso restrito');goTo('s-home');return;}
+  // Montador vê só as próprias; gestor vê todas
+  const visiveis=ST.perfil==='gestor'?ST.folgas:ST.folgas.filter(f=>f.nome===ST.nome);
+  document.getElementById('folga-sub').textContent=ST.perfil==='gestor'?ST.folgas.length+' registro(s) totais':visiveis.length+' folga(s)';
+  // Esconder formulário se for gestor (gestor só vê histórico)
+  const isGestor=ST.perfil==='gestor';
+  ['folga-ini','folga-fim','folga-motivo'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=isGestor?'none':'';});
+  document.querySelectorAll('#s-folga .form-lbl').forEach(el=>el.style.display=isGestor?'none':'');
+  const btn=document.querySelector('#s-folga button.btn-p');if(btn)btn.style.display=isGestor?'none':'';
+  document.querySelectorAll('#s-folga .sec').forEach((el,i)=>{if(i===0)el.style.display=isGestor?'none':'';});
+  document.getElementById('folga-list').innerHTML=visiveis.length?visiveis.slice().reverse().map(f=>{
+    const idx=ST.folgas.indexOf(f);
+    const periodo=f.ini===f.fim?new Date(f.ini+'T12:00').toLocaleDateString('pt-BR'):`${new Date(f.ini+'T12:00').toLocaleDateString('pt-BR')} → ${new Date(f.fim+'T12:00').toLocaleDateString('pt-BR')}`;
+    return `<div class="ferias-item">
+      <div style="flex:1;">
+        <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">${isGestor?f.nome+' · ':''}${periodo}</div>
+        <div style="font-size:11px;color:var(--gl);">${f.dias} dia${f.dias>1?'s':''}${f.motivo?' · '+f.motivo:''}</div>
+      </div>
+      ${(isGestor||f.nome===ST.nome)?`<button onclick="remFolga(${idx})" style="background:none;border:none;color:var(--fail);font-size:18px;cursor:pointer;">✕</button>`:''}
+    </div>`;
+  }).join(''):'<div style="text-align:center;padding:20px;color:var(--gl);font-size:13px;">Nenhuma folga registrada</div>';
+}
+function remFolga(i){
+  const f=ST.folgas[i];if(!f)return;
+  if(ST.perfil!=='gestor'&&f.nome!==ST.nome){toast('Você só pode remover suas folgas');return;}
+  if(!confirm('Remover esta folga?'))return;
+  ST.folgas.splice(i,1);save();rFolga();toast('Folga removida');
+}
+
+let odoTmp={ini:null,fim:null};
+function fotoOdo(tp,input){
+  if(!input.files||!input.files[0])return;
+  const r=new FileReader();
+  r.onload=e=>{odoTmp[tp]=e.target.result;document.getElementById('odo-'+tp+'-l').textContent='✓ Salva';toast('Foto salva!');};
+  r.readAsDataURL(input.files[0]);
+}
+function regOdo(){
+  const ki=parseFloat(v('odo-ki')),kf=parseFloat(v('odo-kf'));
+  if(!ki||!kf){toast('Informe KM inicial e final');return;}
+  if(kf<=ki){toast('KM final deve ser maior');return;}
+  if(!odoTmp.ini||!odoTmp.fim){toast('Fotos obrigatórias');return;}
+  const comb=v('odo-comb'),km=kf-ki;
+  ST.odo.push({id:Date.now(),data:new Date().toLocaleDateString('pt-BR'),nome:ST.nome,ki,kf,km,comb,abastVal:comb?parseFloat(v('odo-val'))||0:0,litros:comb?parseFloat(v('odo-lit'))||0:0,pedido:v('odo-ped')});
+  odoTmp={ini:null,fim:null};save();
+  ['odo-ki','odo-kf','odo-val','odo-lit','odo-ped'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('odo-comb').value='';document.getElementById('odo-abast').style.display='none';
+  document.getElementById('odo-ini-l').textContent='Obrigatória';document.getElementById('odo-fim-l').textContent='Obrigatória';
+  toast(km+' km registrados!');rOdo();
+}
+function rOdo(){
+  const totKm=ST.odo.reduce((a,r)=>a+r.km,0),totA=ST.odo.reduce((a,r)=>a+r.abastVal,0);
+  document.getElementById('odo-list').innerHTML=ST.odo.length?`<div class="card" style="margin-bottom:12px;display:flex;gap:10px;"><div style="flex:1;text-align:center;"><div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:600;color:var(--p);">${totKm}</div><div style="font-size:11px;color:var(--gl);">KM total</div></div><div style="flex:1;text-align:center;"><div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:600;color:var(--p);">R$${totA.toFixed(0)}</div><div style="font-size:11px;color:var(--gl);">Abastecido</div></div></div>`+ST.odo.slice().reverse().map(r=>`<div class="odo-reg"><div style="display:flex;justify-content:space-between;"><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">${r.nome} · ${r.data}</div><span class="badge b-wait">${r.km} km</span></div><div style="font-size:12px;color:var(--gray);margin-top:4px;">KM ${r.ki} → ${r.kf}${r.comb?' · '+r.comb+' R$'+r.abastVal+'/'+r.litros+'L':''}</div>${r.pedido?`<div style="font-size:11px;color:var(--gl);">${r.pedido}</div>`:''}</div>`).join(''):'<div style="text-align:center;padding:20px;color:var(--gl);font-size:13px;">Nenhum registro</div>';
+}
+
+function rRel(){
+  const ativos=ST.pedidos.filter(p=>!p.concluido).length,concl=ST.pedidos.filter(p=>p.concluido).length;
+  const totV=ST.comercial.vendas.reduce((a,arr)=>a+arr.reduce((x,y)=>x+y,0),0);
+  const totKm=ST.odo.reduce((a,r)=>a+r.km,0);
+  const totMont=(ST.montadores&&ST.montadores.comissoes)?ST.montadores.comissoes.reduce((a,c)=>a+c.valor,0):0;
+  document.getElementById('rel-stats').innerHTML=`<div class="stat"><div class="stat-n">${ativos}</div><div class="stat-l">Obras ativas</div></div><div class="stat"><div class="stat-n">${concl}</div><div class="stat-l">Concluídas</div></div><div class="stat"><div class="stat-n">R$${(totV/1000).toFixed(0)}k</div><div class="stat-l">Vendas</div></div><div class="stat"><div class="stat-n">${totKm}</div><div class="stat-l">KM</div></div>`;
+  document.getElementById('rel-obras').innerHTML=ST.pedidos.length?ST.pedidos.map(p=>{const done=p.etapas.filter(e=>e.status==='concluido').length;return `<div class="card"><div class="ir"><span class="ik">Cliente</span><span class="iv">${p.cliente}</span></div><div class="ir"><span class="ik">Pedido</span><span class="iv">${p.num}</span></div><div class="ir"><span class="ik">Etapa</span><span class="iv">${done}/7</span></div><div class="ir"><span class="ik">Status</span><span class="badge ${done===7?'b-ok':done>0?'b-pend':'b-wait'}">${done===7?'Concluído':done>0?'Em andamento':'Não iniciado'}</span></div></div>`;}).join(''):'<div style="color:var(--gl);font-size:13px;padding:10px;">Nenhuma obra</div>';
+  const c=ST.comercial;
+  document.getElementById('rel-com').innerHTML=`<div class="card">${c.nomes.map((nome,i)=>{const t=(c.vendas[i]||[]).reduce((a,b)=>a+b,0),meta=c.metaV[i]||0,p2=meta>0?Math.round(t/meta*100):0;return`<div class="ir"><span class="ik">${nome}</span><span class="iv">R$ ${t.toLocaleString('pt-BR')} (${p2}%)</span></div><div class="ir"><span class="ik">Comissão</span><span class="iv">R$ ${calcCom(t).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></div>`;}).join('')}<div class="ir"><span class="ik">Total loja</span><span class="iv">R$ ${totV.toLocaleString('pt-BR')}</span></div></div>`;
+  // Montadores
+  const m=ST.montadores||{lista:[],comissoes:[]};
+  document.getElementById('rel-mont').innerHTML=m.lista.length?`<div class="card">${m.lista.map(mont=>{const nome=mont.nome;const cs=m.comissoes.filter(c=>c.montador===nome);const t=cs.reduce((a,c)=>a+c.valor,0);return`<div class="ir"><span class="ik">${nome}</span><span class="iv">R$ ${t.toLocaleString('pt-BR',{minimumFractionDigits:2})} (${cs.length} obra${cs.length===1?'':'s'})</span></div>`;}).join('')}<div class="ir"><span class="ik">Total geral</span><span class="iv">R$ ${totMont.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></div></div>`:'<div style="color:var(--gl);font-size:13px;padding:10px;">Nenhum montador cadastrado</div>';
+  document.getElementById('rel-fer').innerHTML=ST.ferias.length?ST.ferias.map(f=>`<div class="card"><div class="ir"><span class="ik">Nome</span><span class="iv">${f.nome}</span></div><div class="ir"><span class="ik">Período</span><span class="iv">${new Date(f.ini+'T12:00').toLocaleDateString('pt-BR')} → ${new Date(f.fim+'T12:00').toLocaleDateString('pt-BR')}</span></div><div class="ir"><span class="ik">Dias</span><span class="iv">${f.dias}</span></div></div>`).join(''):'<div style="color:var(--gl);font-size:13px;padding:10px;">Nenhuma férias</div>';
+  const folgas=ST.folgas||[];
+  document.getElementById('rel-folga').innerHTML=folgas.length?folgas.map(f=>{const periodo=f.ini===f.fim?new Date(f.ini+'T12:00').toLocaleDateString('pt-BR'):`${new Date(f.ini+'T12:00').toLocaleDateString('pt-BR')} → ${new Date(f.fim+'T12:00').toLocaleDateString('pt-BR')}`;return`<div class="card"><div class="ir"><span class="ik">Montador</span><span class="iv">${f.nome}</span></div><div class="ir"><span class="ik">Período</span><span class="iv">${periodo}</span></div><div class="ir"><span class="ik">Dias</span><span class="iv">${f.dias}</span></div>${f.motivo?`<div class="ir"><span class="ik">Motivo</span><span class="iv">${f.motivo}</span></div>`:''}</div>`;}).join(''):'<div style="color:var(--gl);font-size:13px;padding:10px;">Nenhuma folga</div>';
+  document.getElementById('rel-odo').innerHTML=ST.odo.length?`<div class="card"><div class="ir"><span class="ik">Total KM</span><span class="iv">${totKm} km</span></div><div class="ir"><span class="ik">Total abastecido</span><span class="iv">R$ ${ST.odo.reduce((a,r)=>a+r.abastVal,0).toFixed(2)}</span></div><div class="ir"><span class="ik">Registros</span><span class="iv">${ST.odo.length}</span></div></div>`:'<div style="color:var(--gl);font-size:13px;padding:10px;">Nenhum registro</div>';
+}
+
+function v(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+
+function verificarAtualizacao(){
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistration().then(reg=>{
+      if(reg){reg.update().then(()=>{toast('Verificando atualização...');setTimeout(()=>window.location.reload(true),1500);});}
+      else{window.location.reload(true);}
+    });
+  } else {window.location.reload(true);}
+}
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
+
+load();
+rLogin();
+if(ST.nome&&ST.perfil){goTo('s-home');}
+</script>
+</body>
+</html>
