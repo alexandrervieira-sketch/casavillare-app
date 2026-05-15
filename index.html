@@ -525,7 +525,7 @@ function rHome(){
     // Supervisor e projetista: ganham atalho Minhas Comissões
     if(ST.perfil==='supervisor'||ST.perfil==='projetista') m+=`<div class="mod" onclick="goTo('s-mont-mine')" style="background:linear-gradient(135deg,#fff,var(--cream));border-color:var(--p);"><div class="mod-icon">💰</div><div class="mod-name">Minhas Comissões</div><div class="mod-desc">Total e histórico</div></div>`;
     m+=`<div class="mod" onclick="goTo('s-ferias')"><div class="mod-icon">🏖️</div><div class="mod-name">Férias</div><div class="mod-desc">Calendário</div></div>`;
-    if(a==='gestor') m+=`<div class="mod" onclick="goTo('s-odo')"><div class="mod-icon">🚗</div><div class="mod-name">Odômetro</div><div class="mod-desc">KM e combustível</div></div>`;
+    if(ST.perfil==='supervisor'||a==='gestor') m+=`<div class="mod" onclick="goTo('s-odo')"><div class="mod-icon">🚗</div><div class="mod-name">Odômetro</div><div class="mod-desc">KM e combustível</div></div>`;
     if(a==='gestor') m+=`<div class="mod" onclick="goTo('s-rel')"><div class="mod-icon">📋</div><div class="mod-name">Relatórios</div><div class="mod-desc">Visão completa</div></div>`;
     if(a==='gestor') m+=`<div class="mod" onclick="goTo('s-config')"><div class="mod-icon">⚙️</div><div class="mod-name">Configurações</div><div class="mod-desc">Equipe e comissões</div></div>`;
   }
