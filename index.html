@@ -849,14 +849,24 @@ function rMont(){
   document.getElementById('mont-tot').textContent='R$ '+tot.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
   document.getElementById('mont-qtd').textContent=m.comissoes.length;
   document.getElementById('mont-sub').textContent=m.lista.length+' pessoa(s) cadastrada(s)';
-  // Cards por pessoa com totais
+  // Cards por pessoa com totais e comissões editáveis
   document.getElementById('mont-equipe').innerHTML=m.lista.length?m.lista.map((mont,i)=>{
     const nome=mont.nome,tel=mont.tel||'',perfil=mont.perfil||'montador';
     const ic=iconePerfil(perfil);
-    const comissoesDoMont=m.comissoes.filter(c=>c.montador===nome);
+    const comissoesDoMont=m.comissoes.map((c,idx)=>({...c,_idx:idx})).filter(c=>c.montador===nome);
     const totalMont=comissoesDoMont.reduce((a,c)=>a+c.valor,0);
     const qtdMont=comissoesDoMont.length;
     const telFmt=tel?'('+tel.slice(2,4)+') '+tel.slice(4,9)+'-'+tel.slice(9):'sem telefone';
+    const comRows=comissoesDoMont.length?comissoesDoMont.slice().reverse().map(c=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:.5px solid #F0EBE3;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${obraLabel(c)}</div>
+          <div style="font-size:10px;color:var(--gl);">${c.data}${c.tipo==='vinc'?' · '+c.obra:' · Avulso'}</div>
+        </div>
+        <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:600;color:var(--p);white-space:nowrap;">R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+        <button onclick="editarComissao(${c._idx})" style="background:none;border:.5px solid var(--gl);border-radius:6px;width:28px;height:28px;font-size:12px;cursor:pointer;flex-shrink:0;">✏️</button>
+        <button onclick="removerComissao(${c._idx})" style="background:none;border:none;color:var(--fail);font-size:18px;cursor:pointer;flex-shrink:0;">✕</button>
+      </div>`).join(''):`<div style="font-size:12px;color:var(--gl);padding:8px 0;border-top:.5px solid #F0EBE3;">Nenhuma comissão lançada</div>`;
     return `<div class="vend-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
       <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;">${ic} ${nome} <span style="font-size:11px;color:var(--gl);font-weight:400;text-transform:capitalize;">· ${perfil}</span></div>
       <div style="display:flex;gap:6px;">
@@ -864,9 +874,12 @@ function rMont(){
         <button onclick="removerMontador(${i})" style="background:none;border:.5px solid var(--fail);color:var(--fail);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">✕</button>
       </div>
     </div>
-    <div style="font-size:11px;color:var(--gl);margin-bottom:4px;">📱 ${telFmt}</div>
-    <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:600;color:var(--p);">R$ ${totalMont.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-    <div style="font-size:11px;color:var(--gl);">${qtdMont} comissão(ões) · este período</div>
+    <div style="font-size:11px;color:var(--gl);margin-bottom:8px;">📱 ${telFmt}</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:600;color:var(--p);">R$ ${totalMont.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+      <div style="font-size:11px;color:var(--gl);">${qtdMont} obra(s)</div>
+    </div>
+    ${comRows}
     ${tel?(()=>{const msg=encodeURIComponent(`${ic} *Casa Villare*\nOlá ${nome}!\nResumo das suas comissões:\nTotal: R$ ${totalMont.toLocaleString('pt-BR',{minimumFractionDigits:2})}\nObras: ${qtdMont}`);return `<a href="https://wa.me/${tel}?text=${msg}" target="_blank" style="text-decoration:none;display:block;margin-top:10px;"><button class="wa-btn" style="font-size:12px;padding:10px;">📱 Enviar resumo para ${nome}</button></a>`;})():''}
     </div>`;
   }).join(''):'<div style="text-align:center;padding:20px;color:var(--gl);font-size:13px;">Nenhuma pessoa cadastrada</div>';
