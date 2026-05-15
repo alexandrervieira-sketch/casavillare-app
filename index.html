@@ -880,7 +880,8 @@ function rMont(){
     return `<div class="ferias-item">
       <div style="flex:1;">
         <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;">${ic} ${c.montador} · R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-        <div style="font-size:11px;color:var(--gl);">${c.obra} · ${c.data}</div>
+        <div style="font-size:12px;color:var(--dark);margin-top:2px;">${obraLabel(c)}</div>
+        <div style="font-size:11px;color:var(--gl);">${c.tipo==='vinc'?c.obra+' · ':''}${c.data}</div>
         ${c.obs?`<div style="font-size:10px;color:var(--gray);margin-top:2px;font-style:italic;">${c.obs}</div>`:''}
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
@@ -996,6 +997,11 @@ function removerComissao(i){
   ST.montadores.comissoes.splice(i,1);save();rMont();toast('Comissão removida');
 }
 
+function obraLabel(c){
+  if(c.tipo==='vinc'){const p=(ST.pedidos||[]).find(x=>x.num===c.obra);if(p)return p.cliente+' · '+p.ambiente;}
+  return c.obra;
+}
+
 // === VISÃO PESSOAL DO MONTADOR (somente leitura) ===
 function rMine(){
   if(ST.perfil!=='montador'&&ST.perfil!=='supervisor'&&ST.perfil!=='projetista'){toast('Acesso restrito');goTo('s-home');return;}
@@ -1011,7 +1017,7 @@ function rMine(){
   document.getElementById('mine-qtd').textContent=minhasC.length;
   const mesNome=hoje.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   document.getElementById('mine-mes').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;text-transform:capitalize;">${mesNome}</div><div style="font-size:11px;color:var(--gl);margin-top:2px;">${noMes.length} obra(s) no mês</div></div><div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:600;color:var(--p);">R$ ${totMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>`;
-  document.getElementById('mine-hist').innerHTML=minhasC.length?minhasC.slice().reverse().map(c=>`<div class="card" style="padding:12px 14px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;flex:1;padding-right:8px;">${c.obra}</div><div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:600;color:var(--p);white-space:nowrap;">R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div><div style="font-size:11px;color:var(--gl);">📅 ${c.data}${c.tipo==='avulso'?' · Avulso':' · Pedido'}</div>${c.obs?`<div style="font-size:11px;color:var(--gray);margin-top:6px;font-style:italic;border-left:2px solid var(--cream);padding-left:8px;">${c.obs}</div>`:''}</div>`).join(''):'<div style="text-align:center;padding:30px;color:var(--gl);font-size:13px;">Nenhuma comissão registrada ainda.<br>Quando o gestor lançar uma comissão para você, ela aparece aqui.</div>';
+  document.getElementById('mine-hist').innerHTML=minhasC.length?minhasC.slice().reverse().map(c=>{const label=obraLabel(c);const sub=c.tipo==='vinc'?c.obra+' · Pedido':'Avulso';return`<div class="card" style="padding:12px 14px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;flex:1;padding-right:8px;">${label}</div><div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:600;color:var(--p);white-space:nowrap;">R$ ${c.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div><div style="font-size:11px;color:var(--gl);">📅 ${c.data} · ${sub}</div>${c.obs?`<div style="font-size:11px;color:var(--gray);margin-top:6px;font-style:italic;border-left:2px solid var(--cream);padding-left:8px;">${c.obs}</div>`:''}</div>`;}).join(''):'<div style="text-align:center;padding:30px;color:var(--gl);font-size:13px;">Nenhuma comissão registrada ainda.<br>Quando o gestor lançar uma comissão para você, ela aparece aqui.</div>';
 }
 
 function solicitarFerias(){
