@@ -236,8 +236,10 @@ input[type=file]{display:none;}
       <div class="meta-bar"><div class="meta-fill" id="ml-bar" style="width:0%;background:var(--p);"></div></div>
     </div>
     <div id="vend-list"></div>
+    <div id="tabela-com-wrap">
     <div class="sec">Tabela de comissão</div>
     <div class="card" id="tabela-com-display"></div>
+    </div>
     <div class="sec">Lançar venda</div>
     <label class="form-lbl">Vendedora</label>
     <select class="form-inp" id="vsel"></select>
@@ -654,7 +656,9 @@ function rCom(){
   // Selector dinâmico de vendedoras
   document.getElementById('vsel').innerHTML=c.nomes.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
   document.getElementById('btn-meta').style.display=ST.perfil==='gestor'?'block':'none';
-  // Tabela de comissão dinâmica
+  // Tabela de comissão — visível apenas para gestor
+  const tabWrap=document.getElementById('tabela-com-wrap');
+  if(tabWrap) tabWrap.style.display=ST.perfil==='gestor'?'block':'none';
   const tab=ST.tabelaComissao&&ST.tabelaComissao.length?ST.tabelaComissao:TAB_DEF;
   document.getElementById('tabela-com-display').innerHTML=tab.map((tier,i)=>{
     const prox=tab[i+1];
