@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+functions/node_modules/
+
+# 🔒 Credenciais / segredos — NUNCA versionar
+*firebase-adminsdk*.json
+serviceAccount*.json
+*.pem
+*.key
+.env
+.env.*
+
+# Sistema operacional
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Temporários
+*.tmp
+~$*
+*.log

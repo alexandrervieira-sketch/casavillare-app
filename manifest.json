@@ -1,0 +1,10 @@
+{
+  "name": "Casa Villare — Sistema de Gestão",
+  "short_name": "Casa Villare",
+  "description": "Sistema de gestão de equipe, CRM, comissões e financeiro da Casa Villare",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1E1D1D",
+  "theme_color": "#1E1D1D",
+  "orientation": "any"
+}

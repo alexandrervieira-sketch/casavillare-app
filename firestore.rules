@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Casa Villare — ERP interno · Regras de segurança do Firestore
+//
+// BASELINE (Fase 1): nenhum dado é público. Só membros da equipe AUTENTICADOS
+// (via Firebase Authentication) conseguem ler ou escrever qualquer documento.
+// Sem login válido → acesso negado, mesmo conhecendo a apiKey (que é pública
+// por natureza). Isso fecha o vazamento: a tela de login deixa de ser teatro.
+//
+// FASE 2 (futuro): restringir por perfil (vendedora ≠ supervisor ≠ gestor)
+// usando custom claims emitidas por Cloud Function. Enquanto não houver claims,
+// todo usuário autenticado tem acesso de leitura/escrita aos dados da loja.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Exige uma sessão autenticada do Firebase Auth para QUALQUER operação.
+    function autenticado() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // Coleções do ERP: leads (CRM), pedidos, agenda, avisos, cadastros, _config…
+    match /{document=**} {
+      allow read, write: if autenticado();
+    }
+  }
+}
