@@ -2923,6 +2923,7 @@ async function _fsSyncCollection(col,docs){
     }
   }
   if(!writes.length&&!deletes.length)return;
+  const _audit=_fsCaptureAudit(col,writes,deletes); // trilha de auditoria: captura ANTES de _fsSeen mudar
   let batch=_fbDb.batch(), pend=[], ops=0;
   const flush=async()=>{
     if(!ops)return;
@@ -2933,6 +2934,66 @@ async function _fsSyncCollection(col,docs){
   for(const w of writes){ batch.set(ref.doc(w.id),{id:w.id,_json:w.js}); pend.push({k:w.k,js:w.js}); ops++; if(ops>=450)await flush(); } // pacote JSON: imune a array-aninhado/undefined/tipos
   for(const d of deletes){ batch.delete(ref.doc(d.id)); pend.push({k:d.k,del:true}); ops++; if(ops>=450)await flush(); }
   await flush();
+  if(_audit.length) _fsGravarAudit(_audit); // grava a auditoria após o commit confirmar
+}
+
+// ── Trilha de auditoria: registra quem mudou o quê e quando (coleção _audit) ──
+function _fsDiffCampos(a,b){
+  const ks=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);
+  const out=[];
+  for(const k of ks){ if(k==='_uAt'||k==='id')continue; if(JSON.stringify(a&&a[k])!==JSON.stringify(b&&b[k])) out.push(k); }
+  return out;
+}
+function _fsCaptureAudit(col,writes,deletes){
+  if(_fsMigrating||col==='_audit'||col==='_meta') return [];
+  const ents=[];
+  for(const w of writes){
+    const old=_fsSeen[w.k];
+    let campos=[]; if(old){ try{ campos=_fsDiffCampos(JSON.parse(old),JSON.parse(w.js)); }catch(e){} }
+    ents.push({col,docId:w.id,acao:old?'editou':'criou',campos});
+  }
+  for(const d of deletes) ents.push({col,docId:d.id,acao:'excluiu',campos:[]});
+  return ents;
+}
+function _fsGravarAudit(entries){
+  if(!_fbDb||!_fbAuthed||!entries.length) return;
+  try{
+    const por=ST.nome||'?', perfil=ST.perfil||'', em=new Date().toISOString();
+    let batch=_fbDb.batch(), n=0, seq=0;
+    for(const e of entries){
+      const id='aud_'+Date.now()+'_'+(seq++)+'_'+Math.random().toString(36).slice(2,6);
+      batch.set(_fbDb.collection('_audit').doc(id),{col:e.col,docId:String(e.docId),acao:e.acao,campos:(e.campos||[]).slice(0,15),por,perfil,em});
+      if(++n>=450){ batch.commit().catch(()=>{}); batch=_fbDb.batch(); n=0; }
+    }
+    if(n) batch.commit().catch(err=>console.warn('[CVP] auditoria falhou:',err&&err.message));
+  }catch(e){ console.warn('[CVP] auditoria erro:',e&&e.message); }
+}
+// Carrega e exibe a trilha de auditoria (Configurações → Sistema, só gestor)
+async function auditCarregar(){
+  const el=document.getElementById('cfg-audit-body'); if(!el) return;
+  if(!_fbReady||!_fbDb||!_fbAuthed){ el.innerHTML='<div style="font-size:12px;color:var(--gl);padding:8px 0;">Sem conexão com a nuvem.</div>'; return; }
+  el.innerHTML='<div style="font-size:12px;color:var(--gl);padding:8px 0;">⏳ Carregando...</div>';
+  try{
+    const snap=await _fbDb.collection('_audit').orderBy('em','desc').limit(150).get();
+    const rows=snap.docs.map(d=>d.data());
+    if(!rows.length){ el.innerHTML='<div style="font-size:12px;color:var(--gl);padding:8px 0;">Nenhuma ação registrada ainda.</div>'; return; }
+    const MOD={leads:'Lead',pedidos:'Pedido',cadastros:'Cadastro',eventos:'Agenda',comissoes:'Comissão',vendasCom:'Venda',folhas:'Folha',dre:'DRE',contasPagar:'Conta a pagar',avisos:'Aviso',ausencias:'Ausência',treinamentos:'Treinamento',repositorio:'Repositório',_config:'Configuração'};
+    const ACAO={criou:'🟢 criou',editou:'🟡 editou',excluiu:'🔴 excluiu'};
+    let html='<div style="max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:8px;">'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11.5px;"><thead><tr style="background:#F5F0E8;position:sticky;top:0;">'
+      +'<th style="text-align:left;padding:6px 8px;">Data/Hora</th><th style="text-align:left;padding:6px 8px;">Usuário</th><th style="text-align:left;padding:6px 8px;">Ação</th><th style="text-align:left;padding:6px 8px;">Módulo</th><th style="text-align:left;padding:6px 8px;">Campos alterados</th></tr></thead><tbody>';
+    rows.forEach(r=>{
+      const dt=r.em?new Date(r.em).toLocaleString('pt-BR'):'';
+      html+='<tr style="border-top:1px solid var(--border);">'
+        +'<td style="padding:5px 8px;white-space:nowrap;">'+_esc(dt)+'</td>'
+        +'<td style="padding:5px 8px;">'+_esc(r.por||'?')+'</td>'
+        +'<td style="padding:5px 8px;white-space:nowrap;">'+(ACAO[r.acao]||_esc(r.acao||''))+'</td>'
+        +'<td style="padding:5px 8px;">'+_esc(MOD[r.col]||r.col||'')+'</td>'
+        +'<td style="padding:5px 8px;color:var(--gl);">'+_esc((r.campos||[]).join(', '))+'</td></tr>';
+    });
+    html+='</tbody></table></div><div style="font-size:10.5px;color:var(--gl);margin-top:4px;">Últimas '+rows.length+' ações registradas.</div>';
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML='<div style="font-size:12px;color:#B91C1C;padding:8px 0;">Erro ao carregar: '+_esc(e&&e.message||'')+'</div>'; }
 }
 
 // Docs de _config = todas as chaves que NÃO são array (equipe, senhas, configs, fabrica, metas, etc.)
@@ -7593,6 +7654,17 @@ function rConfig(){
           </div>
           <button class="btn btn-p btn-sm" onclick="_fsMigrateToCloud()">☁️ Migrar para a nuvem</button>
         </div>
+      </div>
+      <div class="cfg-block">
+        <div class="cfg-block-hdr"><h3>🛡️ Trilha de Auditoria</h3></div>
+        <div class="cfg-row">
+          <div>
+            <div class="cfg-name">Registro de alterações</div>
+            <div class="cfg-info">Quem alterou o quê e quando (últimas 150 ações). Rastreabilidade dos dados do ERP.</div>
+          </div>
+          <button class="btn btn-p btn-sm" onclick="auditCarregar()">🔄 Carregar</button>
+        </div>
+        <div id="cfg-audit-body" style="margin-top:10px;"></div>
       </div>
       <div class="cfg-block">
         <div class="cfg-block-hdr"><h3>📆 Google Calendar</h3></div>
