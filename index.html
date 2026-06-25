@@ -2219,7 +2219,7 @@ textarea.inp{resize:vertical;min-height:68px;}
             </label>
           </div>
         </div>
-        <div><label class="lbl">Valor Venda (R$)</label>
+        <div><label class="lbl">Valor Venda (R$) <span style="font-size:10px;color:var(--gl);font-weight:400;">— puxado do contrato/CRM</span></label>
           <input class="inp" type="text" inputmode="decimal" id="pd-valor" placeholder="0,00" oninput="_maskBRL(this);pdCalcFab();pdCalcMargem()"/></div>
       </div>
       <div class="fr"><label class="lbl">Ambientes / Descrição</label>
@@ -6383,6 +6383,16 @@ function _getComVend(pontos){
 // ── Comissão projetista: parcelas configuráveis ──
 const _PED_ETAPAS_ORDER=['medicao','proj_exec','exec_assn','pg_fab','pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
 // Valor líquido base de um pedido: usa o lead vinculado (após desconto e taxa) ou pedido.valor
+// Valor de venda BRUTO oficial do pedido — puxado da fonte segura do CRM:
+// 1º contrato/cadastro de cliente (soma dos ambientes), 2º lead vinculado, 3º valor salvo.
+function _pedValorVendaCRM(p){
+  if(!p) return 0;
+  const cad=p.clienteCadId?(ST.cadastros||[]).find(c=>String(c.id)===String(p.clienteCadId)&&c.tipo==='cliente'):null;
+  if(cad){ const v=(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0); if(v) return v; }
+  const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+  if(lead&&lead.valor) return lead.valor;
+  return p.valor||0;
+}
 function _pedidoValorBase(pedido){
   let valorBase=pedido.valor||0;
   if(pedido.leadId){
@@ -8005,6 +8015,13 @@ function rConfigComBlock(){
   html+=me>0?`<span style="font-size:12px;color:#92400E;">→ base de comissão = valor líquido × ${(100-me)}%</span>`:'';
   html+='</div></div>';
 
+  // Flag de visibilidade das comissões do pedido (decisão do gestor)
+  html+='<div style="margin-top:16px;padding:14px 16px;background:#F5F0FF;border:1.5px solid #DDD6FE;border-radius:10px;">';
+  html+='<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">';
+  html+='<input type="checkbox" id="cfgcom-vis" '+(cc.comissaoVisivel?'checked':'')+' style="width:18px;height:18px;margin-top:1px;cursor:pointer;flex-shrink:0;">';
+  html+='<span><span style="font-size:13px;font-weight:700;color:#5B21B6;">&#x1F441;&#xFE0F; Mostrar comissões do pedido para a equipe</span><br><span style="font-size:12px;color:#6B7280;">Quando ativado, as comissões de projetista, supervisor e montador (com as travas de liberação já existentes) ficam visíveis para todos no card do pedido. Desativado: só o gestor vê.</span></span>';
+  html+='</label></div>';
+
   html+='<button class="btn btn-p btn-sm" style="margin-top:14px;" onclick="salvarTabelaCom()">&#x1F4BE; Salvar tabela de comissões</button>';
   html+='</div>';
   return html;
@@ -8024,6 +8041,7 @@ function salvarTabelaCom(){
   ST.configsCom.projetista=[g('cfgcom-pa'),g('cfgcom-pb'),g('cfgcom-pc')];
   ST.configsCom.montador  =g('cfgcom-mont');
   ST.configsCom.margemErro=parseFloat(document.getElementById('cfgcom-margem-err')?.value)||0;
+  ST.configsCom.comissaoVisivel=!!document.getElementById('cfgcom-vis')?.checked;
   save(); toast('Tabela de comissões salva! ✓');
 }
 
@@ -10528,9 +10546,9 @@ function _rPedPipe(ped,hoje,statsHtml){
             <button onclick="event.stopPropagation();navTo('tab-fin');setTimeout(()=>finSubTab('bipartido'),100);" style="border:none;background:none;font-size:10px;color:${cor};cursor:pointer;text-decoration:underline;padding:0;margin-left:4px;">ver</button>
           </div>`;
         })()}
-        ${isG?comBadge:''}
-        ${isG?comProjBadge:''}
-        ${isG?comMontBadge:''}
+        ${(isG||ST.configsCom?.comissaoVisivel)?comBadge:''}
+        ${(isG||ST.configsCom?.comissaoVisivel)?comProjBadge:''}
+        ${(isG||ST.configsCom?.comissaoVisivel)?comMontBadge:''}
         <div class="ped-card-btns">
           <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
           ${e.id!=='concluido'?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
@@ -11023,6 +11041,9 @@ function pdOnClienteChange(){
     document.getElementById('pd-ncontrato').value=c.numContrato||'';
     if(!document.getElementById('pd-cliente-txt').value)
       document.getElementById('pd-cliente-txt').value=c.nome||'';
+    // Puxa automaticamente o valor de venda do contrato (soma dos ambientes)
+    const vCtr=(c.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
+    if(vCtr){ document.getElementById('pd-valor').value=_fmtInputBRL(vCtr); pdCalcFab(); pdCalcMargem(); }
   }
 }
 
@@ -11245,7 +11266,8 @@ function abrirModalPedido(id){
     document.getElementById('pd-montador').value       =p.montador||'';
     document.getElementById('pd-fornecedor').value     =p.fornecedor||'';
     document.getElementById('pd-valor-fab').value      =_fmtInputBRL(p.valorFabrica);
-    document.getElementById('pd-valor').value          =_fmtInputBRL(p.valor);
+    document.getElementById('pd-valor').value          =_fmtInputBRL(_pedValorVendaCRM(p)); // puxa do contrato/CRM
+    pdCalcFab();
     document.getElementById('pd-descricao').value      =p.descricao||'';
     document.getElementById('pd-data').value           =p.data||'';
     document.getElementById('pd-prev-prod').value      =p.prevProd||'';

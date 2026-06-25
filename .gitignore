@@ -20,5 +20,6 @@ desktop.ini
 ~$*
 *.log
 
-# Helper de deploy (caminho local hardcoded)
+# Helpers locais (caminho hardcoded)
 _deploy.js
+_check.js
