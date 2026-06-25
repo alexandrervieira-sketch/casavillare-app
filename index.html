@@ -2210,9 +2210,9 @@ textarea.inp{resize:vertical;min-height:68px;}
           <select class="inp" id="pd-fornecedor">
             <option value="">— Selecionar fábrica —</option>
           </select></div>
-        <div><label class="lbl">Custo Fábrica (R$) <span id="pd-margem-pct" style="font-weight:700;font-size:12px;color:var(--p);margin-left:6px;"></span></label>
+        <div><label class="lbl">Custo Fábrica (R$)</label>
           <div style="display:flex;gap:6px;align-items:center;">
-            <input class="inp" type="text" inputmode="decimal" id="pd-valor-fab" placeholder="Auto 40%" style="flex:1;" oninput="_maskBRL(this);pdCalcMargem()"/>
+            <input class="inp" type="text" inputmode="decimal" id="pd-valor-fab" placeholder="0,00" style="flex:1;" oninput="_maskBRL(this);pdCalcMargem()"/>
             <label title="Importar XML da fábrica" style="cursor:pointer;background:var(--acc);color:#fff;border-radius:7px;padding:0 10px;height:36px;display:flex;align-items:center;font-size:13px;white-space:nowrap;flex-shrink:0;">
               📄 XML
               <input type="file" accept=".xml" multiple style="display:none" onchange="pdImportarXml(this.files);this.value=''">
@@ -10760,24 +10760,13 @@ function verComprovante(pedId){
 }
 
 function pdCalcFab(){
-  const venda=_parseBRL(document.getElementById('pd-valor').value)||0;
-  const fabEl=document.getElementById('pd-valor-fab');
-  if(venda) fabEl.value=_fmtInputBRL(venda*0.4);
-  else fabEl.value='';
+  // Custo de fábrica é VARIÁVEL — digitado manualmente (ou importado do XML).
+  // Não auto-preencher percentual fixo. Mantido só para recálculos dependentes.
   pdCalcMargem();
 }
 function pdCalcMargem(){
   const venda =_parseBRL(document.getElementById('pd-valor')?.value)||0;
   const fab   =_parseBRL(document.getElementById('pd-valor-fab')?.value)||0;
-  const el    =document.getElementById('pd-margem-pct');
-  if(el){
-    if(!venda||!fab){ el.textContent=''; }
-    else{
-      const pct=Math.round((fab/venda)*100);
-      const cor=pct<=35?'#166534':pct<=45?'#D97706':'#DC2626';
-      el.style.color=cor; el.textContent=pct+'%';
-    }
-  }
 
   // Busca lead vinculado para calcular RT, taxa cartão e comissão
   const leadId=document.getElementById('pd-lead')?.value;
@@ -11051,7 +11040,7 @@ function pdOnClienteChange(){
     const vBruto=(c.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
     const _lc=c.leadId?(ST.leads||[]).find(l=>String(l.id)===String(c.leadId)):null;
     const vCtr=vBruto*(1-((_lc?.desconto||c.desconto||0)/100));
-    if(vCtr){ document.getElementById('pd-valor').value=_fmtInputBRL(vCtr); pdCalcFab(); pdCalcMargem(); }
+    if(vCtr){ document.getElementById('pd-valor').value=_fmtInputBRL(vCtr); pdCalcMargem(); }
   }
 }
 
@@ -11275,7 +11264,6 @@ function abrirModalPedido(id){
     document.getElementById('pd-fornecedor').value     =p.fornecedor||'';
     document.getElementById('pd-valor-fab').value      =_fmtInputBRL(p.valorFabrica);
     document.getElementById('pd-valor').value          =_fmtInputBRL(_pedValorVendaCRM(p)); // puxa do contrato/CRM
-    pdCalcFab();
     document.getElementById('pd-descricao').value      =p.descricao||'';
     document.getElementById('pd-data').value           =p.data||'';
     document.getElementById('pd-prev-prod').value      =p.prevProd||'';
