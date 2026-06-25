@@ -19,3 +19,6 @@ desktop.ini
 *.tmp
 ~$*
 *.log
+
+# Helper de deploy (caminho local hardcoded)
+_deploy.js

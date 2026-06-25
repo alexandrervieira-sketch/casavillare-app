@@ -2937,6 +2937,27 @@ async function _fsSyncCollection(col,docs){
   if(_audit.length) _fsGravarAudit(_audit); // grava a auditoria após o commit confirmar
 }
 
+// ── Concorrência multiusuário (genérica) ──────────────────────────────
+// Captura o _uAt do registro ao ABRIR o modal de edição; ao SALVAR, avisa
+// se outra pessoa alterou o mesmo registro enquanto o modal estava aberto.
+// Os listeners em tempo real mantêm ST.xxx atualizado, então a comparação
+// usa sempre o _uAt mais recente do registro. (Leads e pedidos já têm o
+// próprio mecanismo via _ldBaseUAt / _pdBaseUAt.)
+const _conflBase={};
+function _conflCapture(col,arr,id){
+  const r=(id!=null&&id!=='')?(arr||[]).find(x=>String(x.id)===String(id)):null;
+  _conflBase[col+':'+(id==null?'':String(id))]=(r&&r._uAt)||0;
+}
+function _conflOk(col,arr,id,label){
+  if(id==null||id==='') return true;            // criação nova: sem conflito
+  const r=(arr||[]).find(x=>String(x.id)===String(id));
+  const base=_conflBase[col+':'+String(id)];
+  if(r && base!=null && (r._uAt||0)>base){
+    return confirm('⚠️ Este '+(label||'registro')+' foi alterado por outra pessoa enquanto você editava.\n\nSalvar agora vai SOBRESCREVER as mudanças dela com as suas.\n\n• OK = salvar mesmo assim\n• Cancelar = não salvar (reabra para ver o que mudou)');
+  }
+  return true;
+}
+
 // ── Trilha de auditoria: registra quem mudou o quê e quando (coleção _audit) ──
 function _fsDiffCampos(a,b){
   const ks=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);
@@ -4034,6 +4055,7 @@ function rHomeAvisos(){
 let _avId=null;
 function abrirModalAviso(id){
   _avId=id||null;
+  _conflCapture('avisos',ST.avisos,_avId);
   if(id){
     const a=(ST.avisos||[]).find(x=>String(x.id)===String(id));
     if(!a){toast('Não encontrado');return;}
@@ -4055,8 +4077,9 @@ function salvarAviso(){
   const texto=document.getElementById('av-texto').value.trim();
   if(!texto){toast('Escreva a mensagem');return;}
   const isEdit=!!_avId;
+  if(!_conflOk('avisos',ST.avisos,_avId,'aviso')) return;
   const aviso={
-    id:_avId||_newId(), texto,
+    id:_avId||_newId(), _uAt:Date.now(), texto,
     importante:document.getElementById('av-imp').value==='1',
     cor:document.getElementById('av-cor').value,
     autor:ST.nome,
@@ -4322,6 +4345,7 @@ let _pfId=null, _pfVendas=[], _pfCreds=[], _pfDebs=[];
 
 function abrirModalFolha(id, pessoaHint){
   _pfId=id||null;
+  _conflCapture('folhas',ST.folhas,_pfId);
   const todos=todosFunc();
   document.getElementById('pf-pessoa').innerHTML=todos.map(p=>`<option value="${_esc(p.nome)}">${iconeFunc(p.perfil)} ${_esc(p.nome)} · ${_esc(p.perfil)}</option>`).join('');
   if(id){
@@ -4549,8 +4573,9 @@ function salvarFolha(){
   const dup=ST.folhas.find(f=>String(f.id)!==String(_pfId)&&f.pessoa===pessoa&&f.mesAno===mesAno);
   if(dup){toast('Já existe uma folha para '+pessoa+' em '+mesAno);return;}
   const info=infoFunc(pessoa);
+  if(!_conflOk('folhas',ST.folhas,_pfId,'folha')) return;
   const folha={
-    id:_pfId||_newId(), pessoa, mesAno, tipo:info.area,
+    id:_pfId||_newId(), _uAt:Date.now(), pessoa, mesAno, tipo:info.area,
     vendas:   info.area==='comercial'?_pfVendas:[],
     pct:      info.area==='comercial'?(parseFloat(document.getElementById('pf-pct').value)||null):null,
     recuperados:_parseBRL(document.getElementById('pf-rec').value),
@@ -4608,6 +4633,7 @@ let _cnId=null, _cnFromFolha=false;
 
 function abrirModalComissao(id, fromFolha){
   _cnId=id||null; _cnFromFolha=!!fromFolha;
+  _conflCapture('comissoes',ST.comissoes,_cnId);
   const obras=ST.equipe.obras||[];
   document.getElementById('cn-pessoa').innerHTML=obras.map(p=>`<option value="${_esc(p.nome)}">${iconeFunc(p.perfil)} ${_esc(p.nome)}</option>`).join('');
   if(id){
@@ -4656,7 +4682,8 @@ function salvarComissao(){
   const desc=tipo==='vinc'?document.getElementById('cn-obra').value.trim():document.getElementById('cn-desc').value.trim();
   if(!desc){toast('Informe a obra ou descrição');return;}
   const mesAno=data.substring(0,7);
-  const entrada={id:_cnId||_newId(),pessoa,descricao:desc,valor,data:new Date(data+'T12:00').toLocaleDateString('pt-BR'),dataIso:data,mesAno,tipo,obs};
+  if(!_conflOk('comissoes',ST.comissoes,_cnId,'comissão')) return;
+  const entrada={id:_cnId||_newId(),_uAt:Date.now(),pessoa,descricao:desc,valor,data:new Date(data+'T12:00').toLocaleDateString('pt-BR'),dataIso:data,mesAno,tipo,obs};
   const idx=ST.comissoes.findIndex(c=>String(c.id)===String(_cnId));
   if(idx>=0) ST.comissoes[idx]=entrada; else ST.comissoes.push(entrada);
   _cnId=null; save(); toast('Comissão salva!');
@@ -4795,6 +4822,7 @@ function rAgendaAusencias(){
 
 function abrirModalAusencia(id){
   _ausId=id||null;
+  _conflCapture('ausencias',ST.ausencias,_ausId);
   const isG=ST.perfil==='gestor';
   const todos=todosFunc();
   const pEl=document.getElementById('aus-pessoa');
@@ -4836,7 +4864,8 @@ function salvarAusencia(){
   if(!inicio||!fim){toast('Informe as datas');return;}
   if(fim<inicio){toast('Data fim deve ser igual ou posterior ao início');return;}
   if(!ST.ausencias) ST.ausencias=[];
-  const entrada={id:_ausId||_newId(),pessoa,tipo,inicio,fim,obs,status,dataSolicitacao:new Date().toISOString().split('T')[0]};
+  if(!_conflOk('ausencias',ST.ausencias,_ausId,'registro de ausência')) return;
+  const entrada={id:_ausId||_newId(),_uAt:Date.now(),pessoa,tipo,inicio,fim,obs,status,dataSolicitacao:new Date().toISOString().split('T')[0]};
   const idx=ST.ausencias.findIndex(a=>String(a.id)===String(_ausId));
   if(idx>=0) ST.ausencias[idx]=entrada; else ST.ausencias.push(entrada);
   _ausId=null; save(); toast('Ausência salva!');
@@ -4852,11 +4881,11 @@ function excluirAusencia(){
 
 function aprovarAusencia(id){
   const a=(ST.ausencias||[]).find(x=>String(x.id)===String(id));
-  if(!a)return; a.status='aprovada'; save(); toast('Ausência aprovada ✓'); rAgendaAusencias();
+  if(!a)return; a.status='aprovada'; a._uAt=Date.now(); save(); toast('Ausência aprovada ✓'); rAgendaAusencias();
 }
 function rejeitarAusencia(id){
   const a=(ST.ausencias||[]).find(x=>String(x.id)===String(id));
-  if(!a)return; a.status='rejeitada'; save(); toast('Ausência rejeitada'); rAgendaAusencias();
+  if(!a)return; a.status='rejeitada'; a._uAt=Date.now(); save(); toast('Ausência rejeitada'); rAgendaAusencias();
 }
 
 function _agRenderCal(){
@@ -4970,6 +4999,7 @@ function agConfigurarGcal(){
 
 function abrirModalEvento(id, dataPre){
   _agEvId=id||null;
+  _conflCapture('eventos',ST.eventos,_agEvId);
   const todos=todosFunc();
   const respSel=document.getElementById('ev-resp');
   respSel.innerHTML='<option value="">—</option>'+todos.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
@@ -5018,8 +5048,10 @@ function salvarEvento(){
   const data=document.getElementById('ev-data').value;
   if(!titulo){toast('Informe o título do evento');return;}
   if(!data){toast('Informe a data');return;}
+  if(!_conflOk('eventos',ST.eventos,_agEvId,'evento')) return;
   const entrada={
     id:_agEvId||_newId(),
+    _uAt:Date.now(),
     titulo,
     tipo:document.getElementById('ev-tipo').value,
     data,
@@ -6515,6 +6547,7 @@ function calcVendaCom(){
 
 function abrirModalVendaCom(id, pessoaNome){
   _vcId=id||null;
+  _conflCapture('vendasCom',ST.vendasCom,_vcId);
   const vends=(ST.equipe.comercial||[]);
   document.getElementById('vc-pessoa').innerHTML=
     vends.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
@@ -6582,8 +6615,10 @@ function salvarVendaCom(){
   const valorCom    =_aplicarMargemErro(valorLiq)*(pct/100);
   const mesAno      =dataIso.substring(0,7);
 
+  if(!_conflOk('vendasCom',ST.vendasCom,_vcId,'venda')) return;
   const entrada={
     id:         _vcId||_newId(),
+    _uAt:       Date.now(),
     pessoa, cliente, dataIso,
     data:       new Date(dataIso+'T12:00').toLocaleDateString('pt-BR'),
     mesAno,
@@ -7064,6 +7099,7 @@ function rRepositorio(){
 
 function abrirModalRepo(id){
   _repoId=id||null;
+  _conflCapture('repositorio',ST.repositorio,_repoId);
   const del=document.getElementById('repo-btn-del');
   if(id){
     const r=(ST.repositorio||[]).find(x=>String(x.id)===String(id));
@@ -7095,8 +7131,10 @@ function salvarRepo(){
   if(!nome){toast('Informe o nome do arquivo');return;}
   if(!link){toast('Informe o link de acesso');return;}
   if(!ST.repositorio) ST.repositorio=[];
+  if(!_conflOk('repositorio',ST.repositorio,_repoId,'arquivo')) return;
   const obj={
     id:    _repoId||_newId(),
+    _uAt:  Date.now(),
     nome,  link,
     cat:   document.getElementById('repo-cat').value||'outro',
     tipo:  document.getElementById('repo-tipo').value||'link',
@@ -7182,6 +7220,7 @@ function rTreinamentos(){
 
 function abrirModalTrei(id){
   _treiId=id||null;
+  _conflCapture('treinamentos',ST.treinamentos,_treiId);
   const del=document.getElementById('trei-btn-del');
   if(id){
     const t=(ST.treinamentos||[]).find(x=>String(x.id)===String(id));
@@ -7213,8 +7252,10 @@ function salvarTrei(){
   const titulo=document.getElementById('trei-titulo').value.trim();
   if(!titulo){toast('Informe o título do treinamento');return;}
   if(!ST.treinamentos) ST.treinamentos=[];
+  if(!_conflOk('treinamentos',ST.treinamentos,_treiId,'treinamento')) return;
   const obj={
     id:       _treiId||_newId(),
+    _uAt:     Date.now(),
     titulo,
     data:     document.getElementById('trei-data').value||'',
     cat:      document.getElementById('trei-cat').value||'outro',
@@ -12341,6 +12382,7 @@ function cpEstornarConta(id){
 }
 function abrirModalCP(id){
   _cpId=id||null;
+  _conflCapture('contasPagar',ST.contasPagar,_cpId);
   document.getElementById('cp-btn-del').style.display=id?'':'none';
   if(id){
     const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
@@ -12382,8 +12424,10 @@ function salvarCP(){
   if(!vencimento){toast('Informe o vencimento');return;}
   const mesAno=vencimento.slice(0,7);
   const pago=document.getElementById('cp-pago').checked;
+  if(!_conflOk('contasPagar',ST.contasPagar,_cpId,'conta a pagar')) return;
   const conta={
     id:_cpId||_newId(),
+    _uAt:Date.now(),
     descricao, mesAno, vencimento,
     fornecedor:document.getElementById('cp-fornecedor').value.trim(),
     cat:       document.getElementById('cp-cat').value,
@@ -13105,6 +13149,7 @@ function rFinanceiro(){
 
 function abrirModalDRE(id){
   _dreId=id||null;
+  _conflCapture('dre',ST.dre,_dreId);
   if(id){
     const e=(ST.dre||[]).find(x=>String(x.id)===String(id));
     if(!e){toast('Não encontrado');return;}
@@ -13130,8 +13175,10 @@ function salvarLancamento(){
   if(!desc){toast('Informe a descrição');return;}
   if(!valor||valor<=0){toast('Informe um valor válido');return;}
   const isEdit=!!_dreId;
+  if(!_conflOk('dre',ST.dre,_dreId,'lançamento')) return;
   const entrada={
     id:_dreId||_newId(),
+    _uAt:Date.now(),
     mesAno:document.getElementById('dre-mes').value||mesAnoStr(_finMes,_finAno),
     cat:   document.getElementById('dre-cat').value,
     descricao:desc, valor
