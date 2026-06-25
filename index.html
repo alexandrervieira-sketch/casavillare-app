@@ -6383,14 +6383,24 @@ function _getComVend(pontos){
 // ── Comissão projetista: parcelas configuráveis ──
 const _PED_ETAPAS_ORDER=['medicao','proj_exec','exec_assn','pg_fab','pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
 // Valor líquido base de um pedido: usa o lead vinculado (após desconto e taxa) ou pedido.valor
-// Valor de venda BRUTO oficial do pedido — puxado da fonte segura do CRM:
-// 1º contrato/cadastro de cliente (soma dos ambientes), 2º lead vinculado, 3º valor salvo.
+// Valor de venda = VALOR AO CLIENTE (bruto do XML menos o desconto ao cliente).
+// O desconto é custo da venda; o cliente paga o líquido. NUNCA usar o bruto puro.
+function _leadValorVenda(lead){
+  if(!lead) return 0;
+  return (lead.valor||0)*(1-(lead.desconto||0)/100);
+}
+// Valor de venda oficial do pedido — puxado da fonte segura do CRM, já LÍQUIDO:
+// 1º lead vinculado (bruto + desconto → valor ao cliente), 2º contrato/cadastro
+// (soma dos ambientes brutos menos o desconto), 3º valor salvo.
 function _pedValorVendaCRM(p){
   if(!p) return 0;
-  const cad=p.clienteCadId?(ST.cadastros||[]).find(c=>String(c.id)===String(p.clienteCadId)&&c.tipo==='cliente'):null;
-  if(cad){ const v=(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0); if(v) return v; }
   const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
-  if(lead&&lead.valor) return lead.valor;
+  if(lead&&lead.valor) return _leadValorVenda(lead);
+  const cad=p.clienteCadId?(ST.cadastros||[]).find(c=>String(c.id)===String(p.clienteCadId)&&c.tipo==='cliente'):null;
+  if(cad){
+    const bruto=(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
+    if(bruto){ const _l=cad.leadId?(ST.leads||[]).find(l=>String(l.id)===String(cad.leadId)):null; const d=_l?.desconto||cad.desconto||0; return bruto*(1-d/100); }
+  }
   return p.valor||0;
 }
 function _pedidoValorBase(pedido){
@@ -8761,11 +8771,7 @@ function rCrm(){
   }
 
   const valorPipe=visiveis.reduce((a,l)=>a+(l.valor||0),0);
-  const valorFechado=ganhos.reduce((a,l)=>{
-    const cad=(ST.cadastros||[]).find(c=>c.leadId===String(l.id)&&c.tipo==='cliente');
-    const v=cad?(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0)||l.valor||0:l.valor||0;
-    return a+v;
-  },0);
+  const valorFechado=ganhos.reduce((a,l)=>a+_leadValorVenda(l),0); // valor ao cliente (com desconto)
   const hoje=new Date().toISOString().split('T')[0];
   const atrasados=ativos.filter(l=>l.proxContato&&l.proxContato<hoje).length;
   const _d12s=new Date();_d12s.setMonth(_d12s.getMonth()-12);
@@ -8872,7 +8878,7 @@ function rCrm(){
         return `<tr>
           <td class="td-bold">${_esc(l.nome)}</td>
           <td>${_esc(l.responsavel||'—')}</td>
-          <td class="td-gold">${l.valor?fmt(l.valor):'—'}</td>
+          <td class="td-gold">${l.valor?fmt(_leadValorVenda(l)):'—'}</td>
           <td style="color:var(--gl);">${l.ambiente||'—'}</td>
           <td>${cadBadge}</td>
           <td><div class="td-actions">${acoes}
@@ -9190,7 +9196,7 @@ function salvarLead(){
         clienteNome:lead.nome, cliente:lead.nome,
         clienteCadId:'', nContrato:'',
         responsavel:lead.responsavel||'',
-        fornecedor:'', valor:lead.valor||0, valorFab:0,
+        fornecedor:'', valor:_leadValorVenda(lead), valorFab:0,
         descricao:lead.ambiente||'',
         data:new Date().toISOString().split('T')[0],
         prevProd:'', prevEntrega:'', prevMontagem:'',
@@ -10525,7 +10531,7 @@ function _rPedPipe(ped,hoje,statsHtml){
         <div class="ped-card-desc" title="${_esc(p.descricao||'')}">${_esc(p.descricao||'Sem descrição')}</div>
         ${prazoHtml}
         <div class="ped-card-foot">
-          <span class="ped-card-val" title="Valor venda">${p.valor?fmt(p.valor):'—'}</span>
+          <span class="ped-card-val" title="Valor venda (ao cliente)">${_pedValorVendaCRM(p)?fmt(_pedValorVendaCRM(p)):'—'}</span>
           <span class="ped-card-date" style="${atrasado?'color:var(--fail);font-weight:600;':''}">${dtLabel}</span>
         </div>
         ${p.valorFabrica?`<div style="display:flex;justify-content:space-between;align-items:center;background:#1C1A19;border-radius:5px;padding:3px 7px;margin-top:4px;"><span style="font-size:10px;color:#9CA3AF;">Custo Fáb.</span><span style="font-size:12px;font-weight:700;color:#F59E0B;">${fmt(p.valorFabrica)}</span></div>`:''}
@@ -10633,7 +10639,7 @@ function _rPedList(ped,hoje,statsHtml){
       <td>${p.fornecedor||'—'}</td>
       <td>${p.responsavel||'—'}</td>
       <td>${dt?`<span style="${atrasado?'color:var(--fail);font-weight:600;':''}">${atrasado?'⚠️ ':''}${new Date(dt+'T12:00').toLocaleDateString('pt-BR')}</span>`:'—'}</td>
-      <td class="td-gold">${p.valor?fmt(p.valor):'—'}</td>
+      <td class="td-gold">${_pedValorVendaCRM(p)?fmt(_pedValorVendaCRM(p)):'—'}</td>
       <td><span class="badge" style="background:${e.cor}20;color:${e.cor};border:1px solid ${e.cor}40;white-space:nowrap;">${e.icon} ${e.label}</span></td>
       <td><div class="td-actions">
         <button class="btn btn-s btn-sm" onclick="abrirModalPedido('${_sid(p.id)}')">✏️</button>
@@ -11041,8 +11047,10 @@ function pdOnClienteChange(){
     document.getElementById('pd-ncontrato').value=c.numContrato||'';
     if(!document.getElementById('pd-cliente-txt').value)
       document.getElementById('pd-cliente-txt').value=c.nome||'';
-    // Puxa automaticamente o valor de venda do contrato (soma dos ambientes)
-    const vCtr=(c.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
+    // Puxa o valor de venda do contrato (soma dos ambientes) já com o desconto ao cliente
+    const vBruto=(c.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
+    const _lc=c.leadId?(ST.leads||[]).find(l=>String(l.id)===String(c.leadId)):null;
+    const vCtr=vBruto*(1-((_lc?.desconto||c.desconto||0)/100));
     if(vCtr){ document.getElementById('pd-valor').value=_fmtInputBRL(vCtr); pdCalcFab(); pdCalcMargem(); }
   }
 }
@@ -12003,12 +12011,15 @@ function salvarCadastro(){
     const pidx=ST.pedidos.findIndex(p=>String(p.leadId)===String(cad.leadId));
     const ambDesc=(cad.ambientes||[]).map(a=>a.nome).filter(Boolean).join(' + ');
     const ambValor=(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
+    // Valor de venda = soma dos ambientes (bruto) menos o desconto ao cliente (do lead vinculado)
+    const _leadCad=cad.leadId?(ST.leads||[]).find(l=>String(l.id)===String(cad.leadId)):null;
+    const _descCad=_leadCad?.desconto||cad.desconto||0;
     const pedData={
       clienteNome:cad.nome, cliente:cad.nome,
       clienteCadId:String(cad.id),
       nContrato:cad.numContrato||'',
       responsavel:cad.respVenda||'',
-      valor:ambValor||0,
+      valor:(ambValor||0)*(1-_descCad/100),
       descricao:ambDesc||''
     };
     if(pidx>=0){
