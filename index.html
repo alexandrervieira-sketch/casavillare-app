@@ -122,6 +122,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--dark);min-
 .btn-p{background:var(--p);color:#fff;}
 .btn-s{background:transparent;color:var(--p);border:1.5px solid var(--p);}
 .btn-danger{background:transparent;color:var(--fail);border:1.5px solid var(--fail);}
+/* Exclusão é privilégio do gestor: esconde TODO botão de excluir (.btn-danger) para os demais perfis */
+body:not(.perfil-gestor) .btn-danger{display:none!important;}
 .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px;}
 .btn-xs{padding:4px 10px;font-size:11px;border-radius:6px;}
 
@@ -2958,6 +2960,15 @@ function _conflOk(col,arr,id,label){
   return true;
 }
 
+// ── Exclusão = privilégio do gestor ──────────────────────────────────
+// Só o gestor apaga registros (lead, pedido, contrato/cadastro, folha, etc.).
+// Os botões de excluir já ficam escondidos via CSS; este guard é a trava de
+// segurança caso a função seja chamada por outro caminho.
+function _gestorPodeExcluir(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor pode excluir registros.'); return false; }
+  return true;
+}
+
 // ── Trilha de auditoria: registra quem mudou o quê e quando (coleção _audit) ──
 function _fsDiffCampos(a,b){
   const ks=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);
@@ -3508,6 +3519,7 @@ function entrar(nome,perfil,area){
   const isG=perfil==='gestor';
   const isCom=area==='comercial';
   const isObras=area==='obras';
+  document.body.classList.toggle('perfil-gestor', isG); // libera botões de exclusão só p/ gestor
   // Tabs visíveis por perfil
   document.getElementById('tab-crm-btn').style.display    = (isG||isCom)?'':'none';
   document.getElementById('tab-ped-btn').style.display    = (isG||isObras||isCom)?'':'none';
@@ -3550,6 +3562,7 @@ function sair(){
   _fbAuthLogout();
   sessionStorage.removeItem('cvp_token');
   ST.nome=''; ST.perfil=''; ST.area=''; save();
+  document.body.classList.remove('perfil-gestor');
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-overlay').classList.remove('hidden');
 }
@@ -4093,6 +4106,7 @@ function salvarAviso(){
   fecharModal('modal-aviso'); rHomeAvisos();
 }
 function excluirAviso(){
+  if(!_gestorPodeExcluir()) return;
   if(!_avId||!confirm('Excluir este aviso?'))return;
   ST.avisos=(ST.avisos||[]).filter(a=>String(a.id)!==String(_avId));
   _avId=null; save(); toast('Aviso excluído'); fecharModal('modal-aviso'); rHomeAvisos();
@@ -4621,6 +4635,7 @@ function salvarFolha(){
   fecharModal('modal-folha'); rPag();
 }
 function excluirFolha(){
+  if(!_gestorPodeExcluir()) return;
   if(!_pfId||!confirm('Excluir esta folha de pagamento?'))return;
   ST.folhas=ST.folhas.filter(f=>String(f.id)!==String(_pfId));
   save(); toast('Folha excluída'); fecharModal('modal-folha'); rPag();
@@ -4692,6 +4707,7 @@ function salvarComissao(){
   else rPag();
 }
 function excluirComissao(){
+  if(!_gestorPodeExcluir()) return;
   if(!_cnId||!confirm('Excluir esta comissão?'))return;
   ST.comissoes=ST.comissoes.filter(c=>String(c.id)!==String(_cnId));
   _cnId=null; save(); toast('Comissão excluída');
@@ -4873,6 +4889,7 @@ function salvarAusencia(){
 }
 
 function excluirAusencia(){
+  if(!_gestorPodeExcluir()) return;
   if(!_ausId||!confirm('Excluir esta ausência?'))return;
   ST.ausencias=(ST.ausencias||[]).filter(a=>String(a.id)!==String(_ausId));
   _ausId=null; save(); toast('Excluída');
@@ -5078,6 +5095,7 @@ function salvarEvento(){
 }
 
 function evExcluir(){
+  if(!_gestorPodeExcluir()) return;
   if(!_agEvId||!confirm('Excluir este evento?')) return;
   ST.eventos=(ST.eventos||[]).filter(e=>String(e.id)!==String(_agEvId));
   _agEvId=null; save();
@@ -6695,6 +6713,7 @@ function abrirAdiantMont(pedidoId, clienteNome, valorTotal, totalAdiant){
 }
 
 function excluirVendaCom(){
+  if(!_gestorPodeExcluir()) return;
   if(!_vcId||!confirm('Excluir esta venda?')) return;
   ST.vendasCom=(ST.vendasCom||[]).filter(v=>String(v.id)!==String(_vcId));
   _vcId=null; save(); toast('Venda excluída');
@@ -7170,6 +7189,7 @@ function salvarRepo(){
 }
 
 function excluirRepo(){
+  if(!_gestorPodeExcluir()) return;
   if(!_repoId||!confirm('Excluir este arquivo do repositório?')) return;
   ST.repositorio=(ST.repositorio||[]).filter(x=>String(x.id)!==String(_repoId));
   save(); fecharModal('modal-repo'); rRepositorio();
@@ -7293,6 +7313,7 @@ function salvarTrei(){
 }
 
 function excluirTrei(){
+  if(!_gestorPodeExcluir()) return;
   if(!_treiId||!confirm('Excluir este treinamento?')) return;
   ST.treinamentos=(ST.treinamentos||[]).filter(x=>String(x.id)!==String(_treiId));
   save(); fecharModal('modal-trei'); rTreinamentos();
@@ -8242,6 +8263,7 @@ async function cfgSalvarColab(){
 }
 
 function cfgRemColabModal(){
+  if(!_gestorPodeExcluir()) return;
   const p=ST.equipe[_colabArea][_colabIdx];
   if(!confirm(`Remover ${p.nome}?`)) return;
   ST.equipe[_colabArea].splice(_colabIdx,1);
@@ -8257,6 +8279,7 @@ function _fmtDateBR(iso){
   if(!iso)return'';const p=iso.split('-');return(p[2]||'')+'/'+(p[1]||'')+'/'+(p[0]||'');
 }
 function cfgRemPessoa(area,i){
+  if(!_gestorPodeExcluir()) return;
   if(!confirm(`Remover ${ST.equipe[area][i].nome}?`))return;
   ST.equipe[area].splice(i,1);
   save();rConfig();rLogin();toast('Removido');
@@ -9873,6 +9896,7 @@ function _lerXmlFiles(files, onArquivo){
 }
 
 function excluirLead(){
+  if(!_gestorPodeExcluir()) return;
   if(!_ldId)return;
   const pedidosVinculados=(ST.pedidos||[]).filter(p=>String(p.leadId)===String(_ldId));
   // Comissões avulsas (sem pedidoId) de pessoas da equipe de obras no mesmo período do lead
@@ -11417,6 +11441,7 @@ function salvarPedido(){
 }
 
 function excluirPedido(){
+  if(!_gestorPodeExcluir()) return;
   if(!_pdId)return;
   const ped=(ST.pedidos||[]).find(p=>String(p.id)===String(_pdId));
   // Verificar parcelas já recebidas no lead vinculado
@@ -12032,6 +12057,7 @@ function salvarCadastro(){
 }
 
 function excluirCadastroModal(){
+  if(!_gestorPodeExcluir()) return;
   if(!_cadId||!confirm('Excluir este cadastro?'))return;
   ST.cadastros=(ST.cadastros||[]).filter(c=>String(c.id)!==String(_cadId));
   _cadId=null;
@@ -12040,6 +12066,7 @@ function excluirCadastroModal(){
 }
 
 function excluirCadastro(id){
+  if(!_gestorPodeExcluir()) return;
   if(!confirm('Remover este cadastro?'))return;
   ST.cadastros=(ST.cadastros||[]).filter(c=>String(c.id)!==String(id));
   save(); toast('Removido'); rCadastros();
@@ -12464,6 +12491,7 @@ function salvarCP(){
   save(); fecharModal('modal-cp'); toast('✅ Conta salva!'); rFinCP();
 }
 function excluirCP(){
+  if(!_gestorPodeExcluir()) return;
   if(!_cpId||!confirm('Excluir esta conta?')) return;
   ST.contasPagar=(ST.contasPagar||[]).filter(c=>String(c.id)!==String(_cpId));
   save(); fecharModal('modal-cp'); toast('Excluída'); rFinCP();
@@ -13212,6 +13240,7 @@ function salvarLancamento(){
   fecharModal('modal-dre'); rFinanceiro();
 }
 function excluirLancamento(){
+  if(!_gestorPodeExcluir()) return;
   if(!_dreId||!confirm('Excluir este lançamento?'))return;
   ST.dre=(ST.dre||[]).filter(e=>String(e.id)!==String(_dreId));
   _dreId=null; save(); toast('Excluído'); fecharModal('modal-dre'); rFinanceiro();

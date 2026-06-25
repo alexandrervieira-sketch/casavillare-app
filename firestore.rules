@@ -3,14 +3,18 @@ rules_version = '2';
 // ─────────────────────────────────────────────────────────────────────────────
 // Casa Villare — ERP interno · Regras de segurança do Firestore
 //
-// BASELINE (Fase 1): nenhum dado é público. Só membros da equipe AUTENTICADOS
-// (via Firebase Authentication) conseguem ler ou escrever qualquer documento.
-// Sem login válido → acesso negado, mesmo conhecendo a apiKey (que é pública
-// por natureza). Isso fecha o vazamento: a tela de login deixa de ser teatro.
+// BASELINE: nenhum dado é público. Só membros da equipe AUTENTICADOS (via
+// Firebase Authentication) conseguem ler ou escrever. Sem login válido →
+// acesso negado, mesmo conhecendo a apiKey (que é pública por natureza).
 //
-// FASE 2 (futuro): restringir por perfil (vendedora ≠ supervisor ≠ gestor)
-// usando custom claims emitidas por Cloud Function. Enquanto não houver claims,
-// todo usuário autenticado tem acesso de leitura/escrita aos dados da loja.
+// TRILHA DE AUDITORIA (_audit): append-only e INVIOLÁVEL. Qualquer autenticado
+// pode CRIAR registros (o sistema grava automaticamente), mas NINGUÉM pode
+// editar ou apagar — o histórico é prova e não pode ser adulterado. A leitura
+// restrita por perfil (só gestor) virá depois com as permissões granulares
+// (custom claims), pois a regra ainda não conhece o "perfil" do app.
+//
+// FASE FUTURA: restringir por perfil (vendedora ≠ supervisor ≠ gestor) usando
+// custom claims emitidas por Cloud Function / Admin SDK.
 // ─────────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
@@ -21,9 +25,18 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid != null;
     }
 
-    // Coleções do ERP: leads (CRM), pedidos, agenda, avisos, cadastros, _config…
-    match /{document=**} {
-      allow read, write: if autenticado();
+    // ── Trilha de auditoria: APPEND-ONLY (cria sim; edita/apaga NUNCA) ──
+    match /_audit/{doc} {
+      allow read:   if autenticado();
+      allow create: if autenticado();
+      allow update, delete: if false;
+    }
+
+    // ── Demais coleções do ERP (leads, pedidos, agenda, cadastros, _config…) ──
+    // Escrita liberada para autenticados, EXCETO na coleção _audit (protegida acima).
+    match /{collection}/{doc} {
+      allow read:  if autenticado();
+      allow write: if autenticado() && collection != '_audit';
     }
   }
 }
