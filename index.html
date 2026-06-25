@@ -670,6 +670,7 @@ textarea.inp{resize:vertical;min-height:68px;}
     <div class="sidebar-user">
       <div class="sidebar-user-label">Conectado como</div>
       <div class="sidebar-user-name" id="topbar-nome">—</div>
+      <button id="sb-alertas" onclick="navTo('tab-home')" style="display:none;width:100%;margin:6px 0 2px;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:8px;padding:6px 8px;font-size:11px;font-weight:700;cursor:pointer;text-align:left;">🔔 <span id="sb-alertas-n">0</span> pendência(s)</button>
       <div style="margin:6px 0 8px;font-size:10px;color:#9CA3AF;">
         <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
           <span>Armazenamento</span><span id="_ls-pct-lbl">—</span>
@@ -691,6 +692,9 @@ textarea.inp{resize:vertical;min-height:68px;}
           <h2 id="home-titulo">Bem-vindo</h2>
           <p id="home-data"></p>
         </div>
+
+        <!-- Central de Alertas / Pendências -->
+        <div id="home-alertas" style="margin-bottom:18px;"></div>
 
         <!-- KPI cards -->
         <div class="home-kpi-row" id="home-kpi-row"></div>
@@ -3563,6 +3567,7 @@ function sair(){
   sessionStorage.removeItem('cvp_token');
   ST.nome=''; ST.perfil=''; ST.area=''; save();
   document.body.classList.remove('perfil-gestor');
+  { const _sba=document.getElementById('sb-alertas'); if(_sba) _sba.style.display='none'; }
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-overlay').classList.remove('hidden');
 }
@@ -3614,6 +3619,7 @@ function navTo(tabId){
   if(tabId==='tab-trei')       rTreinamentos();
   if(tabId==='tab-fiscal')     rFiscal();
   if(tabId==='tab-config')     rConfig();
+  _atualizarBadgeAlertas(); // mantém o contador da sidebar sempre atual
 }
 
 // ══════════════════════════════════════════════════════
@@ -3636,6 +3642,106 @@ function rHome(){
   rHomeAvisos();
   rHomeQuentes();
   rHomeComercial();
+  rHomeAlertas();
+}
+
+// ── Central de Alertas / Pendências ───────────────────────────────────
+// Calcula pendências acionáveis filtradas pelo perfil. Tudo client-side.
+function _calcAlertas(){
+  const hoje=new Date().toISOString().slice(0,10);
+  const _add=(d,n)=>{const x=new Date(hoje+'T12:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
+  const lim7=_add(hoje,7), ago7=_add(hoje,-7);
+  const perfil=ST.perfil, nome=ST.nome, area=ST.area, isG=perfil==='gestor';
+  const out={leads:[],pedidos:[],pagar:[],receber:[]};
+
+  // 1) Contatos atrasados & leads parados (comercial vê os seus; gestor vê todos)
+  if(isG||area==='comercial'){
+    let base=(ST.leads||[]).filter(l=>l.status!=='perdido'&&l.status!=='ganho');
+    if(!isG) base=base.filter(l=>l.responsavel===nome);
+    base.forEach(l=>{
+      if(l.proxContato&&l.proxContato<hoje)
+        out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'atrasado',info:'Contato venceu '+_fmtDateBR(l.proxContato)});
+      else if(!l.proxContato&&(l.dataCriacao||'')<ago7)
+        out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'parado',info:'Sem próximo contato agendado'});
+    });
+  }
+
+  // 2) Prazos de pedidos estourados (obras vê os seus; gestor vê todos)
+  if(isG||area==='obras'){
+    let base=(ST.pedidos||[]).filter(p=>p.status!=='concluido'&&p.status!=='venda_prog');
+    if(!isG) base=base.filter(p=>[p.responsavel,p.projetista,p.montador].includes(nome));
+    base.forEach(p=>{
+      const prazo=PED_PRAZOS[p.status]||0;
+      const dias=_diasNaEtapa(p,hoje);
+      const etapaEstourada=prazo>0&&dias>prazo;
+      const entregaAtrasada=p.prevEntrega&&p.prevEntrega<hoje;
+      if(etapaEstourada||entregaAtrasada){
+        const et=PED_ETAPAS.find(e=>e.id===p.status);
+        out.pedidos.push({id:p.id,nome:p.clienteNome||p.cliente||'—',
+          info: entregaAtrasada?('Entrega venceu '+_fmtDateBR(p.prevEntrega)):((et?et.label:'Etapa')+' · '+(dias-prazo)+'d além do prazo')});
+      }
+    });
+  }
+
+  // 3) Financeiro a vencer (só gestor) — contas a pagar + parcelas a receber
+  if(isG){
+    (ST.contasPagar||[]).forEach(c=>{
+      if(c.pago||!c.vencimento) return;
+      if(c.vencimento<=lim7) out.pagar.push({id:c.id,desc:c.descricao||c.fornecedor||'Conta',valor:c.valor,venc:c.vencimento,vencida:c.vencimento<hoje});
+    });
+    (ST.leads||[]).forEach(l=>{
+      (l.condicoesPgto||[]).forEach(c=>{
+        if(c.pago||!c.vencimento) return;
+        if(c.vencimento<=lim7) out.receber.push({leadId:l.id,cliente:l.nome,desc:c.desc||'Parcela',valor:c.valor,venc:c.vencimento,vencida:c.vencimento<hoje});
+      });
+    });
+  }
+  out.total=out.leads.length+out.pedidos.length+out.pagar.length+out.receber.length;
+  return out;
+}
+
+function _atualizarBadgeAlertas(a){
+  a=a||_calcAlertas();
+  const btn=document.getElementById('sb-alertas'), n=document.getElementById('sb-alertas-n');
+  if(!btn||!n) return;
+  if(a.total>0){ n.textContent=a.total; btn.style.display=''; } else { btn.style.display='none'; }
+}
+
+function rHomeAlertas(){
+  const el=document.getElementById('home-alertas'); if(!el) return;
+  const a=_calcAlertas();
+  _atualizarBadgeAlertas(a);
+  if(!a.total){
+    el.innerHTML='<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:12px 16px;font-size:13px;color:#166534;font-weight:600;">✅ Tudo em dia — nenhuma pendência no momento.</div>';
+    return;
+  }
+  const fmtL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const _esc2=s=>_esc(String(s==null?'':s));
+  const linha=(icone,titulo,sub,onclick,urgente)=>`<div onclick="${onclick}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;background:${urgente?'#FEF2F2':'#FFFBEB'};border:1px solid ${urgente?'#FECACA':'#FDE68A'};margin-bottom:5px;">
+      <span style="font-size:14px;flex-shrink:0;">${icone}</span>
+      <span style="flex:1;min-width:0;"><span style="font-size:12.5px;font-weight:700;color:#1F2937;">${titulo}</span> <span style="font-size:11.5px;color:#6B7280;">— ${sub}</span></span>
+    </div>`;
+  const bloco=(titulo,cor,itens,htmlItens)=>itens.length?`<div style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:800;color:${cor};text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">${titulo} (${itens.length})</div>
+      ${htmlItens}${itens.length>6?`<div style="font-size:11px;color:#9CA3AF;padding:2px 4px;">+${itens.length-6} mais…</div>`:''}
+    </div>`:'';
+
+  const leadsH=a.leads.slice(0,6).map(l=>linha(l.tipo==='atrasado'?'⏰':'💤',_esc2(l.nome),_esc2(l.info)+(ST.perfil==='gestor'&&l.resp?' · '+_esc2(l.resp):''),`abrirModalLead('${_sid(l.id)}')`,l.tipo==='atrasado')).join('');
+  const pedsH =a.pedidos.slice(0,6).map(p=>linha('📦',_esc2(p.nome),_esc2(p.info),`abrirModalPedido('${_sid(p.id)}')`,true)).join('');
+  const pagH  =a.pagar.slice(0,6).map(c=>linha('💸',_esc2(c.desc)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc),`abrirModalCP('${_sid(c.id)}')`,c.vencida)).join('');
+  const recH  =a.receber.slice(0,6).map(c=>linha('💰',_esc2(c.cliente)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc)+' · '+_esc2(c.desc),`navTo('tab-fin');setTimeout(()=>finSubTab('cr'),120)`,c.vencida)).join('');
+
+  el.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <span style="font-size:16px;">🔔</span>
+      <span style="font-size:15px;font-weight:800;color:#1F2937;">Central de Alertas</span>
+      <span style="margin-left:6px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 9px;">${a.total}</span>
+    </div>
+    ${bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH)}
+    ${bloco('📦 Pedidos atrasados','#9A3412',a.pedidos,pedsH)}
+    ${bloco('💸 Contas a pagar','#B91C1C',a.pagar,pagH)}
+    ${bloco('💰 A receber','#166534',a.receber,recH)}
+  </div>`;
 }
 
 function rHomeKpi(){
