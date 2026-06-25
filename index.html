@@ -9071,6 +9071,7 @@ function leadCardHtml(l,etapa){
   const origLbl=ORIG_LABEL[l.origem]||l.origem||'—';
   const etaIdx=CRM_ETAPAS.findIndex(e=>e.id===l.etapa);
   const prox=etaIdx<CRM_ETAPAS.length-1?CRM_ETAPAS[etaIdx+1]:null;
+  const podeVoltar=ST.perfil==='gestor'&&etaIdx>0; // gestor pode voltar etapas
   return `<div class="pipe-card" onclick="abrirModalLead('${_sid(l.id)}')">
     ${parado?`<div style="font-size:9px;color:#F59E0B;margin-bottom:4px;font-weight:600;">⏸ Lead parado há +12 meses</div>`:''}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
@@ -9086,8 +9087,9 @@ function leadCardHtml(l,etapa){
     ${etaIdx>=CRM_ETAPAS.findIndex(e=>e.id==='fechamento')&&l.prazoEntrega?`<div class="pipe-card-row" style="color:#0369A1;">🚚 ${l.prazoEntrega} dias úteis</div>`:''}
     ${etaIdx>=CRM_ETAPAS.findIndex(e=>e.id==='fechamento')&&l.tipoVenda?`<div class="pipe-card-row"><span style="font-size:10px;background:${l.tipoVenda==='programada'?'#EDE9FE':'#DCFCE7'};color:${l.tipoVenda==='programada'?'#6D28D9':'#166534'};padding:1px 7px;border-radius:10px;font-weight:600;">${l.tipoVenda==='programada'?'📅 Programada':'🛒 Normal'}</span></div>`:''}
     ${l.tags?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;">${l.tags.split(',').map(t=>`<span class="badge b-wait" style="font-size:10px;">${t.trim()}</span>`).join('')}</div>`:''}
-    ${prox?`<div style="display:flex;justify-content:flex-end;margin-top:8px;" onclick="event.stopPropagation()">
-      <button onclick="avancarEtapa('${l.id}')" class="btn btn-s btn-sm" style="font-size:11px;">→ ${prox.label}</button>
+    ${(prox||podeVoltar)?`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
+      <span>${podeVoltar?`<button onclick="voltarEtapa('${l.id}')" class="btn btn-s btn-sm" style="font-size:11px;" title="Voltar etapa">←</button>`:''}</span>
+      <span>${prox?`<button onclick="avancarEtapa('${l.id}')" class="btn btn-s btn-sm" style="font-size:11px;">→ ${prox.label}</button>`:''}</span>
     </div>`:''}
   </div>`;
 }
@@ -10531,7 +10533,22 @@ function avancarEtapa(id){
   }
 
   l.etapa=proximaEtapa.id;
+  l._uAt=Date.now();
   save(); toast('→ '+proximaEtapa.label); rCrm();
+}
+
+// Voltar etapa do lead no CRM — exclusivo do gestor (corrigir avanço indevido)
+function voltarEtapa(id){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor pode voltar etapas.'); return; }
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(id));
+  if(!l) return;
+  const idx=CRM_ETAPAS.findIndex(e=>e.id===l.etapa);
+  if(idx<=0) return;
+  const anterior=CRM_ETAPAS[idx-1];
+  if(!confirm(`Voltar "${l.nome}" de ${CRM_ETAPAS[idx].label} para ${anterior.label}?`)) return;
+  l.etapa=anterior.id;
+  l._uAt=Date.now();
+  save(); toast('← '+anterior.label); rCrm();
 }
 
 // ══════════════════════════════════════════════════════
