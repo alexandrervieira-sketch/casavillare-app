@@ -2713,7 +2713,10 @@ let ST = {
 function _debounce(fn,ms=300){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 const _debouncedRepo=_debounce(()=>rRepositorio(),250);
 let _idSeq=0;
-function _newId(){ return Date.now()*1000+(++_idSeq%1000); }
+// Entropia por máquina/sessão (3 dígitos): evita que duas máquinas gerem o MESMO id
+// ao criar registros no mesmo milissegundo (colisão → um sobrescrevia o outro na nuvem).
+const _idSalt=Math.floor(Math.random()*1000).toString().padStart(3,'0');
+function _newId(){ return String(Date.now())+_idSalt+String((++_idSeq)%1000).padStart(3,'0'); }
 // Sanitiza IDs usados em atributos onclick — permite apenas dígitos (todos os IDs são numéricos)
 function _sid(id){ return String(id||'').replace(/\D/g,''); }
 function _esc(s){
@@ -2819,7 +2822,17 @@ function initFirebase(){
     // Quando a sessão é (re)estabelecida — inclusive ao recarregar a página — dispara o sync pendente.
     firebase.auth().onAuthStateChanged(u=>{
       const antes=_fbAuthed; _fbAuthed=!!u;
-      if(u&&!antes){ console.info('[CVP] Firebase Auth: sessão ativa —',u.email); try{ _fsSyncAll(); }catch(_){} try{ _fsSubscribe(); }catch(_){} }
+      if(u&&!antes){
+        console.info('[CVP] Firebase Auth: sessão ativa —',u.email);
+        // SEMPRE carrega a nuvem ANTES de qualquer escrita (inclusive em F5/reload), para
+        // nunca empurrar estado local desatualizado por cima da nuvem (evita clobber).
+        (async()=>{
+          try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
+          catch(e){ console.warn('[CVP] load no auth-ready falhou:',e&&e.message); }
+          try{ _fsSubscribe(); }catch(_){}
+          try{ _reRenderAtual(); }catch(_){}
+        })();
+      }
     });
   }catch(e){console.warn('[CVP] Firebase não inicializado:',e.message);}
 }
@@ -2906,6 +2919,8 @@ function _fsIsCol(key){ return Array.isArray(ST[key])&&!_FS_SKIP_KEYS.includes(k
 let _fsSeen=Object.create(null);                 // 'col/id' -> JSON já sincronizado (diff p/ economizar escritas)
 let _fsMigrating=false;
 let _fsSubscribed=false;                          // tempo real ativado uma única vez
+let _fsPrimed=false;                              // só empurra p/ nuvem DEPOIS de ter carregado a nuvem (evita clobber)
+let _fsLoadingNow=false;                          // evita _fsLoadAll concorrente (login + onAuthStateChanged)
 
 // ── Tombstones: marcas de exclusão que SINCRONIZAM (via _config) e impedem que
 // um registro apagado ressuscite quando outra máquina (online depois, ou offline
@@ -3072,6 +3087,7 @@ function _fsConfigDocs(){
 // Sincronização incremental — chamada a cada save(), não bloqueante
 function _fsSyncAll(){
   if(!_fbReady||_fsMigrating)return;
+  if(!_fsPrimed)return; // ainda não carregou a nuvem nesta sessão → não empurra (evitaria clobber com estado local velho)
   const warn=e=>console.warn('[CVP] sync falhou:',e&&e.message);
   for(const key of Object.keys(ST)){ if(_fsIsCol(key)) _fsSyncCollection(key,ST[key]).catch(warn); }
   _fsSyncCollection('_config',_fsConfigDocs()).catch(warn);
@@ -3095,6 +3111,8 @@ async function _fsMeta(){
 // Carrega TODOS os dados da nuvem para o ST (fonte de verdade) — usado no login
 async function _fsLoadAll(){
   if(!_fbReady||!_fbDb)return false;
+  if(_fsLoadingNow)return false;          // já há um load em andamento (login + auth ao mesmo tempo)
+  _fsLoadingNow=true;
   try{
     // CONFIG: a nuvem é a verdade (equipe, regras, permissões, fábrica, etc.)
     const cfg=await loadFromFirestore('_config');
@@ -3121,9 +3139,11 @@ async function _fsLoadAll(){
     try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){}
     // Empurra os registros locais preservados (que não estavam na nuvem) para a nuvem
     if(_fbAuthed&&toPush.length){ for(const col of toPush){ try{ await _fsSyncCollection(col,ST[col]); }catch(e){ console.warn('[CVP] push de preservados falhou:',col,e&&e.message); } } }
+    _fsPrimed=true; // nuvem carregada e _fsSeen preparado → agora é seguro empurrar diffs
     console.info('[CVP] Dados mesclados da nuvem (merge seguro). Preservados locais:',toPush.join(',')||'nenhum');
     return true;
   }catch(e){ console.warn('[CVP] _fsLoadAll falhou:',e.message); return false; }
+  finally{ _fsLoadingNow=false; }
 }
 
 // Migração inicial: envia TUDO deste computador para a nuvem e marca como semeada (só gestor)
@@ -3137,7 +3157,7 @@ async function _fsMigrateToCloud(){
     for(const key of Object.keys(ST)){ if(_fsIsCol(key)) await _fsSyncCollection(key,ST[key]); }
     await _fsSyncCollection('_config',_fsConfigDocs());
     await _fbDb.collection('_meta').doc('migration').set({id:'migration',seeded:true,by:(ST.nome||''),at:new Date().toISOString()});
-    _fsMigrating=false;
+    _fsMigrating=false; _fsPrimed=true;
     alert('✅ Migração concluída!\n\nTodos os dados foram enviados para a nuvem. A partir de agora, qualquer computador que fizer login verá os mesmos dados.');
   }catch(e){
     _fsMigrating=false;
