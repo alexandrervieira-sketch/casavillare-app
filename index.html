@@ -671,9 +671,9 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div class="sidebar-user-label">Conectado como</div>
       <div class="sidebar-user-name" id="topbar-nome">—</div>
       <button id="sb-alertas" onclick="navTo('tab-home')" style="display:none;width:100%;margin:6px 0 2px;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:8px;padding:6px 8px;font-size:11px;font-weight:700;cursor:pointer;text-align:left;">🔔 <span id="sb-alertas-n">0</span> pendência(s)</button>
-      <div style="margin:6px 0 8px;font-size:10px;color:#9CA3AF;">
+      <div style="margin:6px 0 8px;font-size:10px;color:#9CA3AF;" title="Espaço usado no cache deste navegador (não é a nuvem). A nuvem mantém todos os dados sincronizados entre as máquinas.">
         <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-          <span>Armazenamento</span><span id="_ls-pct-lbl">—</span>
+          <span>Cache local (este navegador)</span><span id="_ls-pct-lbl">—</span>
         </div>
         <div style="background:#E5E7EB;border-radius:4px;height:5px;overflow:hidden;">
           <div id="_ls-bar-fill" style="height:100%;width:0%;background:#22C55E;transition:width .4s,background .4s;border-radius:4px;"></div>
@@ -2929,6 +2929,18 @@ function _tombKey(col,id){ return col+'/'+String(id); }
 function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); }
 function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]); }
 function _tombClear(col,id){ if(ST._tomb) delete ST._tomb[_tombKey(col,id)]; } // ao RECRIAR um registro de id determinístico
+// Enxuga marcas de exclusão com mais de 180 dias (mantém o cache local leve). Seguro:
+// nenhuma máquina fica offline por 6 meses, então a marca já cumpriu seu papel.
+function _tombPrune(){
+  if(!ST._tomb||typeof ST._tomb!=='object') return;
+  const corte=Date.now()-180*24*60*60*1000;
+  let mudou=false;
+  for(const k of Object.keys(ST._tomb)){
+    const ts=ST._tomb[k];
+    if(typeof ts==='number'&&ts<corte){ delete ST._tomb[k]; mudou=true; }
+  }
+  if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} }
+}
 // Remove de ST qualquer registro marcado como excluído (ex.: tombstone chegou de outra máquina)
 function _tombPurgeAll(){
   if(!ST._tomb||typeof ST._tomb!=='object') return false;
@@ -3118,6 +3130,7 @@ async function _fsLoadAll(){
     // CONFIG: a nuvem é a verdade (equipe, regras, permissões, fábrica, etc.)
     const cfg=await loadFromFirestore('_config');
     if(cfg) cfg.forEach(d=>{ if(d&&d.id&&Object.prototype.hasOwnProperty.call(d,'_val')) ST[d.id]=d._val; });
+    _tombPrune(); // enxuga marcas de exclusão antigas vindas da nuvem
     // COLEÇÕES: MERGE SEGURO por id — nuvem + registros locais que ainda NÃO subiram.
     // Isso garante que NADA criado localmente seja perdido ao carregar a nuvem.
     _fsSeen=Object.create(null);
@@ -3301,6 +3314,8 @@ function load(){
     if(!ST.senhas)     ST.senhas={};
     if(!ST.metas)      ST.metas={};
     if(!ST.configsCom) ST.configsCom={};
+    if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={};
+    _tombPrune(); // enxuga marcas de exclusão antigas no início
     // Migração: descarta tabela de financiamento antiga (formato {parcelas,taxa}) para usar novo (coeficientes)
     if(ST.tabelaFinanciamento&&ST.tabelaFinanciamento.length&&ST.tabelaFinanciamento[0].d30===undefined)
       ST.tabelaFinanciamento=null;
