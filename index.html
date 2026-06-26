@@ -2929,6 +2929,10 @@ function _tombKey(col,id){ return col+'/'+String(id); }
 function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); }
 function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]); }
 function _tombClear(col,id){ if(ST._tomb) delete ST._tomb[_tombKey(col,id)]; } // ao RECRIAR um registro de id determinístico
+// Carimbo de tempo por documento de config (anti-clobber de edição simultânea):
+// marca QUANDO esta máquina editou a config; uma versão mais ANTIGA nunca sobrescreve
+// uma edição local mais nova. _cfgUAt é LOCAL (não sincroniza).
+function _cfgTouch(key){ if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={}; ST._cfgUAt[key]=Date.now(); }
 // Enxuga marcas de exclusão com mais de 180 dias (mantém o cache local leve). Seguro:
 // nenhuma máquina fica offline por 6 meses, então a marca já cumpriu seu papel.
 function _tombPrune(){
@@ -3090,9 +3094,10 @@ function _fsConfigDocs(){
   const cfg=[];
   for(const key of Object.keys(ST)){
     if(_FS_SESSION_KEYS.includes(key)||_FS_SKIP_KEYS.includes(key))continue;
+    if(key==='_cfgUAt')continue;               // relógio local de config — NÃO sincroniza
     if(_fsIsCol(key))continue;                 // coleções de verdade não entram no _config
     const val=ST[key];
-    if(val!==undefined&&val!==null) cfg.push({id:key,_val:val}); // objetos + arrays-blob (tabelaCartao, bipartido)
+    if(val!==undefined&&val!==null) cfg.push({id:key,_val:val,_uAt:(ST._cfgUAt&&ST._cfgUAt[key])||0}); // + carimbo de tempo
   }
   return cfg;
 }
@@ -3127,9 +3132,17 @@ async function _fsLoadAll(){
   if(_fsLoadingNow)return false;          // já há um load em andamento (login + auth ao mesmo tempo)
   _fsLoadingNow=true;
   try{
-    // CONFIG: a nuvem é a verdade (equipe, regras, permissões, fábrica, etc.)
+    // CONFIG: a nuvem é a verdade, EXCETO quando a edição local é mais nova (carimbo _uAt).
     const cfg=await loadFromFirestore('_config');
-    if(cfg) cfg.forEach(d=>{ if(d&&d.id&&Object.prototype.hasOwnProperty.call(d,'_val')) ST[d.id]=d._val; });
+    if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={};
+    const _cfgKeepLocal=[];
+    if(cfg) cfg.forEach(d=>{
+      if(d&&d.id&&Object.prototype.hasOwnProperty.call(d,'_val')){
+        const _k=d.id, _clUAt=d._uAt||0, _loUAt=ST._cfgUAt[_k]||0;
+        if(_clUAt>=_loUAt){ ST[_k]=d._val; if(_k!=='_cfgUAt') ST._cfgUAt[_k]=_clUAt; }
+        else _cfgKeepLocal.push(_k); // edição local mais nova → mantém e reenvia
+      }
+    });
     _tombPrune(); // enxuga marcas de exclusão antigas vindas da nuvem
     // COLEÇÕES: MERGE SEGURO por id — nuvem + registros locais que ainda NÃO subiram.
     // Isso garante que NADA criado localmente seja perdido ao carregar a nuvem.
@@ -3150,9 +3163,12 @@ async function _fsLoadAll(){
       if(_fbAuthed&&tombNaNuvem.length){ const ref=_fbDb.collection(col); for(const id of tombNaNuvem){ try{ await ref.doc(id).delete(); }catch(e){} delete _fsSeen[col+'/'+id]; } }
     }
     _fsConfigDocs().forEach(d=>{ _fsSeen['_config/'+d.id]=JSON.stringify(d); });
+    // Config mantida local (mais nova que a nuvem): esquece o _fsSeen p/ ela ser REENVIADA
+    _cfgKeepLocal.forEach(_k=>{ delete _fsSeen['_config/'+_k]; });
     try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){}
     // Empurra os registros locais preservados (que não estavam na nuvem) para a nuvem
     if(_fbAuthed&&toPush.length){ for(const col of toPush){ try{ await _fsSyncCollection(col,ST[col]); }catch(e){ console.warn('[CVP] push de preservados falhou:',col,e&&e.message); } } }
+    if(_fbAuthed&&_cfgKeepLocal.length){ try{ await _fsSyncCollection('_config',_fsConfigDocs()); }catch(e){ console.warn('[CVP] push de config preservada falhou:',e&&e.message); } }
     _fsPrimed=true; // nuvem carregada e _fsSeen preparado → agora é seguro empurrar diffs
     console.info('[CVP] Dados mesclados da nuvem (merge seguro). Preservados locais:',toPush.join(',')||'nenhum');
     return true;
@@ -3237,7 +3253,13 @@ function _fsSubscribe(){
       snap.docChanges().forEach(ch=>{
         if(ch.doc.metadata.hasPendingWrites) return;
         const parsed=_fsParseDoc(ch.doc);
-        if(parsed&&parsed.id&&('_val' in parsed)){ ST[parsed.id]=parsed._val; _fsSeen['_config/'+parsed.id]=JSON.stringify(parsed); mudou=true; if(parsed.id==='_tomb') tombMudou=true; }
+        if(parsed&&parsed.id&&('_val' in parsed)){
+          const _k=parsed.id, _inUAt=parsed._uAt||0, _locUAt=(ST._cfgUAt&&ST._cfgUAt[_k])||0;
+          if(_inUAt<_locUAt) return;            // edição local é mais nova → ignora versão antiga de outra máquina
+          ST[_k]=parsed._val;
+          if(ST._cfgUAt&&_k!=='_cfgUAt') ST._cfgUAt[_k]=_inUAt;
+          _fsSeen['_config/'+_k]=JSON.stringify(parsed); mudou=true; if(_k==='_tomb') tombMudou=true;
+        }
       });
       if(tombMudou) _tombPurgeAll(); // exclusão feita em outra máquina → remove daqui também
       if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} _reRenderAtual(); }
@@ -3315,6 +3337,7 @@ function load(){
     if(!ST.metas)      ST.metas={};
     if(!ST.configsCom) ST.configsCom={};
     if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={};
+    if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={};
     _tombPrune(); // enxuga marcas de exclusão antigas no início
     // Migração: descarta tabela de financiamento antiga (formato {parcelas,taxa}) para usar novo (coeficientes)
     if(ST.tabelaFinanciamento&&ST.tabelaFinanciamento.length&&ST.tabelaFinanciamento[0].d30===undefined)
@@ -8069,7 +8092,7 @@ function cfgSalvarFabrica(){
   ST.fabrica.cidade  =document.getElementById('cfg-fab-cidade')?.value.trim()||'';
   ST.fabrica.obs     =document.getElementById('cfg-fab-obs')?.value.trim()||'';
   if(!ST.fabrica.email){toast('❌ Informe o e-mail da fábrica');return;}
-  save(); toast('✅ Dados da fábrica salvos!'); rConfig();
+  _cfgTouch('fabrica'); save(); toast('✅ Dados da fábrica salvos!'); rConfig();
 }
 
 function cfgSalvarMetasFabrica(){
@@ -8085,7 +8108,7 @@ function cfgSalvarMetasFabrica(){
   ST.fabrica.metaTier1Vol =t1v; ST.fabrica.metaTier1Desc=t1d;
   ST.fabrica.metaTier2Vol =t2v; ST.fabrica.metaTier2Desc=t2d;
   ST.fabrica.metaTier3Vol =t3v; ST.fabrica.metaTier3Desc=t3d;
-  save(); toast('✅ Metas de desconto salvas!');
+  _cfgTouch('fabrica'); save(); toast('✅ Metas de desconto salvas!');
 }
 
 // Soma valorFabrica de pedidos que pagaram a fábrica no mês (mes = 'YYYY-MM')
@@ -8113,7 +8136,7 @@ function _getFabTiers(){
 }
 function cfgSalvarOrcValidade(){
   const v=parseInt(document.getElementById('cfg-orc-validade')?.value)||15;
-  ST.orcValidade=v; save(); toast('✅ Validade salva: '+v+' dias');
+  ST.orcValidade=v; _cfgTouch('orcValidade'); save(); toast('✅ Validade salva: '+v+' dias');
 }
 // ── Helpers: logo e dados da empresa nos documentos ──
 function _docLogoHtml(){
@@ -8148,7 +8171,7 @@ function cfgSalvarEmpresa(){
   ST.empresa.cidade   = document.getElementById('cfg-emp-cidade')?.value.trim()||'';
   ST.empresa.site     = document.getElementById('cfg-emp-site')?.value.trim()||'';
   ST.empresa.instagram= document.getElementById('cfg-emp-ig')?.value.trim()||'';
-  save(); toast('✅ Dados da empresa salvos!');
+  _cfgTouch('empresa'); save(); toast('✅ Dados da empresa salvos!');
 }
 // ── Configurações: Logo ──
 function cfgCarregarLogo(input){
@@ -8279,7 +8302,7 @@ function salvarTabelaCom(){
   ST.configsCom.montador  =g('cfgcom-mont');
   ST.configsCom.margemErro=parseFloat(document.getElementById('cfgcom-margem-err')?.value)||0;
   ST.configsCom.comissaoVisivel=!!document.getElementById('cfgcom-vis')?.checked;
-  save(); toast('Tabela de comissões salva! ✓');
+  _cfgTouch('configsCom'); save(); toast('Tabela de comissões salva! ✓');
 }
 
 async function cfgEditSenha(nome){
@@ -8299,7 +8322,7 @@ function cfgEditSalario(nome){
   const adiant=prompt('Adiantamento (R$):',cfg.adiantamento||'');if(adiant===null)return;
   if(!ST.configs) ST.configs={};
   ST.configs[nome]={salarioBase:_parseBRL(sal),adiantamento:_parseBRL(adiant)};
-  save();rConfig();toast('Salário atualizado!');
+  _cfgTouch('configs'); save();rConfig();toast('Salário atualizado!');
 }
 // Estado do modal de colaborador
 let _colabArea='', _colabIdx=-1;
@@ -8465,6 +8488,7 @@ async function cfgSalvarColab(){
     if(senha) ST.senhas[email]=await _hashSenha(senha);
     toast('Colaborador atualizado ✅');
   }
+  _cfgTouch('equipe'); _cfgTouch('configs'); _cfgTouch('senhas');
   save(); fecharModal('modal-colab'); rConfig(); rLogin();
 }
 
@@ -8473,7 +8497,7 @@ function cfgRemColabModal(){
   const p=ST.equipe[_colabArea][_colabIdx];
   if(!confirm(`Remover ${p.nome}?`)) return;
   ST.equipe[_colabArea].splice(_colabIdx,1);
-  save(); fecharModal('modal-colab'); rConfig(); rLogin(); toast('Removido');
+  _cfgTouch('equipe'); save(); fecharModal('modal-colab'); rConfig(); rLogin(); toast('Removido');
 }
 function _parseDateBR(s){
   // DD/MM/AAAA → YYYY-MM-DD
@@ -8488,7 +8512,7 @@ function cfgRemPessoa(area,i){
   if(!_gestorPodeExcluir()) return;
   if(!confirm(`Remover ${ST.equipe[area][i].nome}?`))return;
   ST.equipe[area].splice(i,1);
-  save();rConfig();rLogin();toast('Removido');
+  _cfgTouch('equipe'); save();rConfig();rLogin();toast('Removido');
 }
 
 // ── Tabela de Financiamento Inline ──────────────────
@@ -14599,7 +14623,7 @@ function salvarTodasMetas(){
     const ee=document.getElementById('meta-esp-'+k);   if(ee) espVends[v.nome]=parseInt(ee.value)||0;
   });
   ST.metas[_metMes]={loja,vendedores:vends,atendVendedores:atendVends,apresVendedores:apresVends,fechVendedores:fechVends,espVendedores:espVends};
-  save();
+  _cfgTouch('metas'); save();
   fecharModal('modal-meta');
   toast('✅ Metas salvas!');
   rMetas();
@@ -14705,7 +14729,7 @@ function nfeSalvarConfig(){
   ST.configNFe.natureza  =document.getElementById('nfe-natureza').value||'Venda de mercadorias';
   ST.configNFe.infCompl  =document.getElementById('nfe-infcompl').value||'NFe referente ao contrato de venda #';
   ST.configNFe.ambiente  =document.getElementById('nfe-ambiente').value;
-  save(); toast('✅ Configuração NFe salva!'); rConfig();
+  _cfgTouch('configNFe'); save(); toast('✅ Configuração NFe salva!'); rConfig();
 }
 
 async function nfeTestarConexao(){
