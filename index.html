@@ -2907,6 +2907,28 @@ let _fsSeen=Object.create(null);                 // 'col/id' -> JSON já sincron
 let _fsMigrating=false;
 let _fsSubscribed=false;                          // tempo real ativado uma única vez
 
+// ── Tombstones: marcas de exclusão que SINCRONIZAM (via _config) e impedem que
+// um registro apagado ressuscite quando outra máquina (online depois, ou offline
+// na hora da exclusão) faz merge/push. `_tomb` = { 'col/id': timestamp }. ──
+function _tombKey(col,id){ return col+'/'+String(id); }
+function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); }
+function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]); }
+// Remove de ST qualquer registro marcado como excluído (ex.: tombstone chegou de outra máquina)
+function _tombPurgeAll(){
+  if(!ST._tomb||typeof ST._tomb!=='object') return false;
+  let mudou=false;
+  for(const k of Object.keys(ST._tomb)){
+    const sl=k.indexOf('/'); if(sl<0) continue;
+    const col=k.slice(0,sl), id=k.slice(sl+1);
+    if(Array.isArray(ST[col])){
+      const antes=ST[col].length;
+      ST[col]=ST[col].filter(x=>String(x&&(x.id??x._id))!==id);
+      if(ST[col].length!==antes){ mudou=true; delete _fsSeen[col+'/'+id]; }
+    }
+  }
+  return mudou;
+}
+
 // Escreve só o que MUDOU e remove o que sumiu. Só marca como sincronizado APÓS o commit confirmar —
 // assim, se a gravação falhar (ex.: sessão ainda não pronta), ela é RETENTADA no próximo sync.
 async function _fsSyncCollection(col,docs){
@@ -2922,10 +2944,10 @@ async function _fsSyncCollection(col,docs){
     if(_fsSeen[k]===js)continue;                 // inalterado → não reescreve
     writes.push({k,id,js});
   }
-  for(const k of Object.keys(_fsSeen)){          // o que sumiu localmente → deletar na nuvem
+  for(const k of Object.keys(_fsSeen)){          // o que sumiu localmente → deletar na nuvem + marcar tombstone
     if(k.indexOf(col+'/')===0){
       const id=k.slice(col.length+1);
-      if(!curIds.has(id)) deletes.push({k,id});
+      if(!curIds.has(id)){ deletes.push({k,id}); if(col!=='_config') _tombAdd(col,id); }
     }
   }
   if(!writes.length&&!deletes.length)return;
@@ -3080,12 +3102,17 @@ async function _fsLoadAll(){
     const colKeys=Object.keys(ST).filter(k=>_fsIsCol(k));
     const toPush=[];
     for(const col of colKeys){
-      const cloud=await loadFromFirestore(col)||[];
+      let cloud=await loadFromFirestore(col)||[];
+      // Registros com tombstone NÃO voltam; se ainda existirem na nuvem, são apagados de lá.
+      const tombNaNuvem=[];
+      cloud=cloud.filter(d=>{ const id=String(d&&(d.id??d._id)); if(_tombHas(col,id)){ tombNaNuvem.push(id); return false; } return true; });
       const cloudIds=new Set(cloud.map(d=>String(d&&(d.id??d._id))));
       cloud.forEach(d=>{ const id=String(d&&(d.id??d._id)); if(id&&id!=='undefined') _fsSeen[col+'/'+id]=JSON.stringify(d); });
-      const extras=(Array.isArray(ST[col])?ST[col]:[]).filter(it=>{ const id=String(it&&(it.id??it._id)); return id&&id!=='undefined'&&!cloudIds.has(id); });
+      // Extras locais só são preservados se NÃO tiverem tombstone (senão é um apagado ressuscitando)
+      const extras=(Array.isArray(ST[col])?ST[col]:[]).filter(it=>{ const id=String(it&&(it.id??it._id)); return id&&id!=='undefined'&&!cloudIds.has(id)&&!_tombHas(col,id); });
       ST[col]=cloud.concat(extras);                 // nuvem + locais inéditos (preservados)
       if(extras.length) toPush.push(col);
+      if(_fbAuthed&&tombNaNuvem.length){ const ref=_fbDb.collection(col); for(const id of tombNaNuvem){ try{ await ref.doc(id).delete(); }catch(e){} delete _fsSeen[col+'/'+id]; } }
     }
     _fsConfigDocs().forEach(d=>{ _fsSeen['_config/'+d.id]=JSON.stringify(d); });
     try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){}
@@ -3155,6 +3182,10 @@ function _fsSubscribe(){
           if(!Array.isArray(ST[col])) ST[col]=[];
           const idx=ST[col].findIndex(x=>String(x&&(x.id??x._id))===rid);
           if(ch.type==='removed'){ if(idx>=0){ ST[col].splice(idx,1); delete _fsSeen[col+'/'+rid]; mudou=true; } }
+          else if(_tombHas(col,rid)){ // apagado: não ressuscita; remove o que sobrou na nuvem
+            try{ _fbDb.collection(col).doc(rid).delete(); }catch(e){}
+            if(idx>=0){ ST[col].splice(idx,1); delete _fsSeen[col+'/'+rid]; mudou=true; }
+          }
           else { if(idx>=0) ST[col][idx]=rec; else ST[col].push(rec); _fsSeen[col+'/'+rid]=JSON.stringify(rec); mudou=true; }
         });
         if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} _reRenderAtual(); }
@@ -3165,11 +3196,13 @@ function _fsSubscribe(){
     _fbDb.collection('_config').onSnapshot(snap=>{
       if(_fsMigrating) return;
       let mudou=false;
+      let tombMudou=false;
       snap.docChanges().forEach(ch=>{
         if(ch.doc.metadata.hasPendingWrites) return;
         const parsed=_fsParseDoc(ch.doc);
-        if(parsed&&parsed.id&&('_val' in parsed)){ ST[parsed.id]=parsed._val; _fsSeen['_config/'+parsed.id]=JSON.stringify(parsed); mudou=true; }
+        if(parsed&&parsed.id&&('_val' in parsed)){ ST[parsed.id]=parsed._val; _fsSeen['_config/'+parsed.id]=JSON.stringify(parsed); mudou=true; if(parsed.id==='_tomb') tombMudou=true; }
       });
+      if(tombMudou) _tombPurgeAll(); // exclusão feita em outra máquina → remove daqui também
       if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} _reRenderAtual(); }
     }, err=>console.warn('[CVP] listener _config erro:',err&&err.message));
   }catch(e){}
