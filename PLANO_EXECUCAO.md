@@ -7,7 +7,7 @@
 ## Princípios inegociáveis (zero impacto)
 
 1. **Uma mudança de cada vez.** Nada de mexer em duas frentes no mesmo deploy.
-2. **Validação antes de publicar:** checagem de sintaxe + revisão; quando houver testes (Frente 3), eles rodam antes de cada deploy.
+2. **Validação antes de publicar:** checagem de sintaxe + **suíte de testes** (`node tests/run-tests.js`) verde antes de cada deploy.
 3. **Rollback garantido:** todo deploy é precedido de commit no GitHub. Qualquer problema → voltar à versão anterior em segundos.
 4. **Aditivo > destrutivo:** preferir adicionar comportamento novo a alterar o existente.
 5. **Fiscal só em homologação** até estar 100% validado. Produção é o último passo.
@@ -68,7 +68,7 @@
 
 **Objetivo:** governança de verdade e fim do último risco de perda de dado.
 
-### Fase 2.1 — Carimbo de tempo na config (🤖)  · *rápido, aditivo*
+### Fase 2.1 — Carimbo de tempo na config (🤖)  · *rápido, aditivo*  ✅ CONCLUÍDO (26/06)
 - **Problema:** meta/fábrica/equipe sincronizam em "última gravação vence"; duas máquinas editando juntas, uma sobrescreve a outra.
 - **Solução:** `_uAt` por documento de config; só sobrescreve a nuvem se o local for mais novo.
 - **Risco:** baixo (aditivo). **Impacto:** nenhum.
@@ -87,7 +87,8 @@
 
 **Objetivo:** sustentar o crescimento sem regressões e facilitar manutenção.
 
-### Fase 3.1 — Testes automatizados (🤖)  · *zero impacto*
+### Fase 3.1 — Testes automatizados (🤖)  · *zero impacto*  ✅ CONCLUÍDO (26/06)
+> `tests/run-tests.js` — 12 testes da lógica crítica. Rodar `node tests/run-tests.js` **antes de cada deploy**. Ampliar conforme novas mudanças.
 - Cobrir os pontos de maior risco: **sincronização** (tombstones, anti-clobber, merge), **comissão** (faixas/marcos/base líquida), **valor de venda** (desconto), **financeiro** (receber/pagar).
 - Rodar antes de cada deploy → trava regressão.
 - **Risco:** nenhum (aditivo, fora da produção). **DoD:** suíte rodando e barrando uma regressão proposital.
