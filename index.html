@@ -2928,6 +2928,7 @@ let _fsLoadingNow=false;                          // evita _fsLoadAll concorrent
 function _tombKey(col,id){ return col+'/'+String(id); }
 function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); }
 function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]); }
+function _tombClear(col,id){ if(ST._tomb) delete ST._tomb[_tombKey(col,id)]; } // ao RECRIAR um registro de id determinístico
 // Remove de ST qualquer registro marcado como excluído (ex.: tombstone chegou de outra máquina)
 function _tombPurgeAll(){
   if(!ST._tomb||typeof ST._tomb!=='object') return false;
@@ -4903,6 +4904,7 @@ function _syncAgendaLead(lead, prevLead){
   // ── Próximo Contato ──
   const evC=ST.eventos.find(e=>e.leadId===lid&&e.agTipo==='contato');
   if(lead.proxContato){
+    _tombClear('eventos','agc_'+lid); // re-agendou → limpa marca de exclusão anterior (id é determinístico)
     if(evC){
       evC.data=lead.proxContato;
       evC.titulo=`📞 Contato: ${lead.nome}`;
@@ -4916,6 +4918,7 @@ function _syncAgendaLead(lead, prevLead){
         obs:'Gerado pelo CRM — Próximo Contato'});
     }
   } else if(evC){
+    _tombAdd('eventos','agc_'+lid); // desmarcou o contato → propaga a remoção (some na nuvem e nas outras máquinas)
     ST.eventos=ST.eventos.filter(e=>!(e.leadId===lid&&e.agTipo==='contato'));
   }
 
@@ -4923,6 +4926,7 @@ function _syncAgendaLead(lead, prevLead){
   const evA=ST.eventos.find(e=>e.leadId===lid&&e.agTipo==='apres');
   const entrouApres=lead.etapa==='apresentacao'&&prevLead?.etapa!=='apresentacao';
   if(entrouApres&&!evA){
+    _tombClear('eventos','aga_'+lid); // recriou apresentação → limpa marca anterior
     const dataEv=lead.proxContato||new Date().toISOString().slice(0,10);
     ST.eventos.push({id:'aga_'+lid,agTipo:'apres',autoGerado:true,leadId:lid,
       data:dataEv,tipo:'apres',
@@ -4945,7 +4949,20 @@ function agNavMes(d){
   rAgenda();
 }
 
+// Remove eventos automáticos órfãos: gerados por um lead que foi EXCLUÍDO (tombstoned).
+// Só age sobre leads com tombstone (exclusão explícita) → não apaga evento de lead
+// que apenas ainda não sincronizou nesta máquina.
+function _limparAgendaOrfas(){
+  if(!Array.isArray(ST.eventos)) return;
+  const orfas=ST.eventos.filter(e=>e.autoGerado&&e.leadId&&_tombHas('leads',e.leadId));
+  if(!orfas.length) return;
+  const rm=new Set(orfas.map(e=>String(e.id)));
+  orfas.forEach(e=>_tombAdd('eventos',e.id));
+  ST.eventos=ST.eventos.filter(e=>!rm.has(String(e.id)));
+  save();
+}
 function rAgenda(){
+  _limparAgendaOrfas();
   document.getElementById('ag-mes-label').textContent=mesNomeStr(_agMes,_agAno);
   _agRenderCal();
   _agRenderDia();
@@ -10084,6 +10101,13 @@ function excluirLead(){
   if(!confirm('Excluir este lead permanentemente?'+avisoP+avisoC))return;
   _tombAdd('leads',_ldId);
   ST.leads=(ST.leads||[]).filter(l=>String(l.id)!==String(_ldId));
+  // Limpa os eventos AUTOMÁTICOS da agenda gerados por este lead (contato/apresentação)
+  const evsAuto=(ST.eventos||[]).filter(e=>e.autoGerado&&String(e.leadId)===String(_ldId));
+  if(evsAuto.length){
+    const evIds=new Set(evsAuto.map(e=>String(e.id)));
+    evsAuto.forEach(e=>_tombAdd('eventos',e.id));
+    ST.eventos=(ST.eventos||[]).filter(e=>!evIds.has(String(e.id)));
+  }
   if(pedidosVinculados.length){
     const ids=new Set(pedidosVinculados.map(p=>String(p.id)));
     pedidosVinculados.forEach(p=>_tombAdd('pedidos',p.id));
