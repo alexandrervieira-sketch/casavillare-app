@@ -3686,6 +3686,7 @@ let _chartVendasInst=null;
 let _relOrigemChartInst=null;
 
 function rHome(){
+  _limparAgendaOrfas(); // remove lembretes automáticos de leads que não existem mais
   const now=new Date();
   const dias=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   const meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -4949,12 +4950,15 @@ function agNavMes(d){
   rAgenda();
 }
 
-// Remove eventos automáticos órfãos: gerados por um lead que foi EXCLUÍDO (tombstoned).
-// Só age sobre leads com tombstone (exclusão explícita) → não apaga evento de lead
-// que apenas ainda não sincronizou nesta máquina.
+// Remove eventos automáticos órfãos: gerados por um lead que não existe mais.
+// Trava: se está ONLINE mas ainda NÃO carregou a nuvem nesta sessão (_fsPrimed=false),
+// não limpa — os leads podem estar incompletos e seria falso-positivo. Offline puro
+// (sem Firebase) confia no local. O id do evento já carrega o leadId (agc_/aga_<id>).
 function _limparAgendaOrfas(){
   if(!Array.isArray(ST.eventos)) return;
-  const orfas=ST.eventos.filter(e=>e.autoGerado&&e.leadId&&_tombHas('leads',e.leadId));
+  if(_fbReady&&!_fsPrimed) return;
+  const leadIds=new Set((ST.leads||[]).map(l=>String(l.id)));
+  const orfas=ST.eventos.filter(e=>e.autoGerado&&e.leadId&&!leadIds.has(String(e.leadId)));
   if(!orfas.length) return;
   const rm=new Set(orfas.map(e=>String(e.id)));
   orfas.forEach(e=>_tombAdd('eventos',e.id));
