@@ -70,6 +70,13 @@ function adapterFocus(nota) {
       codigo_ncm: it.ncm,
       icms_origem: 0,
       icms_situacao_tributaria: it.csosn || '102', // CSOSN (Simples Nacional)
+      // PIS/COFINS: obrigatórios no XML. No Simples Nacional o valor é zero (recolhido no DAS).
+      pis_situacao_tributaria: it.pisCst || '99',
+      pis_aliquota_porcentual: 0,
+      pis_valor: 0,
+      cofins_situacao_tributaria: it.cofinsCst || '99',
+      cofins_aliquota_porcentual: 0,
+      cofins_valor: 0,
     })),
   };
   if (isCnpj) out.cnpj_destinatario = doc; else out.cpf_destinatario = doc;
