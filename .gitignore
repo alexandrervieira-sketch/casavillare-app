@@ -25,3 +25,4 @@ _deploy.js
 _deploy_rules.js
 _deploy_worker.js
 _check.js
+_purge_testes.js
