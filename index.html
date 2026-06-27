@@ -15121,24 +15121,28 @@ function rFiscalPendentes(){
   const el=document.getElementById('fiscal-content');
   if(!el) return;
 
-  // Pedidos concluídos sem NFe, ou com NFe rejeitada (precisa reemitir)
-  const pedidos=(ST.pedidos||[]).filter(p=>p.status==='concluido'&&(!p.nfe||p.nfe.status==='rejeitada'));
+  // Toda venda fechada (= pedido) ainda SEM nota autorizada — você escolhe qual emitir,
+  // independente do estágio de produção. Mais recentes primeiro + busca por cliente/nº.
+  const todos=(ST.pedidos||[]).filter(p=>!p.nfe||p.nfe.status==='rejeitada').slice().reverse();
+  const busca=document.getElementById('fiscal-busca-pend')?.value?.toLowerCase()||'';
+  const pedidos=busca?todos.filter(p=>(p.clienteNome||'').toLowerCase().includes(busca)||String(p.id).includes(busca)):todos;
   const fmtBRL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const fmtData=d=>d?d.split('-').reverse().join('/'):'—';
+  const _bar=`<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <input class="inp" id="fiscal-busca-pend" placeholder="🔍 Buscar cliente ou nº do pedido..." style="flex:1;min-width:200px;max-width:340px;" oninput="rFiscalPendentes()" value="${busca}"/>
+      <span style="font-size:13px;color:var(--gl);">${pedidos.length} venda${pedidos.length!==1?'s':''} sem nota</span>
+    </div>`;
 
   if(!pedidos.length){
-    el.innerHTML=`<div style="text-align:center;padding:60px 24px;color:var(--gl);">
+    el.innerHTML=_bar+`<div style="text-align:center;padding:50px 24px;color:var(--gl);">
       <div style="font-size:40px;margin-bottom:12px;">✅</div>
-      <div style="font-size:15px;font-weight:600;color:var(--dark);margin-bottom:6px;">Tudo em dia!</div>
-      <div style="font-size:13px;">Nenhum pedido concluído aguardando emissão de NFe.</div>
+      <div style="font-size:15px;font-weight:600;color:var(--dark);margin-bottom:6px;">${busca?'Nenhuma venda encontrada':'Tudo em dia!'}</div>
+      <div style="font-size:13px;">${busca?'Tente outro termo de busca.':'Nenhuma venda aguardando emissão de NFe.'}</div>
     </div>`;
     return;
   }
 
-  el.innerHTML=`
-    <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-size:13px;color:var(--gl);">${pedidos.length} pedido${pedidos.length>1?'s':''} aguardando emissão</div>
-    </div>
+  el.innerHTML=_bar+`
     <div style="display:flex;flex-direction:column;gap:10px;">
       ${pedidos.map(p=>{
         const cad=(ST.cadastros||[]).find(c=>String(c.id)===String(p.clienteCadId)||c.nome===p.clienteNome);
@@ -15153,7 +15157,7 @@ function rFiscalPendentes(){
             <div style="font-size:12px;color:var(--gl);">${p.descricao||'Sem descrição'}</div>
             <div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;">
               <span style="font-size:11px;background:#F5F0E8;color:var(--p);padding:2px 8px;border-radius:20px;">Pedido #${p.id}</span>
-              <span style="font-size:11px;color:var(--gl);">Concluído: ${fmtData(p.dataConclusao||p.updatedAt||'')}</span>
+              ${(()=>{const e=PED_ETAPAS.find(x=>x.id===p.status);return e?`<span style="font-size:11px;background:${e.cor}18;color:${e.cor};padding:2px 8px;border-radius:20px;">${e.icon||''} ${e.label}</span>`:'';})()}
               <span style="font-size:12px;font-weight:700;color:var(--dark);">${fmtBRL(valorLiq)}</span>
             </div>
             ${!pronto?`<div style="margin-top:6px;font-size:11px;color:#D97706;background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;padding:3px 9px;display:inline-block;">
