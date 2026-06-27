@@ -35,17 +35,25 @@ function adapterFocus(nota) {
   const end = d.endereco || {};
   const doc = String(d.cpfCnpj || '').replace(/\D/g, '');
   const isCnpj = doc.length > 11;
+  // Contribuinte de ICMS? (tem IE de verdade, não "Isento"). Define indicador + consumidor final.
+  const ieDest = String(d.inscricaoEstadual || '').trim();
+  const contribuinte = !!ieDest && !/isent/i.test(ieDest);
+  // Desconto da nota distribuído proporcionalmente entre os itens (último absorve o arredondamento).
+  const itens = nota.itens || [];
+  const totalBruto = itens.reduce((s, it) => s + (Number(it.valorBruto) || 0), 0);
+  const descTotal = Math.round((((nota.totais && nota.totais.valorDesconto) || 0)) * 100) / 100;
+  let descAcum = 0;
   const out = {
     natureza_operacao: nota.naturezaOperacao || 'Venda de mercadoria',
     data_emissao: new Date().toISOString(),
     tipo_documento: 1,        // 1 = saída
     finalidade_emissao: 1,    // 1 = normal
-    consumidor_final: isCnpj ? 0 : 1,
+    consumidor_final: contribuinte ? 0 : 1,   // não contribuinte → consumidor final (exigência SEFAZ)
     presenca_comprador: 1,
     cnpj_emitente: String((nota.emitente && nota.emitente.cnpj) || '').replace(/\D/g, ''),
     nome_destinatario: d.razaoSocial || '',
-    indicador_inscricao_estadual_destinatario: 9, // 9 = não contribuinte
-    inscricao_estadual_destinatario: d.inscricaoEstadual && d.inscricaoEstadual !== 'Isento' ? d.inscricaoEstadual : undefined,
+    indicador_inscricao_estadual_destinatario: contribuinte ? 1 : 9, // 1=contribuinte, 9=não contribuinte
+    inscricao_estadual_destinatario: contribuinte ? ieDest : undefined,
     logradouro_destinatario: end.logradouro || '',
     numero_destinatario: end.numero || 'S/N',
     bairro_destinatario: end.bairro || '',
@@ -55,29 +63,38 @@ function adapterFocus(nota) {
     pais_destinatario: 'Brasil',
     valor_frete: 0,
     modalidade_frete: 9,      // 9 = sem ocorrência de transporte
-    items: (nota.itens || []).map((it, i) => ({
-      numero_item: i + 1,
-      codigo_produto: it.codigo || String(i + 1),
-      descricao: it.descricao,
-      cfop: it.cfop,
-      unidade_comercial: it.unidadeComercial || 'UN',
-      quantidade_comercial: it.quantidadeComercial || 1,
-      valor_unitario_comercial: it.valorUnitarioComercial,
-      valor_bruto: it.valorBruto,
-      unidade_tributavel: it.unidadeComercial || 'UN',
-      quantidade_tributavel: it.quantidadeComercial || 1,
-      valor_unitario_tributavel: it.valorUnitarioComercial,
-      codigo_ncm: it.ncm,
-      icms_origem: 0,
-      icms_situacao_tributaria: it.csosn || '102', // CSOSN (Simples Nacional)
-      // PIS/COFINS: obrigatórios no XML. No Simples Nacional o valor é zero (recolhido no DAS).
-      pis_situacao_tributaria: it.pisCst || '99',
-      pis_aliquota_porcentual: 0,
-      pis_valor: 0,
-      cofins_situacao_tributaria: it.cofinsCst || '99',
-      cofins_aliquota_porcentual: 0,
-      cofins_valor: 0,
-    })),
+    items: itens.map((it, i) => {
+      const bruto = Number(it.valorBruto) || 0;
+      let desconto = 0;
+      if (descTotal > 0 && totalBruto > 0) {
+        desconto = (i === itens.length - 1) ? Math.round((descTotal - descAcum) * 100) / 100 : Math.round((bruto / totalBruto * descTotal) * 100) / 100;
+        descAcum += desconto;
+      }
+      return {
+        numero_item: i + 1,
+        codigo_produto: it.codigo || String(i + 1),
+        descricao: it.descricao,
+        cfop: it.cfop,
+        unidade_comercial: it.unidadeComercial || 'UN',
+        quantidade_comercial: it.quantidadeComercial || 1,
+        valor_unitario_comercial: it.valorUnitarioComercial,
+        valor_bruto: it.valorBruto,
+        desconto: desconto,
+        unidade_tributavel: it.unidadeComercial || 'UN',
+        quantidade_tributavel: it.quantidadeComercial || 1,
+        valor_unitario_tributavel: it.valorUnitarioComercial,
+        codigo_ncm: it.ncm,
+        icms_origem: 0,
+        icms_situacao_tributaria: it.csosn || '102', // CSOSN (Simples Nacional)
+        // PIS/COFINS: obrigatórios no XML. No Simples Nacional o valor é zero (recolhido no DAS).
+        pis_situacao_tributaria: it.pisCst || '99',
+        pis_aliquota_porcentual: 0,
+        pis_valor: 0,
+        cofins_situacao_tributaria: it.cofinsCst || '99',
+        cofins_aliquota_porcentual: 0,
+        cofins_valor: 0,
+      };
+    }),
   };
   if (isCnpj) out.cnpj_destinatario = doc; else out.cpf_destinatario = doc;
   return out;

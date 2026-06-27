@@ -14686,6 +14686,45 @@ const NFE_PROXY_URL='https://cv-nfe.alexandre-rvieira.workers.dev';
 function _nfeMapStatus(s){
   return ({autorizado:'emitida',cancelado:'cancelada',erro_autorizacao:'rejeitada',denegado:'rejeitada',processando_autorizacao:'processing'})[s]||'';
 }
+// Consulta status e atualiza o MODAL aberto (botão manual + auto-polling após emitir)
+async function nfeConsultarStatusUI(){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
+  const statusEl=document.getElementById('nfe-status-box');
+  if(!p?.nfe?.ref){ toast('Sem referência pra consultar'); return; }
+  const amb=p.nfe.ambiente||'homologacao';
+  try{
+    const resp=await fetch(NFE_PROXY_URL+'/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
+    const data=await resp.json().catch(()=>({}));
+    const novo=_nfeMapStatus(data.status)||p.nfe.status;
+    p.nfe.status=novo;
+    if(data.numero)   p.nfe.numero=data.numero;
+    if(data.chave)    p.nfe.chaveAcesso=data.chave;
+    if(data.danfeUrl) p.nfe.danfeUrl=data.danfeUrl;
+    if(data.xmlUrl)   p.nfe.xmlUrl=data.xmlUrl;
+    if(data.mensagem) p.nfe.mensagem=data.mensagem;
+    save();
+    if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),300);
+    if(!statusEl) return;
+    if(novo==='emitida'){
+      statusEl.innerHTML=`<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534;margin-bottom:12px;">
+        🟢 <strong>NFe autorizada!</strong><br>Número: <strong>${p.nfe.numero||'—'}</strong> · Série: ${p.nfe.serie||1}<br>
+        Chave: <code style="font-size:10px;">${p.nfe.chaveAcesso||'—'}</code><br>
+        ${p.nfe.danfeUrl?`<a href="${p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
+        ${p.nfe.xmlUrl?`<a href="${p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
+      </div>`;
+      const b=document.getElementById('nfe-btn-emitir'); if(b) b.textContent='🟢 Autorizada';
+      toast('🟢 NFe autorizada!');
+    } else if(novo==='rejeitada'){
+      statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">❌ <strong>Rejeitada pela SEFAZ:</strong> ${_esc(p.nfe.mensagem||'')}</div>`;
+      const b=document.getElementById('nfe-btn-emitir'); if(b){ b.disabled=false; b.textContent='🧾 Corrigir e reemitir'; }
+    } else {
+      statusEl.innerHTML=`<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400E;margin-bottom:12px;">
+        🟡 <strong>Ainda em processamento na SEFAZ.</strong><br>
+        <button onclick="nfeConsultarStatusUI()" class="btn btn-s" style="margin-top:8px;font-size:12px;">🔄 Consultar de novo</button>
+      </div>`;
+    }
+  }catch(e){ toast('Erro ao consultar: '+e.message); }
+}
 // Consulta status da NFe pela ponte (por referência) e atualiza o pedido
 async function nfeConsultarStatus(pedidoId){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedidoId));
@@ -15024,10 +15063,13 @@ async function nfeEmitir(){
     } else {
       statusEl.innerHTML=`<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400E;margin-bottom:12px;">
         🟡 <strong>NFe enviada — aguardando autorização SEFAZ.</strong><br>
-        <span style="font-size:12px;">Em processamento. Use "🔄 Consultar status" em alguns segundos.</span>
+        <span style="font-size:12px;">Em processamento (alguns segundos)…</span><br>
+        <button onclick="nfeConsultarStatusUI()" class="btn btn-s" style="margin-top:8px;font-size:12px;">🔄 Consultar status</button>
       </div>`;
       btnEmitir.textContent='🟡 Aguardando';
-      toast('🟡 NFe enviada — consulte o status');
+      toast('🟡 NFe enviada — consultando…');
+      setTimeout(()=>nfeConsultarStatusUI(),6000);  // auto-consulta
+      setTimeout(()=>{ const pp=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId)); if(pp?.nfe?.status==='processing') nfeConsultarStatusUI(); },13000);
     }
     setTimeout(()=>rFiscal&&rFiscal(),500);
   }catch(e){
