@@ -118,6 +118,8 @@ export default {
         if (!tok) return json({ error: 'Token Focus não configurado para ' + amb }, 500);
         const ref = b.ref || ('cv' + Date.now());
         const payload = adapterFocus(b.nota || {});
+        // Homologação: a SEFAZ EXIGE este nome fixo no destinatário (senão rejeita).
+        if (amb === 'homologacao') payload.nome_destinatario = 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL';
         const r = await fetch(focusBase(amb) + '/v2/nfe?ref=' + encodeURIComponent(ref), {
           method: 'POST',
           headers: { 'Authorization': focusAuth(tok), 'Content-Type': 'application/json' },
