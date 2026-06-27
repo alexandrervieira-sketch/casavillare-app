@@ -79,7 +79,7 @@ function adapterFocus(nota) {
         quantidade_comercial: it.quantidadeComercial || 1,
         valor_unitario_comercial: it.valorUnitarioComercial,
         valor_bruto: it.valorBruto,
-        desconto: desconto,
+        valor_desconto: desconto,
         unidade_tributavel: it.unidadeComercial || 'UN',
         quantidade_tributavel: it.quantidadeComercial || 1,
         valor_unitario_tributavel: it.valorUnitarioComercial,
