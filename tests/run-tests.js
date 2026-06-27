@@ -70,7 +70,7 @@ vm.createContext(ctx);
 const EPILOGUE = `;try{ globalThis.__T = {
   ST: ST,
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
-  _tombKey, _tombAdd, _tombHas, _tombClear, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId
+  _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -105,6 +105,29 @@ test('tombstone add/has/clear', () => {
   T.ST._tomb = {};
   T._tombAdd('leads', '5'); assert(T._tombHas('leads', '5'), 'has após add');
   T._tombClear('leads', '5'); assert(!T._tombHas('leads', '5'), 'sem marca após clear');
+});
+// União do _tomb entre máquinas: NUNCA sobrescreve; mantém exclusões das duas e a ação mais recente vence.
+test('tomb união preserva exclusão de outra máquina', () => {
+  T.ST._tomb = {};
+  T._tombAdd('leads', 'arthur');                 // esta máquina excluiu o Arthur
+  T._tombMergeIncoming({ 'leads/jarbas': Date.now() }); // chega exclusão da máquina da Paula (Jarbas)
+  assert(T._tombHas('leads', 'arthur'), 'exclusão local sobrevive à união');
+  assert(T._tombHas('leads', 'jarbas'), 'exclusão remota é incorporada');
+});
+test('tomb união: recriação recente vence exclusão antiga', () => {
+  T.ST._tomb = {};
+  // outra máquina ainda tem um tombstone ANTIGO de um evento que aqui foi reagendado depois
+  const antigo = Date.now() - 10000;
+  T.ST._tomb['eventos/agc_9'] = antigo;           // tombstone antigo (positivo)
+  T._tombClear('eventos', 'agc_9');               // reagendado AGORA (negativo, mais recente)
+  T._tombMergeIncoming({ 'eventos/agc_9': antigo }); // a máquina antiga reenvia o tombstone velho
+  assert(!T._tombHas('eventos', 'agc_9'), 'recriação recente vence: evento NÃO ressuscita o tombstone');
+});
+test('tomb união: exclusão mais nova vence recriação antiga', () => {
+  T.ST._tomb = {};
+  T.ST._tomb['leads/x'] = -(Date.now() - 10000);  // recriação antiga
+  T._tombMergeIncoming({ 'leads/x': Date.now() }); // exclusão nova de outra máquina
+  assert(T._tombHas('leads', 'x'), 'exclusão mais recente prevalece');
 });
 
 // Concorrência (detecção de conflito)

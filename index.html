@@ -2926,9 +2926,24 @@ let _fsLoadingNow=false;                          // evita _fsLoadAll concorrent
 // um registro apagado ressuscite quando outra máquina (online depois, ou offline
 // na hora da exclusão) faz merge/push. `_tomb` = { 'col/id': timestamp }. ──
 function _tombKey(col,id){ return col+'/'+String(id); }
-function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); }
-function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]); }
-function _tombClear(col,id){ if(ST._tomb) delete ST._tomb[_tombKey(col,id)]; } // ao RECRIAR um registro de id determinístico
+// _tomb[key] > 0  → excluído (timestamp da exclusão)
+// _tomb[key] < 0  → recriado/des-excluído (−timestamp; vence o tombstone na UNIÃO entre máquinas)
+// O _tomb é UNIDO entre máquinas (nunca sobrescrito): por chave vence a AÇÃO mais recente (maior |ts|).
+function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); _cfgTouch('_tomb'); }
+function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]>0); }
+function _tombClear(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=-Date.now(); _cfgTouch('_tomb'); } // ao RECRIAR um registro de id determinístico (vence a exclusão antiga na união)
+// Une um _tomb vindo de outra máquina ao local: por chave mantém a ação mais recente (maior valor absoluto). Devolve true se mudou algo.
+function _tombMergeIncoming(inc){
+  if(!inc||typeof inc!=='object') return false;
+  if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={};
+  let mudou=false;
+  for(const k of Object.keys(inc)){
+    const iv=inc[k]; if(typeof iv!=='number') continue;
+    const cv=ST._tomb[k];
+    if(cv===undefined||Math.abs(iv)>Math.abs(cv)){ ST._tomb[k]=iv; mudou=true; }
+  }
+  return mudou;
+}
 // Carimbo de tempo por documento de config (anti-clobber de edição simultânea):
 // marca QUANDO esta máquina editou a config; uma versão mais ANTIGA nunca sobrescreve
 // uma edição local mais nova. _cfgUAt é LOCAL (não sincroniza).
@@ -2941,7 +2956,7 @@ function _tombPrune(){
   let mudou=false;
   for(const k of Object.keys(ST._tomb)){
     const ts=ST._tomb[k];
-    if(typeof ts==='number'&&ts<corte){ delete ST._tomb[k]; mudou=true; }
+    if(typeof ts==='number'&&Math.abs(ts)<corte){ delete ST._tomb[k]; mudou=true; }
   }
   if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} }
 }
@@ -2951,6 +2966,7 @@ function _tombPurgeAll(){
   let mudou=false;
   for(const k of Object.keys(ST._tomb)){
     const sl=k.indexOf('/'); if(sl<0) continue;
+    if(!(ST._tomb[k]>0)) continue; // só remove exclusões reais (ts>0); ts<0 = recriado, não purga
     const col=k.slice(0,sl), id=k.slice(sl+1);
     if(Array.isArray(ST[col])){
       const antes=ST[col].length;
@@ -3138,7 +3154,13 @@ async function _fsLoadAll(){
     const _cfgKeepLocal=[];
     if(cfg) cfg.forEach(d=>{
       if(d&&d.id&&Object.prototype.hasOwnProperty.call(d,'_val')){
-        const _k=d.id, _clUAt=d._uAt||0, _loUAt=ST._cfgUAt[_k]||0;
+        const _k=d.id;
+        if(_k==='_tomb'){ // mapa de exclusões: UNIÃO (nunca sobrescreve). Reenvia se a união local≠nuvem para a nuvem convergir.
+          _tombMergeIncoming(d._val);
+          if(JSON.stringify(ST._tomb||{})!==JSON.stringify(d._val||{})) _cfgKeepLocal.push('_tomb');
+          return;
+        }
+        const _clUAt=d._uAt||0, _loUAt=ST._cfgUAt[_k]||0;
         if(_clUAt>=_loUAt){ ST[_k]=d._val; if(_k!=='_cfgUAt') ST._cfgUAt[_k]=_clUAt; }
         else _cfgKeepLocal.push(_k); // edição local mais nova → mantém e reenvia
       }
@@ -3254,14 +3276,19 @@ function _fsSubscribe(){
         if(ch.doc.metadata.hasPendingWrites) return;
         const parsed=_fsParseDoc(ch.doc);
         if(parsed&&parsed.id&&('_val' in parsed)){
-          const _k=parsed.id, _inUAt=parsed._uAt||0, _locUAt=(ST._cfgUAt&&ST._cfgUAt[_k])||0;
+          const _k=parsed.id;
+          if(_k==='_tomb'){ // mapa de exclusões: UNIÃO (nunca sobrescreve)
+            if(_tombMergeIncoming(parsed._val)){ tombMudou=true; mudou=true; }
+            return;
+          }
+          const _inUAt=parsed._uAt||0, _locUAt=(ST._cfgUAt&&ST._cfgUAt[_k])||0;
           if(_inUAt<_locUAt) return;            // edição local é mais nova → ignora versão antiga de outra máquina
           ST[_k]=parsed._val;
           if(ST._cfgUAt&&_k!=='_cfgUAt') ST._cfgUAt[_k]=_inUAt;
-          _fsSeen['_config/'+_k]=JSON.stringify(parsed); mudou=true; if(_k==='_tomb') tombMudou=true;
+          _fsSeen['_config/'+_k]=JSON.stringify(parsed); mudou=true;
         }
       });
-      if(tombMudou) _tombPurgeAll(); // exclusão feita em outra máquina → remove daqui também
+      if(tombMudou){ _tombPurgeAll(); try{ _fsSyncCollection('_config',_fsConfigDocs()); }catch(e){} } // exclusão de outra máquina → remove daqui e reenvia a união p/ a nuvem convergir
       if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} _reRenderAtual(); }
     }, err=>console.warn('[CVP] listener _config erro:',err&&err.message));
   }catch(e){}
