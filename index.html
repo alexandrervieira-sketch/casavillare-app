@@ -15121,9 +15121,13 @@ function rFiscalPendentes(){
   const el=document.getElementById('fiscal-content');
   if(!el) return;
 
-  // Toda venda fechada (= pedido) ainda SEM nota autorizada — você escolhe qual emitir,
-  // independente do estágio de produção. Mais recentes primeiro + busca por cliente/nº.
-  const todos=(ST.pedidos||[]).filter(p=>!p.nfe||p.nfe.status==='rejeitada').slice().reverse();
+  // Critério = CRM: toda VENDA FECHADA (lead ganho, ou pedido manual) ainda SEM nota.
+  // NÃO depende do estágio de produção — a nota sai na venda, não no fim da montagem.
+  const todos=(ST.pedidos||[]).filter(p=>{
+    if(p.nfe&&p.nfe.status!=='rejeitada') return false;            // já tem nota emitida/em processamento
+    const l=p.leadId?(ST.leads||[]).find(x=>String(x.id)===String(p.leadId)):null;
+    return !l || l.status==='ganho';                               // venda fechada (ganho) ou pedido manual
+  }).slice().reverse();
   const busca=document.getElementById('fiscal-busca-pend')?.value?.toLowerCase()||'';
   const pedidos=busca?todos.filter(p=>(p.clienteNome||'').toLowerCase().includes(busca)||String(p.id).includes(busca)):todos;
   const fmtBRL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
