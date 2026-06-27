@@ -14686,6 +14686,14 @@ const NFE_PROXY_URL='https://cv-nfe.alexandre-rvieira.workers.dev';
 function _nfeMapStatus(s){
   return ({autorizado:'emitida',cancelado:'cancelada',erro_autorizacao:'rejeitada',denegado:'rejeitada',processando_autorizacao:'processing'})[s]||'';
 }
+// Refazer teste (SÓ homologação): limpa a nota de teste do pedido e devolve para Pendentes
+function nfeRefazerTeste(pedidoId){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedidoId));
+  if(!p||!p.nfe) return;
+  if(p.nfe.ambiente!=='homologacao'){ toast('Disponível apenas em homologação'); return; }
+  if(!confirm('Refazer teste: limpar a nota de HOMOLOGAÇÃO deste pedido para emitir de novo?\n(Não afeta nada fiscal — é nota de teste.)')) return;
+  delete p.nfe; save(); toast('🧪 Pronto — voltou para Pendentes'); fiscalSubTab('pendentes');
+}
 // Consulta status e atualiza o MODAL aberto (botão manual + auto-polling após emitir)
 async function nfeConsultarStatusUI(){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
@@ -15285,6 +15293,7 @@ function rFiscalEmitidas(){
               ?`<a href="${p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="font-size:11px;padding:5px 14px;">📦 XML</a>`
               :''}
             <button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">✏️ Editar</button>
+            ${p.nfe.ambiente==='homologacao'?`<button onclick="nfeRefazerTeste('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;border-color:#A78B6D;color:#A78B6D;" title="Limpa a nota de teste e devolve para Pendentes">🧪 Refazer teste</button>`:''}
           </div>
         </div>`;
       }).join('')}
