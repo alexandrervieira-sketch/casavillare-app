@@ -130,6 +130,17 @@ test('tomb união: exclusão mais nova vence recriação antiga', () => {
   assert(T._tombHas('leads', 'x'), 'exclusão mais recente prevalece');
 });
 
+// Baixa de parcela: id de 19 dígitos NÃO pode ser casado via parseInt/Number (perde precisão).
+// Guarda contra a regressão da baixa em massa que nunca encontrava a parcela.
+test('id de 19 dígitos: parseInt corrompe, String casa', () => {
+  const id = T._newId(); // string de 19 dígitos
+  const conds = [{ id, pago: false }];
+  // jeito ERRADO (o bug): coagir para Number e comparar estrito
+  assert(conds.find(x => x.id === parseInt(id)) === undefined, 'parseInt+=== NÃO deve encontrar (documenta o bug)');
+  // jeito CERTO (a correção): comparar como string
+  assert(conds.find(x => String(x.id) === String(id)) !== undefined, 'String===String encontra a parcela');
+});
+
 // Concorrência (detecção de conflito)
 test('conflito: sem mudança → ok, sem pedir confirmação', () => {
   T.ST.leads = [{ id: '1', _uAt: 100 }]; T._conflCapture('leads', T.ST.leads, '1');

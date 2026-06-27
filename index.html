@@ -13053,10 +13053,10 @@ function crReceberMassa(){
   if(!confirm(`Confirmar recebimento de ${checks.length} parcela${checks.length!==1?'s':''} — total ${fmtL(total)}?`)) return;
   const hoje=new Date().toISOString().slice(0,10);
   checks.forEach(el=>{
-    const leadId=el.dataset.lead, condId=parseInt(el.dataset.cond);
+    const leadId=el.dataset.lead, condId=el.dataset.cond; // id é string de 19 dígitos — NUNCA coagir para Number (perde precisão)
     const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
     if(!l||!l.condicoesPgto) return;
-    const c=l.condicoesPgto.find(x=>x.id===condId);
+    const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
     if(c){c.pago=true;c.dataPagamento=hoje;}
   });
   save(); toast(`✅ ${checks.length} parcela${checks.length!==1?'s':''} recebida${checks.length!==1?'s':''}!`); rFinCR();
@@ -13130,7 +13130,7 @@ function crExportarCSV(){
 function crReceberParcela(leadId, condId){
   const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
   if(!l||!l.condicoesPgto) return;
-  const c=l.condicoesPgto.find(x=>x.id==condId);
+  const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
   if(!c) return;
   if(!confirm(`Confirmar recebimento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.desc}?`)) return;
   c.pago=true;
@@ -13140,7 +13140,7 @@ function crReceberParcela(leadId, condId){
 function crEstornarParcela(leadId, condId){
   const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
   if(!l||!l.condicoesPgto) return;
-  const c=l.condicoesPgto.find(x=>x.id==condId);
+  const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
   if(!c||!confirm('Estornar este recebimento?')) return;
   c.pago=false; c.dataPagamento=null;
   save(); toast('Estorno realizado'); rFinCR();
@@ -13236,8 +13236,8 @@ function rFinCR(){
     <td style="${!isPago&&p.vencimento&&p.vencimento<hoje?'color:#DC2626;font-weight:600;':''}">${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}${!isPago&&p.vencimento&&p.vencimento<hoje?' ⚠️':''}</td>
     <td>${isPago?`<span style="color:#166534;font-size:11px;">✅ ${p.dataPagamento?new Date(p.dataPagamento+'T12:00').toLocaleDateString('pt-BR'):'Recebido'}</span>`:'<span style="color:#92400E;font-size:11px;">⏳ Pendente</span>'}</td>
     <td>${isPago
-      ?`<button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}',${p.id})">↩ Estornar</button>`
-      :`<button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}',${p.id})">✅ Receber</button>`}
+      ?`<button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
+      :`<button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
     </td></tr>`;
 
   // Label do período atual
