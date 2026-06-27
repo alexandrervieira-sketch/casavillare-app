@@ -15227,7 +15227,7 @@ function rFiscalEmitidas(){
             ${p.nfe.chaveAcesso?`<div style="margin-top:4px;font-size:10px;color:var(--gl);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;" title="${p.nfe.chaveAcesso}">Chave: ${p.nfe.chaveAcesso}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
-            ${p.nfe.id?`<button onclick="nfeConsultarStatus('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">🔄 Consultar</button>`:''}
+            ${(p.nfe.ref&&p.nfe.status!=='emitida')?`<button onclick="nfeConsultarStatus('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">🔄 Consultar</button>`:''}
             ${p.nfe.danfeUrl&&st==='emitida'
               ?`<a href="${p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="font-size:11px;padding:5px 14px;">📄 DANFE</a>`
               :`<button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">📎 Informar DANFE</button>`}
