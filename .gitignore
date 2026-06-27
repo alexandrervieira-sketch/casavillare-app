@@ -23,4 +23,5 @@ desktop.ini
 # Helpers locais (caminho hardcoded)
 _deploy.js
 _deploy_rules.js
+_deploy_worker.js
 _check.js

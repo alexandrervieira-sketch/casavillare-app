@@ -14680,39 +14680,32 @@ function nfeAtualizarCFOP(){
   }
 }
 
-// Consulta status da NFe na API NFE.io e atualiza o pedido
+// Camada fiscal provider-agnóstica (emitirNota). Trocar de provedor/host = trocar só esta URL.
+const NFE_PROXY_URL='https://cv-nfe.alexandre-rvieira.workers.dev';
+// Mapeia o status do provedor para o status interno do pedido
+function _nfeMapStatus(s){
+  return ({autorizado:'emitida',cancelado:'cancelada',erro_autorizacao:'rejeitada',denegado:'rejeitada',processando_autorizacao:'processing'})[s]||'';
+}
+// Consulta status da NFe pela ponte (por referência) e atualiza o pedido
 async function nfeConsultarStatus(pedidoId){
-  const cfg=ST.configNFe||{};
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedidoId));
-  if(!p?.nfe?.id){toast('Sem ID NFe para consultar');return;}
-  if(!cfg.apiKey||!cfg.empresaId){toast('⚠️ Configure as credenciais NFe');return;}
-  toast('🔄 Consultando status na NFE.io...');
+  if(!p?.nfe?.ref){toast('Sem referência NFe para consultar');return;}
+  const amb=p.nfe.ambiente||'homologacao';
+  toast('🔄 Consultando status...');
   try{
-    const resp=await fetch(`https://api.nfe.io/v1/companies/${cfg.empresaId}/productinvoices/${p.nfe.id}`,{
-      headers:{'Authorization':`Bearer ${cfg.apiKey}`}
-    });
+    const resp=await fetch(NFE_PROXY_URL+'/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
     const data=await resp.json().catch(()=>({}));
-    const st=data.productInvoice?.flowStatus||data.flowStatus||'';
-    const stMap={
-      'Authorized':'emitida','Issued':'emitida',
-      'Cancelled':'cancelada','Canceled':'cancelada',
-      'Error':'rejeitada','SefazError':'rejeitada','DeniedByTaxAuthority':'rejeitada',
-      'WaitingCalculateTaxes':'processing','WaitingDefineRpsNumber':'processing',
-      'WaitingSendToSefaz':'processing','WaitingReturn':'processing','WaitingLotReturn':'processing',
-    };
-    const novoStatus=stMap[st]||p.nfe.status;
-    p.nfe.status=novoStatus;
-    if(data.productInvoice?.accessKey||data.accessKey)
-      p.nfe.chaveAcesso=data.productInvoice?.accessKey||data.accessKey;
-    if(data.productInvoice?.links?.danfePdf||data.links?.danfePdf)
-      p.nfe.danfeUrl=data.productInvoice?.links?.danfePdf||data.links?.danfePdf;
-    if(data.productInvoice?.links?.xml||data.links?.xml)
-      p.nfe.xmlUrl=data.productInvoice?.links?.xml||data.links?.xml;
-    if(data.productInvoice?.number||data.number)
-      p.nfe.numero=data.productInvoice?.number||data.number;
+    if(data.error){toast('Erro: '+data.error);return;}
+    const novo=_nfeMapStatus(data.status)||p.nfe.status;
+    p.nfe.status=novo;
+    if(data.numero)   p.nfe.numero=data.numero;
+    if(data.chave)    p.nfe.chaveAcesso=data.chave;
+    if(data.danfeUrl) p.nfe.danfeUrl=data.danfeUrl;
+    if(data.xmlUrl)   p.nfe.xmlUrl=data.xmlUrl;
+    if(data.mensagem) p.nfe.mensagem=data.mensagem;
     save();
-    toast(novoStatus==='emitida'?'✅ NFe Autorizada!':novoStatus==='rejeitada'?'❌ NFe Rejeitada':novoStatus==='cancelada'?'🔵 NFe Cancelada':'🟡 Ainda em processamento');
-    rFiscalEmitidas();
+    toast(novo==='emitida'?'✅ NFe Autorizada!':novo==='rejeitada'?('❌ Rejeitada: '+(data.mensagem||'')):novo==='cancelada'?'🔵 NFe Cancelada':'🟡 Ainda em processamento');
+    if(typeof rFiscalEmitidas==='function') rFiscalEmitidas();
   }catch(e){toast('Erro ao consultar: '+e.message);}
 }
 
@@ -14978,13 +14971,13 @@ async function nfeEmitir(){
   const statusEl=document.getElementById('nfe-status-box');
   const btnEmitir=document.getElementById('nfe-btn-emitir');
 
-  if(!cfg.apiKey||!cfg.empresaId){
-    toast('⚠️ Configure a API Key e o ID da Empresa em Configurações → NFe');
+  const emp=ST.empresa||{};
+  if(!emp.cnpj){
+    toast('⚠️ Informe o CNPJ da empresa em Configurações → Empresa');
     statusEl.style.display='';
     statusEl.innerHTML=`<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400E;">
-      ⚙️ <strong>Configure as credenciais NFE.io antes de emitir.</strong><br>
-      <span style="font-size:12px;">Acesse <strong>Configurações → NFe</strong>, preencha a API Key e o ID da Empresa.<br>
-      Não tem conta? Crie grátis em <a href="https://nfe.io" target="_blank">nfe.io</a> — plano free inclui 10 NFes/mês.</span>
+      ⚙️ <strong>Antes de emitir, preencha:</strong><br>
+      <span style="font-size:12px;">• <strong>Configurações → Empresa:</strong> CNPJ e endereço completo.<br>• <strong>Configurações → NFe:</strong> Inscrição Estadual, série, CFOP, CSOSN, NCM e ambiente (Homologação para teste).</span>
     </div>`;
     return;
   }
@@ -14993,98 +14986,54 @@ async function nfeEmitir(){
     toast('⚠️ Informe o CPF/CNPJ do destinatário');return;
   }
 
+  const amb=(cfg.ambiente==='producao')?'producao':'homologacao';
   statusEl.style.display='';
-  statusEl.innerHTML=`<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;font-size:13px;color:#1E40AF;margin-bottom:12px;">⏳ Enviando para NFE.io...</div>`;
+  statusEl.innerHTML=`<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;font-size:13px;color:#1E40AF;margin-bottom:12px;">⏳ Enviando para o Focus NFe (${amb==='producao'?'PRODUÇÃO':'homologação'})...</div>`;
   btnEmitir.disabled=true;
 
-  const payload=nfeMontarPayload();
+  const nota=nfeMontarPayload();
+  const ref='cv'+String(_nfePedidoId||'')+'_'+Date.now();
 
-  // Tenta primeiro via Netlify Function (proxy seguro — disponível após deploy)
-  // Fallback: chamada direta à API NFE.io (pode funcionar em alguns ambientes)
-  const tryUrls=[
-    {url:'/api/nfe-emit', isProxy:true},
-    {url:`https://api.nfe.io/v1/companies/${cfg.empresaId}/productinvoices`, isProxy:false}
-  ];
-
-  let lastErr='';
-  for(const {url, isProxy} of tryUrls){
-    try{
-      const fetchOpts = isProxy
-        ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({payload,apiKey:cfg.apiKey,empresaId:cfg.empresaId})}
-        : {method:'POST', headers:{'Authorization':`Bearer ${cfg.apiKey}`,'Content-Type':'application/json'}, body:JSON.stringify(payload)};
-
-      const resp=await fetch(url, fetchOpts);
-
-      // Se Netlify Function não existe (404 em local), tenta próxima URL
-      if(isProxy && resp.status===404){ lastErr='local'; continue; }
-
-      const data=await resp.json().catch(()=>({}));
-
-      if(resp.ok||resp.status===201||resp.status===200){
-        const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
-        const nfeId=data.id||data.productInvoice?.id||'';
-        const chave=data.accessKey||data.productInvoice?.accessKey||'';
-        const numero=data.number||data.productInvoice?.number||'';
-        const danfe=data.links?.danfePdf||data.productInvoice?.links?.danfePdf||'';
-        const xmlUrl=data.links?.xml||data.productInvoice?.links?.xml||'';
-        const statusRetorno=chave?'emitida':'processing';
-        if(p){
-          p.nfe={
-            status:statusRetorno,
-            id:nfeId,
-            numero,
-            chaveAcesso:chave,
-            danfeUrl:danfe,
-            xmlUrl,
-            emitidaEm:new Date().toISOString().slice(0,10)
-          };
-          // Auto-incrementa o próximo número após emissão aceita pela API
-          if(ST.configNFe?.proxNum){
-            ST.configNFe.proxNum=String(parseInt(ST.configNFe.proxNum||0)+1);
-          }
-          save();
-        }
-        if(statusRetorno==='processing'){
-          statusEl.innerHTML=`<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400E;margin-bottom:12px;">
-            🟡 <strong>NFe enviada — aguardando autorização SEFAZ.</strong><br>
-            <span style="font-size:12px;">A nota está em processamento. Use "🔄 Consultar status" em alguns minutos para verificar a autorização.</span>
-          </div>`;
-          btnEmitir.textContent='🟡 Aguardando';
-          toast('🟡 NFe enviada — aguardando SEFAZ');
-        } else {
-          statusEl.innerHTML=`<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534;margin-bottom:12px;">
-            🟢 <strong>NFe autorizada!</strong><br>
-            Número: <strong>${numero||'—'}</strong>&nbsp;|&nbsp;Série: ${cfg.serie||1}<br>
-            Chave: <code style="font-size:10px;">${chave||'—'}</code><br>
-            ${danfe?`<a href="${danfe}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 Baixar DANFE</a>`:''}
-          </div>`;
-          btnEmitir.textContent='🟢 Autorizada';
-          toast('🟢 NFe autorizada com sucesso!');
-        }
-        setTimeout(()=>rFiscal&&rFiscal(),500);
-        return; // sucesso — para aqui
-      } else {
-        const msg=data.message||data.error||data.errors||JSON.stringify(data);
-        statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">
-          ❌ <strong>Erro NFE.io:</strong> ${msg}<br>
-          <span style="font-size:11px;">Verifique os dados e tente novamente.</span>
-        </div>`;
-        btnEmitir.disabled=false; btnEmitir.textContent='🧾 Tentar novamente';
-        return;
-      }
-    }catch(e){ lastErr=e.message; }
+  try{
+    const resp=await fetch(NFE_PROXY_URL+'/emitir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:amb,ref,nota})});
+    const data=await resp.json().catch(()=>({}));
+    const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
+    const erroProvedor = data.error || (data.erros&&data.erros.length) || (data.http&&data.http>=400&&!data.autorizado&&data.status!=='processando_autorizacao');
+    if(erroProvedor){
+      const msg=data.mensagem||data.error||(data.erros&&data.erros.length?data.erros.map(e=>e.mensagem||e.codigo||JSON.stringify(e)).join('; '):'')||'Falha na emissão';
+      statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">❌ <strong>Erro do Focus/SEFAZ:</strong> ${_esc(msg)}<br><span style="font-size:11px;">Confira CNPJ, IE, endereço e os fiscais (NCM/CFOP/CSOSN) e tente novamente.</span></div>`;
+      btnEmitir.disabled=false; btnEmitir.textContent='🧾 Tentar novamente';
+      return;
+    }
+    const novoStatus=data.autorizado?'emitida':'processing';
+    if(p){
+      p.nfe={ provider:'focus', ambiente:amb, ref, status:novoStatus, numero:data.numero||'', serie:data.serie||cfg.serie||'1', chaveAcesso:data.chave||'', danfeUrl:data.danfeUrl||'', xmlUrl:data.xmlUrl||'', mensagem:data.mensagem||'', emitidaEm:new Date().toISOString().slice(0,10) };
+      if(novoStatus==='emitida'&&ST.configNFe?.proxNum) ST.configNFe.proxNum=String(parseInt(ST.configNFe.proxNum||0)+1);
+      save();
+    }
+    if(novoStatus==='emitida'){
+      statusEl.innerHTML=`<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534;margin-bottom:12px;">
+        🟢 <strong>NFe autorizada!</strong><br>
+        Número: <strong>${data.numero||'—'}</strong>&nbsp;|&nbsp;Série: ${data.serie||cfg.serie||1}<br>
+        Chave: <code style="font-size:10px;">${data.chave||'—'}</code><br>
+        ${data.danfeUrl?`<a href="${data.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
+        ${data.xmlUrl?`<a href="${data.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
+      </div>`;
+      btnEmitir.textContent='🟢 Autorizada';
+      toast('🟢 NFe autorizada!');
+    } else {
+      statusEl.innerHTML=`<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400E;margin-bottom:12px;">
+        🟡 <strong>NFe enviada — aguardando autorização SEFAZ.</strong><br>
+        <span style="font-size:12px;">Em processamento. Use "🔄 Consultar status" em alguns segundos.</span>
+      </div>`;
+      btnEmitir.textContent='🟡 Aguardando';
+      toast('🟡 NFe enviada — consulte o status');
+    }
+    setTimeout(()=>rFiscal&&rFiscal(),500);
+  }catch(e){
+    statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">❌ Erro de comunicação com a ponte fiscal: ${_esc(e.message)}</div>`;
+    btnEmitir.disabled=false; btnEmitir.textContent='🧾 Tentar novamente';
   }
-
-  // Todos os métodos falharam (ambiente local sem rede/CORS)
-  const payloadStr=JSON.stringify(nfeMontarPayload(),null,2);
-  statusEl.innerHTML=`<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400E;">
-    ⚠️ <strong>Emissão automática disponível após o deploy no Netlify.</strong><br>
-    <span style="font-size:12px;">Use o botão "📋 Copiar dados" para copiar um resumo e lançar manualmente, ou use o JSON abaixo no painel NFE.io.</span>
-    <textarea id="nfe-payload-txt" readonly style="width:100%;height:110px;font-family:monospace;font-size:10px;margin-top:8px;border-radius:6px;padding:8px;border:1px solid var(--border);resize:none;">${payloadStr.replace(/</g,'&lt;')}</textarea>
-    <button onclick="navigator.clipboard.writeText(document.getElementById('nfe-payload-txt').value).then(()=>toast('✅ JSON copiado!'))"
-      class="btn btn-s" style="margin-top:6px;font-size:12px;">📋 Copiar JSON</button>
-  </div>`;
-  btnEmitir.disabled=false; btnEmitir.textContent='🧾 Emitir via NFE.io';
 }
 
 // Copia resumo formatado para colar no portal SEBRAE/NFE.io
