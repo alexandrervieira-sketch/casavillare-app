@@ -63,6 +63,7 @@ function adapterFocus(nota) {
     pais_destinatario: 'Brasil',
     valor_frete: 0,
     modalidade_frete: 9,      // 9 = sem ocorrência de transporte
+    informacoes_adicionais_contribuinte: (nota.informacoesAdicionais && nota.informacoesAdicionais.informacoesContribuinte) || undefined,
     items: itens.map((it, i) => {
       const bruto = Number(it.valorBruto) || 0;
       let desconto = 0;
