@@ -8821,7 +8821,8 @@ function ldCondAddFormaChange(){
   const forma=document.getElementById('ld-nadd-forma')?.value||'';
   const isFin=forma==='financiamento';
   const isCartao=forma==='cartao';
-  const showParc=isCartao||isFin;
+  const isBoleto=forma==='boleto';
+  const showParc=isCartao||isFin||isBoleto;
   const pw=document.getElementById('ld-nadd-parc-wrap');
   const pzw=document.getElementById('ld-nadd-prazo-wrap');
   const aw=document.getElementById('ld-nadd-abs-wrap');
@@ -8831,11 +8832,14 @@ function ldCondAddFormaChange(){
   if(aw)  aw.style.display=(isCartao||isFin)?'flex':'none';
   const absLbl=document.getElementById('ld-nadd-abs-lbl');
   if(absLbl) absLbl.textContent=isFin?'Retenção':'Taxa';
-  if(pv)  pv.style.display=isFin?'':'none';
+  if(pv){
+    if(isBoleto){ pv.style.display=''; pv.innerHTML='📅 Informe o <b>valor total</b> e a <b>data da 1ª parcela</b>. O sistema gera 1 boleto por parcela (demais +30 dias), com valores/datas editáveis na lista.'; }
+    else pv.style.display=isFin?'':'none';
+  }
   if(showParc){
     const sel=document.getElementById('ld-nadd-parc');
     if(sel){
-      const max=isFin?_getTabFin().length:(_getTabCartao().length||21);
+      const max=isFin?_getTabFin().length:isCartao?(_getTabCartao().length||21):24;
       sel.innerHTML=Array.from({length:max},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join('');
     }
   }
@@ -8847,6 +8851,8 @@ function ldCondAddFormaChange(){
   if(isFin) ldCondPreviewParcela();
 }
 function ldCondPreviewParcela(){
+  const _forma=document.getElementById('ld-nadd-forma')?.value||'';
+  if(_forma==='boleto'){ const pvb=document.getElementById('ld-nadd-preview-parc'); if(pvb) pvb.innerHTML='📅 Informe o <b>valor total</b> e a <b>data da 1ª parcela</b>. O sistema gera 1 boleto por parcela (demais +30 dias), com valores/datas editáveis na lista.'; return; }
   const n=parseInt(document.getElementById('ld-nadd-parc')?.value)||1;
   const prazo=document.getElementById('ld-nadd-prazo')?.value||'d30';
   const coef=_coefFin(n,prazo);
@@ -8876,13 +8882,31 @@ function ldConfirmarAddCond(){
   const prazoFin=document.getElementById('ld-nadd-prazo')?.value||'d30'; // salva prazo do financiamento
   if(!valor){toast('Informe o valor da condição');return;}
   if(!vencimento){toast('Informe a data de vencimento');return;}
-  _ldCondPgto.push({
-    id:_newId(),
-    desc:desc||(PGTO_FORMAS[forma]?.label||forma),
-    forma,valor,vencimento,parcelas,absorcao,
-    prazoFin:forma==='financiamento'?prazoFin:undefined,
-    pago:false
-  });
+  if(forma==='boleto'&&parcelas>1){
+    // Boleto parcelado: gera 1 recebível por parcela (1ª na data escolhida; demais +30 dias cada).
+    // Valores iguais por padrão (última absorve os centavos) — editáveis depois, parcela a parcela.
+    const base=Math.floor((valor/parcelas)*100)/100;
+    let acum=0;
+    for(let i=1;i<=parcelas;i++){
+      const v=(i===parcelas)?Math.round((valor-acum)*100)/100:base;
+      acum=Math.round((acum+v)*100)/100;
+      const dv=new Date(vencimento+'T12:00'); dv.setDate(dv.getDate()+(i-1)*30);
+      _ldCondPgto.push({
+        id:_newId(),
+        desc:`${desc||'Boleto'} ${i}/${parcelas}`,
+        forma:'boleto', valor:v, vencimento:dv.toISOString().slice(0,10),
+        parcelas:1, boletoGrupo:parcelas, boletoSeq:i, pago:false
+      });
+    }
+  } else {
+    _ldCondPgto.push({
+      id:_newId(),
+      desc:desc||(PGTO_FORMAS[forma]?.label||forma),
+      forma,valor,vencimento,parcelas,absorcao,
+      prazoFin:forma==='financiamento'?prazoFin:undefined,
+      pago:false
+    });
+  }
   const descEl=document.getElementById('ld-nadd-desc');
   const valEl=document.getElementById('ld-nadd-valor');
   if(descEl) descEl.value='';
@@ -8891,6 +8915,16 @@ function ldConfirmarAddCond(){
 }
 function ldRemoveCond(id){
   _ldCondPgto=_ldCondPgto.filter(c=>c.id!=id);
+  ldRenderConds();
+}
+function ldCondSetValor(id,val){
+  const c=_ldCondPgto.find(x=>x.id==id); if(!c) return;
+  c.valor=Math.round((parseFloat(val)||0)*100)/100;
+  ldRenderConds();
+}
+function ldCondSetVenc(id,val){
+  const c=_ldCondPgto.find(x=>x.id==id); if(!c) return;
+  c.vencimento=val||c.vencimento;
   ldRenderConds();
 }
 function ldRenderConds(){
@@ -8927,12 +8961,20 @@ function ldRenderConds(){
         }
       }
     }
+    // Boleto parcelado: valor e data editáveis por parcela (o usuário pode deixar parcelas diferentes).
+    const isBolPar=c.forma==='boleto'&&c.boletoGrupo>1;
+    const valorCell=isBolPar
+      ? `<input type="number" step="0.01" value="${(c.valor||0).toFixed(2)}" onchange="ldCondSetValor(${c.id},this.value)" title="Valor desta parcela" style="width:108px;font-size:13px;font-weight:700;color:var(--p);text-align:right;border:1px solid var(--border);border-radius:6px;padding:3px 6px;"/>`
+      : `<span style="font-size:13px;font-weight:700;color:var(--p);">${fmtL(c.valor)}</span>`;
+    const vencCell=isBolPar
+      ? `<input type="date" value="${c.vencimento||''}" onchange="ldCondSetVenc(${c.id},this.value)" title="Vencimento desta parcela" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 5px;"/>`
+      : `<span style="font-size:11px;color:var(--gl);">📅 ${vencTxt}${parcTxt}${absTxt}</span>`;
     return`<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
       <span style="font-size:10px;font-weight:700;background:${f.cor};color:${f.txt};padding:3px 9px;border-radius:12px;white-space:nowrap;">${f.icon} ${f.label}</span>
       <span style="flex:1;font-size:12.5px;color:var(--dark);">${c.desc}</span>
-      <span style="font-size:13px;font-weight:700;color:var(--p);">${fmtL(c.valor)}</span>
+      ${valorCell}
       ${taxaTxt}
-      <span style="font-size:11px;color:var(--gl);">📅 ${vencTxt}${parcTxt}${absTxt}</span>
+      ${vencCell}
       <button type="button" style="background:none;border:none;color:#9CA3AF;cursor:pointer;font-size:15px;padding:0 2px;" onclick="ldRemoveCond(${c.id})">✕</button>
     </div>`;
   }).join('');
