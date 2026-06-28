@@ -724,7 +724,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         </div>
 
         <!-- Row 2: Projetos Quentes -->
-        <div class="widget-card">
+        <div class="widget-card" id="home-quentes-card">
           <div class="widget-hdr">
             <span class="widget-hdr-title">🔥 Projetos Quentes</span>
             <span id="home-quentes-count" style="font-size:11px;color:var(--gl);"></span>
@@ -3754,6 +3754,8 @@ function _idleStop(){
 // NAVEGAÇÃO
 // ══════════════════════════════════════════════════════
 function navTo(tabId){
+  const _pk=_TAB_PERM[tabId];
+  if(_pk && !_temPerm(_pk)){ toast('🔒 Você não tem acesso a esta área.'); return; } // bloqueia atalhos do dashboard p/ áreas sem permissão
   window.scrollTo({top:0,behavior:'instant'});
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId));
@@ -3891,10 +3893,10 @@ function rHomeAlertas(){
       <span style="font-size:15px;font-weight:800;color:#1F2937;">Central de Alertas</span>
       <span style="margin-left:6px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 9px;">${a.total}</span>
     </div>
-    ${bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH)}
+    ${_temPerm('crm')?bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH):''}
     ${bloco('📦 Pedidos atrasados','#9A3412',a.pedidos,pedsH)}
-    ${bloco('💸 Contas a pagar','#B91C1C',a.pagar,pagH)}
-    ${bloco('💰 A receber','#166534',a.receber,recH)}
+    ${_temPerm('fin')?bloco('💸 Contas a pagar','#B91C1C',a.pagar,pagH):''}
+    ${_temPerm('fin')?bloco('💰 A receber','#166534',a.receber,recH):''}
   </div>`;
 }
 
@@ -4042,6 +4044,9 @@ function rHomeAgenda(){
 }
 
 function rHomeQuentes(){
+  const _card=document.getElementById('home-quentes-card');
+  if(!_temPerm('crm')){ if(_card)_card.style.display='none'; return; } // sem CRM: nem exibe leads no dashboard
+  if(_card) _card.style.display='';
   const isG=ST.perfil==='gestor';
   const todos=(ST.leads||[]).filter(l=>l.etapa==='apresentacao'&&l.status==='ativo');
   const lista=todos; // todos veem a empresa inteira
@@ -4186,6 +4191,7 @@ function rHomeComercial(){
   const card=document.getElementById('home-comercial-card');
   const body=document.getElementById('home-comercial-body');
   if(!card||!body) return;
+  if(!_temPerm('crm')){ card.style.display='none'; return; } // sem CRM: oculta o painel comercial
   // Dashboard comercial completo: visível a TODOS (o botão "Ver relatório completo" fica só p/ gestor — controlado no entrar)
 
   const now=new Date();
@@ -8088,6 +8094,15 @@ const _PERMS_PADRAO={
   prestador:  {crm:0,ped:0,agenda:1,metas:0,com:1,cad:0,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
 };
 const _PERMS_KEYS=['crm','ped','agenda','metas','com','cad','fin','rel','repo','trei','fiscal','config'];
+// Permissão efetiva do usuário logado (espelha a lógica do entrar(): perms explícitas mandam;
+// sem perms explícitas → permissivo). Gestor sempre pode.
+function _temPerm(k){
+  if(ST.perfil==='gestor') return true;
+  const pm=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoes)||null;
+  return pm ? !!pm[k] : true;
+}
+// Aba (painel) → chave de permissão. Usado para bloquear navegação a áreas sem acesso.
+const _TAB_PERM={'tab-crm':'crm','tab-pedidos':'ped','tab-agenda':'agenda','tab-metas':'metas','tab-comissoes':'com','tab-cad':'cad','tab-fin':'fin','tab-pag':'fin','tab-rel':'rel','tab-repo':'repo','tab-trei':'trei','tab-fiscal':'fiscal','tab-config':'config'};
 
 function _permDefaults(perfil){ return _PERMS_PADRAO[perfil]||_PERMS_PADRAO.prestador; }
 
@@ -9335,6 +9350,7 @@ function leadCardHtml(l,etapa){
 }
 
 function abrirModalLead(id, etapaInicial){
+  if(!_temPerm('crm')){ toast('🔒 Você não tem acesso ao CRM.'); return; }
   _ldId=id||null;
   _ldBaseUAt=id?(((ST.leads||[]).find(x=>String(x.id)===String(id))||{})._uAt||0):0; // base p/ detectar conflito ao salvar
   const resp=[...(ST.equipe.comercial||[]),...(ST.equipe.gestor||[])];
