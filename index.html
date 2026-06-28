@@ -1478,12 +1478,9 @@ textarea.inp{resize:vertical;min-height:68px;}
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-fiscal"/> 🧾 Fiscal</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-config"/> ⚙️ Configurações</label>
       </div>
-      <div class="form-sec">🔑 Senha de acesso</div>
-      <div class="fr r2">
-        <div><label class="lbl">Nova senha <span style="font-size:10px;color:var(--gl);">(deixe em branco para não alterar)</span></label>
-          <input class="inp" id="colab-senha" type="password" placeholder="mínimo 4 caracteres"/></div>
-        <div><label class="lbl">Confirmar senha</label>
-          <input class="inp" id="colab-senha2" type="password" placeholder="repita a senha"/></div>
+      <div class="form-sec">🔑 Acesso</div>
+      <div style="font-size:12px;color:#166534;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px 12px;">
+        A senha é criada pelo <b>próprio colaborador</b> no 1º acesso (tela de login → “Primeiro acesso? Criar minha senha”). Você não define a senha aqui. Para redefinir, use <b>Resetar senha</b> na aba Equipe (envia um e-mail seguro de redefinição).
       </div>
       <div class="form-actions">
         <button class="btn btn-danger btn-sm" id="colab-btn-del" onclick="cfgRemColabModal()" style="display:none;margin-right:auto;">🗑 Remover</button>
@@ -2864,25 +2861,28 @@ async function _fbAuthLogin(email,pass){
     return 'ok';
   }catch(err){
     const code=err&&err.code;
-    // Proteção de enumeração (projetos novos): conta inexistente E senha errada caem em invalid-credential.
-    // Tentamos criar a conta: se não existir, é o 1º acesso; se já existir, a senha estava errada.
-    if(code==='auth/user-not-found'||code==='auth/invalid-credential'||code==='auth/invalid-login-credentials'){
-      try{
-        await firebase.auth().createUserWithEmailAndPassword(email,pass);
-        console.info('[CVP] Firebase Auth: conta criada (1º acesso) —',email);
-        return 'ok';
-      }catch(e2){
-        const c2=e2&&e2.code;
-        if(c2==='auth/email-already-in-use') return 'wrong';        // conta existe → senha incorreta
-        if(c2==='auth/network-request-failed') return 'offline';
-        console.warn('[CVP] Firebase Auth: falha ao criar conta —',email,'·',c2||(e2&&e2.message));
-        return 'error';
-      }
-    }
-    if(code==='auth/wrong-password') return 'wrong';
+    // NÃO cria conta aqui. Conta nova é EXCLUSIVAMENTE via "Primeiro acesso" (_fbAuthCriar).
+    // Mensagem genérica p/ conta inexistente OU senha errada (não revela quais e-mails existem).
+    if(code==='auth/wrong-password'||code==='auth/invalid-credential'||code==='auth/invalid-login-credentials'||code==='auth/user-not-found') return 'wrong';
     if(code==='auth/network-request-failed') return 'offline';
     if(code==='auth/operation-not-allowed'){ console.warn('[CVP] Firebase Auth: provedor E-mail/Senha não habilitado no Console.'); return 'offline'; }
     console.warn('[CVP] Firebase Auth: falha no login —',code||(err&&err.message));
+    return 'error';
+  }
+}
+// Cria a conta no Firebase Auth — SOMENTE pelo "Primeiro acesso". createUser já deixa autenticado.
+async function _fbAuthCriar(email,pass){
+  if(typeof firebase==='undefined'||!firebase.auth){return 'offline';}
+  try{
+    await firebase.auth().createUserWithEmailAndPassword(email,pass);
+    console.info('[CVP] Firebase Auth: conta criada (1º acesso) —',email);
+    return 'ok';
+  }catch(err){
+    const code=err&&err.code;
+    if(code==='auth/email-already-in-use') return 'existe';
+    if(code==='auth/weak-password') return 'fraca';
+    if(code==='auth/network-request-failed') return 'offline';
+    console.warn('[CVP] Firebase Auth: falha ao criar conta —',email,'·',code||(err&&err.message));
     return 'error';
   }
 }
@@ -3523,7 +3523,7 @@ function lcMostrarLogin(){
   document.getElementById('lc-panel-login').style.display='';
   document.getElementById('l-erro').style.display='none';
 }
-function criarPrimeiraSenha(){
+async function criarPrimeiraSenha(){
   const email = document.getElementById('pa-nome').value.trim().toLowerCase();
   const senha = document.getElementById('pa-senha').value;
   const conf  = document.getElementById('pa-conf').value;
@@ -3538,32 +3538,23 @@ function criarPrimeiraSenha(){
   if(senha!==conf) return mostrarErro('As senhas não coincidem.');
 
   // Verificar se e-mail existe na equipe
-  const todasPessoas=[
-    ...(ST.equipe.comercial||[]),
-    ...(ST.equipe.obras||[]),
-    ...(ST.equipe.gestor||[]),
-    ...(ST.equipe.outros||[])
-  ];
-  const pessoa=todasPessoas.find(p=>_emailDePessoa(p)===email);
+  const pessoa=todosFunc().find(p=>_emailDePessoa(p)===email);
   if(!pessoa) return mostrarErro('E-mail não encontrado. Verifique com o administrador.');
-
-  // Verificar se já tem senha (não pode redefinir por aqui)
-  if(!ST.senhas) ST.senhas={};
   const emailKey=_emailDePessoa(pessoa);
-  if(ST.senhas[emailKey]){
-    return mostrarErro('Este usuário já possui senha. Use o login normal ou contate o administrador.');
-  }
 
-  // Criar senha
-  ST.senhas[emailKey]=senha;
-  save();
+  if(!(_fbReady && typeof firebase!=='undefined' && firebase.auth)) return mostrarErro('Sem conexão com o servidor. Tente novamente em instantes.');
+  const st=await _fbAuthCriar(emailKey, senha);
+  if(st==='existe')  return mostrarErro('Este e-mail já tem senha. Use o login normal — ou “Esqueci a senha” para redefinir.');
+  if(st==='fraca')   return mostrarErro('Senha muito fraca. Use ao menos 6 caracteres.');
+  if(st==='offline') return mostrarErro('Sem conexão com o servidor. Tente novamente.');
+  if(st!=='ok')      return mostrarErro('Não foi possível criar agora. Tente novamente.');
+
+  // createUser já autenticou a sessão. Carrega a nuvem e entra.
   toast('Senha criada! Entrando...');
-  setTimeout(()=>{
-    document.getElementById('l-user').value=email;
-    document.getElementById('l-pass').value=senha;
-    lcMostrarLogin();
-    document.querySelector('#lc-panel-login form').dispatchEvent(new Event('submit'));
-  },800);
+  try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
+  catch(err){ console.warn('[CVP] load no 1º acesso falhou:',err&&err.message); }
+  const info=infoFunc(pessoa.nome);
+  entrar(pessoa.nome, pessoa.perfil, info.area);
 }
 
 function _emailDePessoa(p){
@@ -3574,23 +3565,8 @@ function _emailDePessoa(p){
   return primeiro+'@casavillare.com.br';
 }
 async function resetEmergencia(){
-  const codigo=prompt('Digite o código de confirmação do administrador para resetar todas as senhas:');
-  if(!codigo) return;
-  // Usa hash legado (sem salt) para manter compatibilidade com código já distribuído
-  const hashCodigo=await _hashSenhaLegacy(codigo);
-  const HASH_RESET='b7e5c3d2a1f8e4b9c6d3a2f7e1b8c5d4a3f2e9b6c1d8a5f4e3b2c7d6a1f0e9b8';
-  const hashPadrao=await _hashSenha('villare');
-  if(hashCodigo!==HASH_RESET){
-    toast('❌ Código inválido.'); return;
-  }
-  if(!ST.senhas) ST.senhas={};
-  // Reseta todas as senhas para hash de 'villare'
-  const todos=todosFunc();
-  for(const p of todos){
-    ST.senhas[_emailDePessoa(p)]=hashPadrao;
-  }
-  save();
-  toast('Senhas resetadas para "villare". Oriente os usuários a criar nova senha no próximo acesso.');
+  // A autenticação agora é 100% Firebase Auth. Não existe mais "senha padrão" local.
+  alert('A redefinição de senha agora é por e-mail seguro do Firebase.\n\nEm Configurações → Equipe, use “Resetar senha” no colaborador para enviar o link de redefinição. Em último caso, contate o administrador do sistema.');
 }
 function _espBadge(l){
   if(!l.especificadorId) return '';
@@ -3614,43 +3590,30 @@ async function fazerLogin(e){
   }
   const emailKey=_emailDePessoa(pessoa);
 
-  // ── ONLINE: Firebase Auth é a AUTORIDADE (a credencial vale em qualquer máquina) ──
-  // É a sessão exigida pelas regras do Firestore para ler/gravar.
-  if(_fbReady && typeof firebase!=='undefined' && firebase.auth){
-    const st=await _fbAuthLogin(emailKey, pass);
-    if(st==='ok'){
-      // Nuvem é a fonte de verdade — carrega os dados de lá antes de entrar
-      try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
-      catch(err){ console.warn('[CVP] load da nuvem no login falhou:',err&&err.message); }
-      const info=infoFunc(pessoa.nome);
-      entrar(pessoa.nome, pessoa.perfil, info.area);
-      return;
-    }
-    if(st==='wrong'){
-      erroEl.textContent='Senha incorreta.';
-      erroEl.style.display='block'; return;
-    }
-    // st==='offline' ou 'error' → cai para a validação local (modo offline) abaixo
-  }
-
-  // ── OFFLINE / Firebase indisponível: validação local (cache), com migração de hash ──
-  const senhaArmazenada=ST.senhas[emailKey]||'villare';
-  let ok=false;
-  if(!_isHash(senhaArmazenada)){
-    if(pass===senhaArmazenada){ ST.senhas[emailKey]=await _hashSenha(pass); save(); ok=true; }
-  } else {
-    ok=(await _hashSenha(pass))===senhaArmazenada;
-    if(!ok){
-      const legacyOk=(await _hashSenhaLegacy(pass))===senhaArmazenada;
-      if(legacyOk){ ST.senhas[emailKey]=await _hashSenha(pass); save(); ok=true; }
-    }
-  }
-  if(!ok){
-    erroEl.textContent='Senha incorreta.';
+  // Firebase Auth é a ÚNICA autoridade. Sem login local nem senha padrão.
+  if(!(_fbReady && typeof firebase!=='undefined' && firebase.auth)){
+    erroEl.textContent='Sem conexão com o servidor. Aguarde alguns segundos e tente de novo.';
     erroEl.style.display='block'; return;
   }
-  const info=infoFunc(pessoa.nome);
-  entrar(pessoa.nome, pessoa.perfil, info.area);
+  const st=await _fbAuthLogin(emailKey, pass);
+  if(st==='ok'){
+    // Nuvem é a fonte de verdade — carrega os dados de lá antes de entrar
+    try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
+    catch(err){ console.warn('[CVP] load da nuvem no login falhou:',err&&err.message); }
+    const info=infoFunc(pessoa.nome);
+    entrar(pessoa.nome, pessoa.perfil, info.area);
+    return;
+  }
+  if(st==='wrong'){
+    erroEl.innerHTML='Senha incorreta. Se for seu <b>primeiro acesso</b>, clique em “Primeiro acesso? Criar minha senha”.';
+    erroEl.style.display='block'; return;
+  }
+  if(st==='offline'){
+    erroEl.textContent='Sem conexão com o servidor. Aguarde alguns segundos e tente de novo.';
+    erroEl.style.display='block'; return;
+  }
+  erroEl.textContent='Não foi possível entrar agora. Tente novamente.';
+  erroEl.style.display='block';
 }
 
 function togglePwd(){
@@ -7725,7 +7688,6 @@ function rConfig(){
     const todosF=todosFunc();
     const credRows=todosF.map(p=>{
       const emailReal=_emailDePessoa(p);
-      const temSenha=!!(ST.senhas&&ST.senhas[emailReal]);
       const emailSalvo=p.email||'';
       const emailDeriv=p.nome.split(' ')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')+'@casavillare.com.br';
       const emailOk=emailSalvo&&emailSalvo===emailReal;
@@ -7738,10 +7700,7 @@ function rConfig(){
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="font-size:11px;background:${temSenha?'#DCFCE7':'#FEF3C7'};color:${temSenha?'#166534':'#92400E'};padding:3px 10px;border-radius:12px;font-weight:600;">
-            ${temSenha?'🔑 Senha definida':'🔓 Senha padrão'}
-          </div>
-          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="cfgResetarSenhaUsuario('${emailReal}','${p.nome.split(' ')[0]}')">Resetar</button>
+          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="cfgResetarSenhaUsuario('${emailReal}','${p.nome.split(' ')[0]}')" title="Envia e-mail de redefinição de senha">✉️ Resetar senha</button>
         </div>
       </div>`;
     }).join('');
@@ -8125,12 +8084,16 @@ function colabAtualizarPerfil(manterPerms){
   }
 }
 async function cfgResetarSenhaUsuario(email, primeiroNome){
-  if(!confirm(`Resetar a senha de ${primeiroNome} para "villare"?`)) return;
-  if(!ST.senhas) ST.senhas={};
-  ST.senhas[email]=await _hashSenha('villare');
-  save();
-  toast(`✅ Senha de ${primeiroNome} resetada para "villare"`);
-  rConfig();
+  if(!email) return toast('E-mail não definido para este colaborador.');
+  if(!confirm(`Enviar e-mail de redefinição de senha para ${primeiroNome}?\n\n${email}\n\nA pessoa recebe um link seguro para criar uma nova senha.`)) return;
+  if(!(typeof firebase!=='undefined'&&firebase.auth)) return toast('Sem conexão com o servidor.');
+  try{
+    await firebase.auth().sendPasswordResetEmail(email);
+    toast(`✅ E-mail de redefinição enviado para ${email}`);
+  }catch(err){
+    console.warn('[CVP] reset senha falhou:',err&&err.code);
+    toast('❌ Não consegui enviar agora ('+((err&&err.code)||'erro')+'). Tente de novo.');
+  }
 }
 
 function cfgSincronizarEmails(){
@@ -8143,8 +8106,6 @@ function cfgSincronizarEmails(){
         p.nome.split(' ')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')+'@casavillare.com.br';
       if(!p.email){
         p.email=emailEsperado;
-        // migra senha se existe pelo derivado
-        if(!ST.senhas[emailEsperado]) ST.senhas[emailEsperado]='villare';
         corrigidos++;
       }
     });
@@ -8494,14 +8455,7 @@ async function cfgSalvarColab(){
 
   const salario=_parseBRL(document.getElementById('colab-salario').value);
   const adiantamento=_parseBRL(document.getElementById('colab-adiantamento').value);
-  const senha=document.getElementById('colab-senha').value;
-  const senha2=document.getElementById('colab-senha2').value;
-
-  if(senha&&senha.length<4){toast('Senha precisa ter no mínimo 4 caracteres');return;}
-  if(senha&&senha!==senha2){toast('Senhas não conferem');return;}
-
   if(!ST.configs) ST.configs={};
-  if(!ST.senhas)  ST.senhas={};
   if(!ST.equipe.outros) ST.equipe.outros=[];
 
   // Detecta área correta pelo perfil selecionado
@@ -8540,7 +8494,6 @@ async function cfgSalvarColab(){
     if(salario)     c0.salarioBase=salario;
     if(adiantamento)c0.adiantamento=adiantamento;
     c0.permissoes=Object.fromEntries(_PERMS_KEYS.map(k=>[k,!!(document.getElementById('perm-'+k)?.checked)]));
-    if(senha) ST.senhas[email]=await _hashSenha(senha);
     toast('Colaborador adicionado ✅');
   } else {
     const antigo=ST.equipe[_colabArea][_colabIdx].nome;
@@ -8549,10 +8502,6 @@ async function cfgSalvarColab(){
     ST.comissoes.forEach(c=>{if(c.pessoa===antigo)c.pessoa=nome;});
     ST.folhas.forEach(f=>{if(f.pessoa===antigo)f.pessoa=nome;});
     (ST.eventos||[]).forEach(a=>{if(a.nome===antigo)a.nome=nome;});
-    if(emailAntigo&&emailAntigo!==email&&ST.senhas[emailAntigo]){
-      ST.senhas[email]=ST.senhas[emailAntigo];
-      delete ST.senhas[emailAntigo];
-    }
     if(ST.configs[antigo]&&antigo!==nome){ST.configs[nome]=ST.configs[antigo];delete ST.configs[antigo];}
     if(!ST.configs[nome]) ST.configs[nome]={};
     const c1=ST.configs[nome];
@@ -8572,7 +8521,6 @@ async function cfgSalvarColab(){
     c1.salarioBase  =salario;
     c1.adiantamento =adiantamento;
     c1.permissoes=Object.fromEntries(_PERMS_KEYS.map(k=>[k,!!(document.getElementById('perm-'+k)?.checked)]));
-    if(senha) ST.senhas[email]=await _hashSenha(senha);
     toast('Colaborador atualizado ✅');
   }
   _cfgTouch('equipe'); _cfgTouch('configs'); _cfgTouch('senhas');
