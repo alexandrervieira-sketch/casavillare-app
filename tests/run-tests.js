@@ -110,6 +110,14 @@ test('vendaLiquido detalha taxa/rt/liquido', () => {
   const r = T._vendaLiquido({ valor: 50000, desconto: 10, rtPct: 3 });
   assert(_close(r.aposDesc, 45000) && _close(r.taxa, 0) && _close(r.rt, 1350) && _close(r.liquido, 43650), 'breakdown');
 });
+// Cascata desconto→taxa→RT (exemplo exato do gestor): 200k −20% −16% −10% = 120.960
+test('vendaLiquido em cascata (desconto→taxa→RT)', () => {
+  const r = T._vendaLiquido({ valor: 200000, desconto: 20, absorcao: 'loja', taxaLoja: 16, rtPct: 10 });
+  assert(_close(r.aposDesc, 160000), 'após desconto = 160.000');
+  assert(_close(r.taxa, 25600), 'taxa 16% de 160.000 = 25.600');
+  assert(_close(r.rt, 13440), 'RT 10% de 134.400 = 13.440');
+  assert(_close(r.liquido, 120960), 'líquido final = 120.960');
+});
 test('vendaLiquido lead nulo = zeros', () => { const r = T._vendaLiquido(null); assertEq(r.liquido, 0); });
 
 // Tombstones (exclusão durável)
