@@ -4086,7 +4086,7 @@ function rHomeAniversariantes(){
         ${isHoje?'<div class="aniv-day-sub">hoje</div>':''}
       </div>
       <div style="flex:1;min-width:0;">
-        <div class="aniv-nome">${isHoje?'🥳 ':''}${p.nome}</div>
+        <div class="aniv-nome">${isHoje?'🥳 ':''}${_esc(p.nome)}</div>
         <div class="aniv-tipo">${p.icon} ${p.tipo}</div>
       </div>
     </div>`;
@@ -4289,7 +4289,7 @@ function rHomeAvisos(){
         <div class="aviso-texto">${a.importante?'⚠️ ':''}${_esc(a.texto)}</div>
         ${isG?`<button onclick="abrirModalAviso('${a.id}')" style="background:none;border:none;color:var(--gl);cursor:pointer;font-size:14px;padding:0;flex-shrink:0;">✏️</button>`:''}
       </div>
-      <div class="aviso-meta">📌 ${a.autor} · ${a.data}</div>
+      <div class="aviso-meta">📌 ${_esc(a.autor)} · ${a.data}</div>
     </div>`).join('');
 }
 
@@ -4402,7 +4402,7 @@ function rPag(){
           <div style="margin-top:10px;">
             <button class="btn btn-p btn-sm" onclick="gerarReciboFolha('${folha.id}')">🧾 Gerar Recibo</button>
           </div>
-          ${folha.obs?`<div style="margin-top:8px;font-size:12px;color:var(--mid);font-style:italic;">📝 ${folha.obs}</div>`:''}
+          ${folha.obs?`<div style="margin-top:8px;font-size:12px;color:var(--mid);font-style:italic;">📝 ${_esc(folha.obs)}</div>`:''}
         </div>`
       :`<div class="stat-card" style="opacity:.7;border-style:dashed;">
           <div class="sc-label">${mesNomeStr(_pagMes,_pagAno)}</div>
@@ -4412,12 +4412,12 @@ function rPag(){
     if(isCom){
       const vs=(ST.vendas||[]).filter(v=>v.vendedor===ST.nome&&v.mesAno===mesAno);
       rows=vs.length
-        ?vs.map(v=>`<tr><td>${v.cliente||'—'}</td><td>${fmt(v.valor)}</td><td style="color:var(--fail);">−${fmt(v.taxas||0)}</td><td class="td-gold">${fmt((v.valor||0)-(v.taxas||0))}</td></tr>`).join('')
+        ?vs.map(v=>`<tr><td>${_esc(v.cliente||'—')}</td><td>${fmt(v.valor)}</td><td style="color:var(--fail);">−${fmt(v.taxas||0)}</td><td class="td-gold">${fmt((v.valor||0)-(v.taxas||0))}</td></tr>`).join('')
         :'<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--gl);">Nenhuma venda neste mês.</td></tr>';
     } else {
       const cs=(ST.comissoes||[]).filter(c=>c.pessoa===ST.nome&&c.mesAno===mesAno);
       rows=cs.length
-        ?cs.map(c=>`<tr><td>${c.descricao}</td><td style="color:var(--gl);">${c.data}</td><td class="td-gold">${fmt(c.valor)}</td></tr>`).join('')
+        ?cs.map(c=>`<tr><td>${_esc(c.descricao)}</td><td style="color:var(--gl);">${c.data}</td><td class="td-gold">${fmt(c.valor)}</td></tr>`).join('')
         :'<tr><td colspan="3" style="text-align:center;padding:30px;color:var(--gl);">Nenhuma comissão neste mês.</td></tr>';
     }
     document.getElementById('fin-content').innerHTML=`
@@ -4559,7 +4559,7 @@ ${f.dataPago||f.valorPago?`
   ${f.metodo?' · '+f.metodo:''} ${f.dataPago?' · '+f.dataPago:''}
 </div>`:''}
 
-${f.obs?`<div style="margin-top:8px;font-size:10.5px;color:#555;font-style:italic;">📝 ${f.obs}</div>`:''}
+${f.obs?`<div style="margin-top:8px;font-size:10.5px;color:#555;font-style:italic;">📝 ${_esc(f.obs)}</div>`:''}
 
 <!-- ASSINATURAS -->
 <div class="assin" style="margin-top:28px;">
@@ -4677,7 +4677,7 @@ function pfRenderComsAuto(){
   const linhasManuais=coms.map(c=>`<div class="com-row"><span style="flex:1;">${_esc(c.descricao)}</span><strong style="color:var(--p);">${fmt(c.valor)}</strong></div>`);
   const linhasSup=pedsConcl.map(pd=>{
     const c=_calcComSupervisor(pd);
-    return`<div class="com-row"><span style="flex:1;">✅ ${pd.clienteNome||pd.cliente||'—'} ${pd.descricao?'· '+pd.descricao:''} <span style="font-size:10px;color:var(--gl);">(1% supervisão)</span></span><strong style="color:var(--ok);">${fmt(c.valorCom)}</strong></div>`;
+    return`<div class="com-row"><span style="flex:1;">✅ ${_esc(pd.clienteNome||pd.cliente||'—')} ${pd.descricao?'· '+_esc(pd.descricao):''} <span style="font-size:10px;color:var(--gl);">(1% supervisão)</span></span><strong style="color:var(--ok);">${fmt(c.valorCom)}</strong></div>`;
   });
 
   const todas=[...linhasManuais,...linhasSup,...linhasProj];
@@ -4720,7 +4720,7 @@ function pfRenderComsComercial(){
     ?`<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
         ${todas.map(v=>`<div class="com-row" style="border-top:1px solid var(--border);padding:8px 12px;">
           <div style="flex:1;">
-            <div style="font-size:12.5px;font-weight:500;">${v.cliente||'—'}${v.fromLead?' <span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:1px 5px;border-radius:3px;">CRM</span>':''}</div>
+            <div style="font-size:12.5px;font-weight:500;">${_esc(v.cliente||'—')}${v.fromLead?' <span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:1px 5px;border-radius:3px;">CRM</span>':''}</div>
             <div style="font-size:11px;color:var(--gl);">${fmt(v.valorBruto)} ${v.desconto>0?'· −'+v.desconto+'%':''} · ${(v.pontos||0).toFixed(2).replace('.',',')} pts · ${(v.comissaoPct||0).toFixed(1).replace('.',',')}% comissão</div>
           </div>
           <strong style="color:var(--ok);">${fmt(v.valorCom)}</strong>
@@ -5449,7 +5449,7 @@ function rRelCustosFabrica(){
       ?`<span style="font-size:10px;background:#FFF1F2;color:#9F1239;border-radius:4px;padding:1px 5px;font-weight:700;">🛠️ AT${sub?' · '+sub:''}</span>`
       :`<span style="font-size:10px;background:#FFFBEB;color:#92400E;border-radius:4px;padding:1px 5px;font-weight:700;">🏭 Fáb.</span>`;
     return `<tr>
-      <td style="padding:7px 10px;font-size:13px;">${p.clienteNome||p.cliente||(cli?cli.nome:'—')}</td>
+      <td style="padding:7px 10px;font-size:13px;">${_esc(p.clienteNome||p.cliente||(cli?cli.nome:'—'))}</td>
       <td style="padding:7px 10px;font-size:12px;color:#6B7280;">${nomeAmbiente}</td>
       <td style="padding:7px 10px;">${tipoBadge}</td>
       <td style="padding:7px 10px;font-size:13px;text-align:right;">${p.valor?fmt(p.valor):'—'}</td>
@@ -5846,7 +5846,7 @@ function rRelResumo(){
           ...vendasM.map(v=>({pessoa:v.pessoa,cliente:v.cliente,valorBruto:v.valorBruto,desconto:v.desconto,pontos:v.pontos,comissaoPct:v.comissaoPct,valorCom:v.valorCom}))
         ];
         if(!todas.length) return`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda comercial neste mês.</td></tr>`;
-        return todas.map(v=>`<tr><td class="td-bold">${v.pessoa||'—'}</td><td>${v.cliente||'—'}</td><td>${fmt(v.valorBruto)}</td><td>${v.desconto||0}%</td><td>${(v.pontos||0).toFixed(2).replace('.',',')}</td><td style="color:var(--ok);font-weight:600;">${(v.comissaoPct||0).toFixed(1).replace('.',',')}%</td><td class="td-gold">${fmt(v.valorCom)}</td></tr>`).join('');
+        return todas.map(v=>`<tr><td class="td-bold">${_esc(v.pessoa||'—')}</td><td>${_esc(v.cliente||'—')}</td><td>${fmt(v.valorBruto)}</td><td>${v.desconto||0}%</td><td>${(v.pontos||0).toFixed(2).replace('.',',')}</td><td style="color:var(--ok);font-weight:600;">${(v.comissaoPct||0).toFixed(1).replace('.',',')}%</td><td class="td-gold">${fmt(v.valorCom)}</td></tr>`).join('');
       })()}</tbody></table>
     </div>
     <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Comissões — Equipe de Obras</div>
@@ -5857,7 +5857,7 @@ function rRelResumo(){
     ${agMes.length?`
     <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Eventos do Mês</div>
     <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Tipo</th><th>Título</th><th>Responsável</th><th>Cliente</th></tr></thead><tbody>
-    ${agMes.sort((a,b)=>a.data.localeCompare(b.data)).map(e=>{const tp=_tipoEv[e.tipo]||_tipoEv.outro;return`<tr><td>${new Date(e.data+'T12:00').toLocaleDateString('pt-BR')}</td><td style="color:var(--gl);">${e.horaIni||'—'}</td><td>${tp.icon} ${tp.label}</td><td class="td-bold">${e.titulo}</td><td>${e.resp||'—'}</td><td>${e.cliente||'—'}</td></tr>`;}).join('')}
+    ${agMes.sort((a,b)=>a.data.localeCompare(b.data)).map(e=>{const tp=_tipoEv[e.tipo]||_tipoEv.outro;return`<tr><td>${new Date(e.data+'T12:00').toLocaleDateString('pt-BR')}</td><td style="color:var(--gl);">${e.horaIni||'—'}</td><td>${tp.icon} ${tp.label}</td><td class="td-bold">${_esc(e.titulo)}</td><td>${_esc(e.resp||'—')}</td><td>${_esc(e.cliente||'—')}</td></tr>`;}).join('')}
     </tbody></table></div>`:''}
     <div class="meta-section-title" style="margin-top:24px;">📍 Origem dos Leads — ${mesNomeStr(_relMes,_relAno)}</div>
     <div class="orig-wrap">
@@ -6936,7 +6936,10 @@ function salvarVendaCom(){
   rComissoes();
 }
 
-function abrirAdiantMont(pedidoId, clienteNome, valorTotal, totalAdiant){
+function abrirAdiantMont(pedidoId, valorTotal, totalAdiant){
+  // nome buscado pelo id (não trafega no onclick → evita quebra de string/XSS via nome de cliente)
+  const _pd=(ST.pedidos||[]).find(p=>String(p.id)===String(pedidoId));
+  const clienteNome=_pd?(_pd.clienteNome||_pd.cliente||'—'):'—';
   const saldo=Math.max(0,valorTotal-totalAdiant);
   const val=prompt(
     `Adiantamento para: ${clienteNome}\n`+
@@ -6990,7 +6993,7 @@ function _rComMontadorHtml(p, comsMan, mesStr){
     const cor=c.liberada?'var(--ok)':'#92400E';
     return`<div class="com-venda-row">
       <div class="com-venda-info" onclick="abrirModalPedido('${_sid(pd.id)}')" style="cursor:pointer;">
-        <span class="com-venda-cliente">${pd.clienteNome||pd.cliente||'—'}</span>
+        <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
         <span class="com-venda-data">${pd.descricao||''} · ${etLabel}</span>
       </div>
       <div class="com-venda-vals">
@@ -7001,7 +7004,7 @@ function _rComMontadorHtml(p, comsMan, mesStr){
            <span style="font-size:12.5px;font-weight:700;color:${cor};">${icon} ${fmt(c.valorCom)}</span>
            ${c.totalAdiant>0?`<span style="font-size:11px;color:#2563EB;">Adiant: ${fmt(c.totalAdiant)}</span>`:''}
            ${c.saldo<c.valorCom&&c.valorCom>0?`<span style="font-size:11px;color:#166534;">Saldo: ${fmt(c.saldo)}</span>`:''}
-           <button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 7px;" onclick="abrirAdiantMont('${pd.id}','${pd.clienteNome||pd.cliente||''}',${c.valorCom},${c.totalAdiant})">💸 Adiant.</button>`}
+           <button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 7px;" onclick="abrirAdiantMont('${pd.id}',${c.valorCom},${c.totalAdiant})">💸 Adiant.</button>`}
       </div>
     </div>`;
   }).join('');
@@ -7085,7 +7088,7 @@ function rComissoes(){
       const linhasVendas=minhasVendas.map(v=>`
         <div class="com-venda-row" onclick="${v.fromLead?`abrirModalLead('${v.id}')`:`abrirModalVendaCom('${v.id}')`}">
           <div class="com-venda-info">
-            <span class="com-venda-cliente">${v.cliente||'Cliente não informado'}${v.fromLead?' <span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:1px 5px;border-radius:4px;">CRM</span>':''}</span>
+            <span class="com-venda-cliente">${_esc(v.cliente||'Cliente não informado')}${v.fromLead?' <span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:1px 5px;border-radius:4px;">CRM</span>':''}</span>
             <span class="com-venda-data">${v.data||''}</span>
           </div>
           <div class="com-venda-vals">
@@ -7180,7 +7183,7 @@ function rComissoes(){
         const cor =c.liberada?'var(--ok)':c.bloqueada?'#92400E':'#6B7280';
         return`<div class="com-venda-row" onclick="abrirModalPedido('${_sid(pd.id)}')">
           <div class="com-venda-info">
-            <span class="com-venda-cliente">${pd.clienteNome||pd.cliente||'—'}</span>
+            <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
             <span class="com-venda-data">${pd.descricao||''} · ${etapaLabel}</span>
           </div>
           <div class="com-venda-vals">
@@ -7228,7 +7231,7 @@ function rComissoes(){
           const etLabel=(PED_ETAPAS.find(e=>e.id===pd.status)||{}).label||pd.status;
           return`<div class="com-venda-row" onclick="abrirModalPedido('${_sid(pd.id)}')">
             <div class="com-venda-info">
-              <span class="com-venda-cliente">${pd.clienteNome||pd.cliente||'—'}</span>
+              <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
               <span class="com-venda-data">${pd.descricao||''} · ${etLabel}</span>
             </div>
             <div class="com-venda-vals" style="flex-direction:column;align-items:flex-end;gap:3px;">
@@ -7818,7 +7821,7 @@ function rConfig(){
               <input class="inp" id="cfg-fab-cidade" value="${fab.cidade||''}" placeholder="Ex: São Paulo / SP"/></div>
           </div>
           <div><label class="lbl">Observações (aparece no corpo do e-mail)</label>
-            <textarea class="inp" id="cfg-fab-obs" rows="2" placeholder="Ex: Incluir nº do pedido no assunto...">${fab.obs||''}</textarea></div>
+            <textarea class="inp" id="cfg-fab-obs" rows="2" placeholder="Ex: Incluir nº do pedido no assunto...">${_esc(fab.obs||'')}</textarea></div>
           <div style="text-align:right;">
             <button class="btn btn-p btn-sm" onclick="cfgSalvarFabrica()">💾 Salvar dados da fábrica</button>
           </div>
@@ -9271,7 +9274,7 @@ function leadCardHtml(l,etapa){
       <div class="pipe-card-name" style="flex:1;padding-right:6px;">${_esc(l.nome)}</div>
       <span class="orig-badge" style="background:${origCor}18;color:${origCor};flex-shrink:0;">${origLbl}</span>
     </div>
-    ${l.responsavel?`<div class="pipe-card-row">👤 ${l.responsavel}</div>`:''}
+    ${l.responsavel?`<div class="pipe-card-row">👤 ${_esc(l.responsavel)}</div>`:''}
     ${_espBadge(l)}
     ${l.valor?`<div class="pipe-card-row" style="color:var(--p);font-weight:700;">💰 ${fmt(l.valor)}${l.tipoParcelamento&&l.parcelas?` <span style="font-size:10px;font-weight:400;color:var(--gl);">${l.tipoParcelamento==='cartao'?'💳':'🏦'} ${l.parcelas}x</span>`:''}</div>`:''}
     ${l.ambiente?`<div class="pipe-card-row">🏠 ${l.ambiente}</div>`:''}
@@ -9871,7 +9874,7 @@ function gerarOrcamentoLead(){
     prazo     ? ['Prazo desejado', prazo]     : null,
     resp      ? ['Responsável', resp]         : null,
   ].filter(Boolean).map(([k,v])=>`
-    <tr><td style="font-weight:bold;white-space:nowrap;width:180px;">${k}</td><td>${v}</td></tr>`).join('');
+    <tr><td style="font-weight:bold;white-space:nowrap;width:180px;">${k}</td><td>${_esc(v)}</td></tr>`).join('');
 
   // Desconto e taxa
   const valorDesconto   = descontoPct>0 ? totalValor*(descontoPct/100) : 0;
@@ -9904,12 +9907,12 @@ function gerarOrcamentoLead(){
   const obsHtml = obs ? `
     <div style="margin-top:18px;">
       <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Observações</div>
-      <div style="border:1px solid #ccc;border-radius:4px;padding:8px 10px;font-size:10.5px;line-height:1.65;white-space:pre-wrap;">${obs}</div>
+      <div style="border:1px solid #ccc;border-radius:4px;padding:8px 10px;font-size:10.5px;line-height:1.65;white-space:pre-wrap;">${_esc(obs)}</div>
     </div>` : '';
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"/>
-<title>Orçamento — ${nome}</title>
+<title>Orçamento — ${_esc(nome)}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff;}
@@ -9947,7 +9950,7 @@ body.has-toolbar{padding-top:52px;}
 </style></head><body class="has-toolbar">
 
 <div class="toolbar">
-  <span class="ct-title">📄 Orçamento — ${nome}</span>
+  <span class="ct-title">📄 Orçamento — ${_esc(nome)}</span>
   <div class="tb-actions">
     <button class="tb-btn tb-print" onclick="window.print()">🖨 Imprimir</button>
     <button class="tb-btn tb-pdf" onclick="var _t=document.title;document.title='${orcFilename}';window.print();setTimeout(function(){document.title=_t;},300);">📥 Salvar PDF</button>
@@ -10036,7 +10039,7 @@ ${obsHtml}
   <div style="text-align:center;">
     <div style="border-top:1px solid #000;padding-top:8px;font-size:10px;">
       <div style="font-weight:bold;">CLIENTE</div>
-      <div style="color:#555;margin-top:2px;">${nome}</div>
+      <div style="color:#555;margin-top:2px;">${_esc(nome)}</div>
     </div>
   </div>
 </div>
@@ -10098,7 +10101,7 @@ function ctAtualizarXmlInfo(){
       <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-top:6px;">
         <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'"
           style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#f8fafc;">
-          <span style="font-size:12px;font-weight:600;color:#1e293b;">🛋️ ${a.descricao}
+          <span style="font-size:12px;font-weight:600;color:#1e293b;">🛋️ ${_esc(a.descricao)}
             <span style="font-weight:400;color:#64748b;">(${_itens.length} iten${_itens.length!==1?'s':''})</span></span>
           <span style="font-size:12px;color:var(--p);font-weight:600;">${a.valorVenda>0?fmt(a.valorVenda):''} ▾</span>
         </div>
@@ -10271,7 +10274,7 @@ function gerarContrato(cadId){
     xmlList.forEach(x=>{(x.ambientesData||[]).forEach(a=>{
       ri++;totalAmbientesXml+=(a.valorVenda||0);
       itemRows+=`<tr><td style="text-align:center;">${ri}</td><td style="text-align:center;">1</td>
-        <td>${a.descricao}</td><td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(a.valorVenda)}</td></tr>`;
+        <td>${_esc(a.descricao)}</td><td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(a.valorVenda)}</td></tr>`;
     });});
   } else {
     itemRows=ambs.map((a,i)=>`
@@ -10291,7 +10294,7 @@ function gerarContrato(cadId){
 
   const obsRows=ambs.map(a=>a.obs?`
     <tr><td style="font-weight:bold;white-space:nowrap;vertical-align:top;">${a.nome}</td>
-    <td style="font-size:11px;">${a.obs}</td></tr>`:'').join('');
+    <td style="font-size:11px;">${_esc(a.obs)}</td></tr>`:'').join('');
 
   // Condições de pagamento: usa condicoesPgto do lead vinculado (novo formato) ou parcs do cadastro (legado)
   const _condsPgto=_leadCt?.condicoesPgto;
@@ -10822,7 +10825,7 @@ function _rPedPipe(ped,hoje,statsHtml){
       const dt=p.prevEntrega||p.previsao||'';
       const atrasado=dt&&dt<hoje&&e.id!=='concluido';
       const dtLabel=dt?`${atrasado?'⚠️ ':''}${new Date(dt+'T12:00').toLocaleDateString('pt-BR')}` :'';
-      const nome=p.clienteNome||p.cliente||'—';
+      const nome=_esc(p.clienteNome||p.cliente||'—'); // XSS: nome de cliente é texto livre
 
       // Semáforo de prazo
       let prazoHtml='';
@@ -10984,12 +10987,12 @@ function _rPedList(ped,hoje,statsHtml){
     const e=PED_ETAPAS.find(e=>e.id===p.status)||PED_ETAPAS[0];
     const dt=p.prevEntrega||p.previsao||'';
     const atrasado=dt&&dt<hoje&&p.status!=='concluido';
-    const nome=p.clienteNome||p.cliente||'—';
+    const nome=_esc(p.clienteNome||p.cliente||'—');
     return `<tr>
       <td class="td-bold">${nome}</td>
-      <td style="max-width:180px;color:var(--gray);font-size:12px;">${p.descricao||'—'}</td>
-      <td>${p.fornecedor||'—'}</td>
-      <td>${p.responsavel||'—'}</td>
+      <td style="max-width:180px;color:var(--gray);font-size:12px;">${_esc(p.descricao||'—')}</td>
+      <td>${_esc(p.fornecedor||'—')}</td>
+      <td>${_esc(p.responsavel||'—')}</td>
       <td>${dt?`<span style="${atrasado?'color:var(--fail);font-weight:600;':''}">${atrasado?'⚠️ ':''}${new Date(dt+'T12:00').toLocaleDateString('pt-BR')}</span>`:'—'}</td>
       <td class="td-gold">${_pedValorVendaCRM(p)?fmt(_pedValorVendaCRM(p)):'—'}</td>
       <td><span class="badge" style="background:${e.cor}20;color:${e.cor};border:1px solid ${e.cor}40;white-space:nowrap;">${e.icon} ${e.label}</span></td>
@@ -12846,8 +12849,8 @@ function rFinCP(){
   const thStyle='padding:8px 10px;background:#F5F3F0;border-bottom:2px solid var(--border);text-align:left;font-size:11px;font-weight:700;color:var(--gl);text-transform:uppercase;';
   const thead=`<thead><tr>${['Descrição','Fornecedor','Categoria','Valor','Vencimento','Status','Ação'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>`;
   const linhaCP=(c,isPago)=>`<tr>
-    <td style="font-weight:600;padding:10px;">${c.descricao}</td>
-    <td style="padding:10px;color:var(--gl);">${c.fornecedor||'—'}</td>
+    <td style="font-weight:600;padding:10px;">${_esc(c.descricao)}</td>
+    <td style="padding:10px;color:var(--gl);">${_esc(c.fornecedor||'—')}</td>
     <td style="padding:10px;"><span class="badge b-wait" style="font-size:10px;">${CAT_LABEL[c.cat]||c.cat}</span></td>
     <td style="padding:10px;font-weight:700;color:${isPago?'var(--gl)':'#DC2626'};">${fmtL(c.valor)}</td>
     <td style="padding:10px;">${c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
@@ -13017,7 +13020,7 @@ function rBipartido(){
       <tbody>
         ${registros.map(r=>`<tr>
           <td class="td-bold">${r.l.nome}</td>
-          <td style="color:var(--gl);">${r.l.responsavel||'—'}</td>
+          <td style="color:var(--gl);">${_esc(r.l.responsavel||'—')}</td>
           <td style="font-size:12px;">${r.c.desc||'Financiamento'}${r.c.parcelas>1?' · '+r.c.parcelas+'x':''}</td>
           <td style="font-size:12px;">${r.c.vencimento?fmtD(r.c.vencimento):'—'}</td>
           <td style="text-align:right;">R$ ${fmt2(r.valorFin)}</td>
@@ -13229,7 +13232,7 @@ function rFinCR(){
   const theadRec=`<thead><tr>${['','Cliente','Descrição','Forma','Valor','Vencimento','Status','Ação'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>`;
   const linhaParc=(p,isPago)=>`<tr>
     <td>${!isPago?`<input type="checkbox" class="cr-check" data-lead="${p.leadId}" data-cond="${p.id}" data-valor="${p.valor||0}" onchange="crAtualizarBarra()" style="width:15px;height:15px;cursor:pointer;"/>`:''}</td>
-    <td style="font-weight:600;">${p.cliente||'—'}</td>
+    <td style="font-weight:600;">${_esc(p.cliente||'—')}</td>
     <td>${p.desc||'—'}</td>
     <td>${badge(p.forma)}</td>
     <td style="font-weight:700;color:var(--p);">${fmtL(p.valor)}</td>
@@ -13275,7 +13278,7 @@ function rFinCR(){
       <label style="font-size:12px;color:var(--gl);display:block;margin-bottom:4px;">Cliente</label>
       <select id="cr-filtro-cliente" onchange="crFiltroClienteChange()" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;width:100%;max-width:360px;background:var(--card);color:var(--dark);">
         <option value="">— Todos os clientes —</option>
-        ${[...new Set(todasParcelas.map(p=>p.cliente).filter(Boolean))].sort().map(c=>`<option value="${c}" ${_crFiltroCliente===c?'selected':''}>${c}</option>`).join('')}
+        ${[...new Set(todasParcelas.map(p=>p.cliente).filter(Boolean))].sort().map(c=>`<option value="${_esc(c)}" ${_crFiltroCliente===c?'selected':''}>${_esc(c)}</option>`).join('')}
       </select>
     </div>
     <!-- Filtro por período -->
@@ -13462,7 +13465,7 @@ function rFinanceiro(){
   const mesesNomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const lanRows=entries.length
     ?entries.map(e=>`<div class="dre-lan-row">
-        <div style="flex:1;"><div style="font-size:13px;">${e.descricao}</div>
+        <div style="flex:1;"><div style="font-size:13px;">${_esc(e.descricao)}</div>
           <div style="font-size:11px;color:var(--gl);">${catLabel(e.cat)}</div></div>
         <span class="dre-val ${['rec_outra'].includes(e.cat)?'ok':'fail'}" style="margin-right:8px;">${fmt(e.valor)}</span>
         <button onclick="abrirModalDRE('${e.id}')" style="background:none;border:none;color:var(--gl);cursor:pointer;font-size:13px;padding:0;">✏️</button>
@@ -15276,7 +15279,7 @@ function rFiscalPendentes(){
         const pronto=temDoc&&temEnd;
         return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:16px;">
           <div style="flex:1;min-width:0;">
-            <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;color:var(--dark);margin-bottom:3px;">${p.clienteNome||'—'}</div>
+            <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;color:var(--dark);margin-bottom:3px;">${_esc(p.clienteNome||'—')}</div>
             <div style="font-size:12px;color:var(--gl);">${p.descricao||'Sem descrição'}</div>
             <div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;">
               <span style="font-size:11px;background:#F5F0E8;color:var(--p);padding:2px 8px;border-radius:20px;">Pedido #${p.id}</span>
@@ -15342,7 +15345,7 @@ function rFiscalEmitidas(){
           <div style="width:36px;height:36px;background:${borderColor}44;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${iconMap[st]||'📄'}</div>
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;">
-              <span style="font-family:'Sora',sans-serif;font-size:13px;font-weight:600;color:var(--dark);">${p.clienteNome||'—'}</span>
+              <span style="font-family:'Sora',sans-serif;font-size:13px;font-weight:600;color:var(--dark);">${_esc(p.clienteNome||'—')}</span>
               ${nfeStatusBadge(st)}
             </div>
             <div style="font-size:11px;color:var(--gl);">${p.descricao||''}</div>
