@@ -2948,6 +2948,10 @@ function _tombMergeIncoming(inc){
 // marca QUANDO esta máquina editou a config; uma versão mais ANTIGA nunca sobrescreve
 // uma edição local mais nova. _cfgUAt é LOCAL (não sincroniza).
 function _cfgTouch(key){ if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={}; ST._cfgUAt[key]=Date.now(); }
+// Anti-perda de config: bloqueia salvar quando ONLINE mas a nuvem ainda NÃO carregou nesta sessão.
+// Sem isto, um salvar pré-sync carimba mais novo que a nuvem e a sobrescreve (metas/equipe "somem").
+// Offline puro (sem Firebase) continua liberado — é edição local legítima.
+function _cfgSyncPronto(){ if(_fbReady&&!_fsPrimed){ toast('⏳ Sincronizando com a nuvem — aguarde alguns segundos e tente de novo.'); return false; } return true; }
 // Enxuga marcas de exclusão com mais de 180 dias (mantém o cache local leve). Seguro:
 // nenhuma máquina fica offline por 6 meses, então a marca já cumpriu seu papel.
 function _tombPrune(){
@@ -8106,6 +8110,7 @@ function cfgSincronizarEmails(){
 }
 
 function cfgSalvarFabrica(){
+  if(!_cfgSyncPronto()) return;
   if(!ST.fabrica) ST.fabrica={};
   ST.fabrica.nome    =document.getElementById('cfg-fab-nome')?.value.trim()||'';
   ST.fabrica.cnpj    =document.getElementById('cfg-fab-cnpj')?.value.trim()||'';
@@ -8119,6 +8124,7 @@ function cfgSalvarFabrica(){
 }
 
 function cfgSalvarMetasFabrica(){
+  if(!_cfgSyncPronto()) return;
   if(!ST.fabrica) ST.fabrica={};
   const t1v=_parseBRL(document.getElementById('cfg-fab-t1-vol')?.value);
   const t2v=_parseBRL(document.getElementById('cfg-fab-t2-vol')?.value);
@@ -8185,6 +8191,7 @@ function _docEmpInfoHtml(){
 }
 // ── Configurações: Empresa ──
 function cfgSalvarEmpresa(){
+  if(!_cfgSyncPronto()) return;
   if(!ST.empresa) ST.empresa={};
   ST.empresa.nome     = document.getElementById('cfg-emp-nome')?.value.trim()||'';
   ST.empresa.cnpj     = document.getElementById('cfg-emp-cnpj')?.value.trim()||'';
@@ -8311,6 +8318,7 @@ function rConfigComBlock(){
 }
 
 function salvarTabelaCom(){
+  if(!_cfgSyncPronto()) return;
   const g=id=>parseFloat(document.getElementById(id)?.value)||0;
   if(!ST.configsCom) ST.configsCom={};
   ST.configsCom.faixas=COM_DEFAULTS.faixas.map((_,i)=>({
@@ -8414,6 +8422,7 @@ function cfgEditPessoa(area,i){
 }
 
 async function cfgSalvarColab(){
+  if(!_cfgSyncPronto()) return;
   const nome=document.getElementById('colab-nome').value.trim();
   if(!nome){toast('Informe o nome');return;}
   const perfil=document.getElementById('colab-perfil').value;
@@ -8517,6 +8526,7 @@ async function cfgSalvarColab(){
 
 function cfgRemColabModal(){
   if(!_gestorPodeExcluir()) return;
+  if(!_cfgSyncPronto()) return;
   const p=ST.equipe[_colabArea][_colabIdx];
   if(!confirm(`Remover ${p.nome}?`)) return;
   ST.equipe[_colabArea].splice(_colabIdx,1);
@@ -8533,6 +8543,7 @@ function _fmtDateBR(iso){
 }
 function cfgRemPessoa(area,i){
   if(!_gestorPodeExcluir()) return;
+  if(!_cfgSyncPronto()) return;
   if(!confirm(`Remover ${ST.equipe[area][i].nome}?`))return;
   ST.equipe[area].splice(i,1);
   _cfgTouch('equipe'); save();rConfig();rLogin();toast('Removido');
@@ -14611,6 +14622,8 @@ function rMetasChart(){
 
 function abrirModalMeta(){
   if(ST.perfil!=='gestor'){toast('Acesso restrito');return;}
+  // Anti-perda: não abrir com estado local pré-sync (evita salvar por cima da nuvem ainda não carregada).
+  if(_fbReady&&!_fsPrimed){ toast('⏳ Sincronizando com a nuvem… aguarde alguns segundos e abra de novo.'); return; }
   if(!ST.metas) ST.metas={};
   const metMes=ST.metas[_metMes]||{loja:0,vendedores:{}};
 
@@ -14671,6 +14684,8 @@ function _parseBRL(v){
   return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||0;
 }
 function salvarTodasMetas(){
+  // Anti-perda: nunca salvar config antes de a nuvem carregar (senão carimba mais novo e sobrescreve a nuvem).
+  if(_fbReady&&!_fsPrimed){ toast('⏳ Ainda sincronizando com a nuvem — não salvei para não apagar as metas existentes. Tente de novo em instantes.'); return; }
   if(!ST.metas) ST.metas={};
   const loja=_parseBRL(document.getElementById('meta-loja-val').value);
   const vends={};
