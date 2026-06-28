@@ -2827,6 +2827,9 @@ function initFirebase(){
         // SEMPRE carrega a nuvem ANTES de qualquer escrita (inclusive em F5/reload), para
         // nunca empurrar estado local desatualizado por cima da nuvem (evita clobber).
         (async()=>{
+          // P0-4 Fase 0: renova o token para trazer o carimbo de perfil (custom claim) atualizado.
+          // Inofensivo hoje (regras ainda não usam claim); deixa o terreno pronto para a Fase 1.
+          try{ await u.getIdToken(true); }catch(_){}
           try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
           catch(e){ console.warn('[CVP] load no auth-ready falhou:',e&&e.message); }
           try{ _fsSubscribe(); }catch(_){}
