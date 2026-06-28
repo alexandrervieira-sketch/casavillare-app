@@ -1404,6 +1404,15 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div><label class="lbl">Data de admissão</label>
           <input class="inp" id="colab-admissao" type="date"/></div>
       </div>
+      <div class="fr r2">
+        <div><label class="lbl">Situação</label>
+          <select class="inp" id="colab-situacao">
+            <option value="ativo">✅ Ativo</option>
+            <option value="desligado">🚪 Desligado</option>
+          </select></div>
+        <div><label class="lbl">Data de demissão</label>
+          <input class="inp" id="colab-demissao" type="date"/></div>
+      </div>
       <div class="fr r3">
         <div><label class="lbl">Tipo de Pessoa</label>
           <select class="inp" id="colab-tipopessoa" onchange="colabAtualizarTipoPessoa()">
@@ -2955,6 +2964,9 @@ function _cfgTouch(key){ if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUA
 // Sem isto, um salvar pré-sync carimba mais novo que a nuvem e a sobrescreve (metas/equipe "somem").
 // Offline puro (sem Firebase) continua liberado — é edição local legítima.
 function _cfgSyncPronto(){ if(_fbReady&&!_fsPrimed){ toast('⏳ Sincronizando com a nuvem — aguarde alguns segundos e tente de novo.'); return false; } return true; }
+// Anti-clobber legado: um config VAZIO ({}) vindo da nuvem NUNCA apaga um local com dados.
+function _cfgVazio(v){ return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===0; }
+function _cfgLocalTemDados(k){ const v=ST[k]; return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0; }
 // Enxuga marcas de exclusão com mais de 180 dias (mantém o cache local leve). Seguro:
 // nenhuma máquina fica offline por 6 meses, então a marca já cumpriu seu papel.
 function _tombPrune(){
@@ -3169,6 +3181,7 @@ async function _fsLoadAll(){
           return;
         }
         const _clUAt=d._uAt||0, _loUAt=ST._cfgUAt[_k]||0;
+        if(_cfgVazio(d._val)&&_cfgLocalTemDados(_k)){ _cfgKeepLocal.push(_k); return; } // nuvem vazia NÃO apaga dados locais → mantém e reenvia
         if(_clUAt>=_loUAt){ ST[_k]=d._val; if(_k!=='_cfgUAt') ST._cfgUAt[_k]=_clUAt; }
         else _cfgKeepLocal.push(_k); // edição local mais nova → mantém e reenvia
       }
@@ -3294,6 +3307,7 @@ function _fsSubscribe(){
           }
           const _inUAt=parsed._uAt||0, _locUAt=(ST._cfgUAt&&ST._cfgUAt[_k])||0;
           if(_inUAt<_locUAt) return;            // edição local é mais nova → ignora versão antiga de outra máquina
+          if(_cfgVazio(parsed._val)&&_cfgLocalTemDados(_k)) return; // nuvem vazia NÃO apaga dados locais
           ST[_k]=parsed._val;
           if(ST._cfgUAt&&_k!=='_cfgUAt') ST._cfgUAt[_k]=_inUAt;
           _fsSeen['_config/'+_k]=JSON.stringify(parsed); mudou=true;
@@ -7621,6 +7635,7 @@ function rConfig(){
               ${p.perfil}${cfg.cargo?' · '+cfg.cargo:''}${p.tel?' · '+p.tel.slice(2):''}
               ${p.email?'<br><span style="font-size:11px;color:var(--gl);">'+p.email+'</span>':''}
               ${cfg.dataAdmissao?'<br><span style="font-size:11px;color:var(--gl);">Admissão: '+_fmtDateBR(cfg.dataAdmissao)+'</span>':''}
+              ${cfg.situacao==='desligado'?'<br><span style="font-size:11px;color:#B91C1C;font-weight:600;">🚪 Desligado'+(cfg.dataDemissao?' em '+_fmtDateBR(cfg.dataDemissao):'')+'</span>':''}
               ${cfg.tipoPessoa==='pj'?'<span style="font-size:10px;background:#EDE9FE;color:#6D28D9;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600;">PJ</span>':''}
               ${cfg.cnpj?'<br><span style="font-size:11px;color:var(--gl);">CNPJ: '+cfg.cnpj+(cfg.razaoSocial?' · '+cfg.razaoSocial:'')+'</span>':''}
               ${(!cfg.tipoPessoa||cfg.tipoPessoa==='pf')&&cfg.cpf?'<br><span style="font-size:11px;color:var(--gl);">CPF: '+cfg.cpf+'</span>':''}
@@ -8381,6 +8396,8 @@ function _colabLimparModal(){
   });
   document.getElementById('colab-salario').value='';
   document.getElementById('colab-adiantamento').value='';
+  const sit=document.getElementById('colab-situacao'); if(sit) sit.value='ativo';
+  const dem=document.getElementById('colab-demissao'); if(dem) dem.value='';
   const dept=document.getElementById('colab-dept');
   if(dept) dept.value='';
   const tp=document.getElementById('colab-tipopessoa');
@@ -8412,6 +8429,8 @@ function cfgEditPessoa(area,i){
   document.getElementById('colab-email').value=p.email||'';
   document.getElementById('colab-nasc').value      =cfg.dataNasc||'';
   document.getElementById('colab-admissao').value  =cfg.dataAdmissao||'';
+  document.getElementById('colab-situacao').value  =cfg.situacao||'ativo';
+  document.getElementById('colab-demissao').value  =cfg.dataDemissao||'';
   document.getElementById('colab-tipopessoa').value=cfg.tipoPessoa||'pf';
   document.getElementById('colab-cpf').value       =cfg.cpf||'';
   document.getElementById('colab-rg').value        =cfg.rg||'';
@@ -8446,6 +8465,8 @@ async function cfgSalvarColab(){
     nome.split(' ')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')+'@casavillare.com.br';
   const nasc       =document.getElementById('colab-nasc').value||'';
   const admissao   =document.getElementById('colab-admissao').value||'';
+  const situacao   =document.getElementById('colab-situacao').value||'ativo';
+  const demissao   =document.getElementById('colab-demissao').value||'';
   const tipoPessoa =document.getElementById('colab-tipopessoa').value||'pf';
   const cpf        =document.getElementById('colab-cpf').value.trim()||'';
   const rg         =document.getElementById('colab-rg').value.trim()||'';
@@ -8490,6 +8511,8 @@ async function cfgSalvarColab(){
     const c0=ST.configs[nome];
     if(nasc)        c0.dataNasc=nasc;
     if(admissao)    c0.dataAdmissao=admissao;
+    c0.situacao     =situacao;
+    if(demissao)    c0.dataDemissao=demissao;
     c0.tipoPessoa   =tipoPessoa;
     if(cpf)         c0.cpf=cpf;
     if(rg)          c0.rg=rg;
@@ -8520,6 +8543,8 @@ async function cfgSalvarColab(){
     const c1=ST.configs[nome];
     if(nasc) c1.dataNasc=nasc; else delete c1.dataNasc;
     c1.dataAdmissao =admissao||c1.dataAdmissao||'';
+    c1.situacao     =situacao;
+    if(demissao) c1.dataDemissao=demissao; else delete c1.dataDemissao;
     c1.tipoPessoa   =tipoPessoa;
     c1.cpf          =cpf||c1.cpf||'';
     c1.rg           =rg||c1.rg||'';
