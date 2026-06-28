@@ -3180,7 +3180,9 @@ async function _fsLoadAll(){
     const colKeys=Object.keys(ST).filter(k=>_fsIsCol(k));
     const toPush=[];
     for(const col of colKeys){
-      let cloud=await loadFromFirestore(col)||[];
+      const _cloudRaw=await loadFromFirestore(col);
+      if(_cloudRaw===null) continue; // leitura indisponível (negada por perfil OU falha de rede): NÃO mexe nesta coleção — evita empurrar cópia local desatualizada por cima da nuvem (clobber)
+      let cloud=_cloudRaw;
       // Registros com tombstone NÃO voltam; se ainda existirem na nuvem, são apagados de lá.
       const tombNaNuvem=[];
       cloud=cloud.filter(d=>{ const id=String(d&&(d.id??d._id)); if(_tombHas(col,id)){ tombNaNuvem.push(id); return false; } return true; });

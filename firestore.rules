@@ -3,40 +3,48 @@ rules_version = '2';
 // ─────────────────────────────────────────────────────────────────────────────
 // Casa Villare — ERP interno · Regras de segurança do Firestore
 //
-// BASELINE: nenhum dado é público. Só membros da equipe AUTENTICADOS (via
-// Firebase Authentication) conseguem ler ou escrever. Sem login válido →
-// acesso negado, mesmo conhecendo a apiKey (que é pública por natureza).
+// BASELINE: nada é público. Só membros AUTENTICADOS (Firebase Auth) leem/escrevem.
 //
-// TRILHA DE AUDITORIA (_audit): append-only e INVIOLÁVEL. Qualquer autenticado
-// pode CRIAR registros (o sistema grava automaticamente), mas NINGUÉM pode
-// editar ou apagar — o histórico é prova e não pode ser adulterado. A leitura
-// restrita por perfil (só gestor) virá depois com as permissões granulares
-// (custom claims), pois a regra ainda não conhece o "perfil" do app.
+// P0-4 FASE 1 (permissões por perfil no servidor):
+//   - O perfil vem do custom claim `request.auth.token.perfil` (carimbado via Admin).
+//   - Coleções financeiras (dre, folhas, comissoes, vendasCom): leitura E escrita
+//     SÓ para gestor. As demais (leads, pedidos, agenda, cadastros, _config…)
+//     seguem para qualquer autenticado.
+//   - _audit: leitura SÓ gestor; create por qualquer autenticado (o app registra);
+//     update/delete NUNCA (trilha inviolável).
 //
-// FASE FUTURA: restringir por perfil (vendedora ≠ supervisor ≠ gestor) usando
-// custom claims emitidas por Cloud Function / Admin SDK.
+// Obs.: regra ÚNICA por coleção (sem match permissivo concorrente) — no Firestore,
+// se QUALQUER match concede, o acesso é concedido; então o genérico já embute a
+// restrição, em vez de um match restritivo "por cima".
+//
+// FASE 2 (futura): mover salários/tabelas (_config/configs, _config/configsCom)
+// para coleção própria gestor-only; exclusão só-gestor; _audit à prova de forja.
 // ─────────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Exige uma sessão autenticada do Firebase Auth para QUALQUER operação.
     function autenticado() {
       return request.auth != null && request.auth.uid != null;
     }
+    function isGestor() {
+      return autenticado() && request.auth.token.perfil == 'gestor';
+    }
+    function isFinanceira(c) {
+      return c == 'dre' || c == 'folhas' || c == 'comissoes' || c == 'vendasCom';
+    }
 
-    // ── Trilha de auditoria: APPEND-ONLY (cria sim; edita/apaga NUNCA) ──
+    // ── Trilha de auditoria: leitura só gestor; cria sim; edita/apaga NUNCA ──
     match /_audit/{doc} {
-      allow read:   if autenticado();
+      allow read:   if isGestor();
       allow create: if autenticado();
       allow update, delete: if false;
     }
 
-    // ── Demais coleções do ERP (leads, pedidos, agenda, cadastros, _config…) ──
-    // Escrita liberada para autenticados, EXCETO na coleção _audit (protegida acima).
+    // ── Demais coleções: financeiras só gestor (read+write); resto, autenticado ──
     match /{collection}/{doc} {
-      allow read:  if autenticado();
-      allow write: if autenticado() && collection != '_audit';
+      allow read:  if collection != '_audit' && autenticado() && (isFinanceira(collection) ? isGestor() : true);
+      allow write: if collection != '_audit' && autenticado() && (isFinanceira(collection) ? isGestor() : true);
     }
   }
 }
