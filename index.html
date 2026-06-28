@@ -2913,7 +2913,7 @@ async function loadFromFirestore(col){
 
 // ══ FASE 3 — Firestore como fonte de verdade (multi-computador) ═════════════
 const _FS_SESSION_KEYS=['nome','perfil','area']; // por sessão — nunca sincroniza
-const _FS_SKIP_KEYS=['agenda'];                  // legado (a agenda real é 'eventos')
+const _FS_SKIP_KEYS=['agenda','senhas'];         // 'agenda'=legado (real é 'eventos'); 'senhas'=NUNCA vai à nuvem (segredo). Auth real é o Firebase Auth; ST.senhas é só cache offline local.
 const _FS_BLOB_ARRAYS=['tabelaCartao','bipartido']; // arrays sem id estável → guardados inteiros em _config (1 doc)
 function _fsIsCol(key){ return Array.isArray(ST[key])&&!_FS_SKIP_KEYS.includes(key)&&!_FS_BLOB_ARRAYS.includes(key); }
 let _fsSeen=Object.create(null);                 // 'col/id' -> JSON já sincronizado (diff p/ economizar escritas)
@@ -3155,6 +3155,7 @@ async function _fsLoadAll(){
     if(cfg) cfg.forEach(d=>{
       if(d&&d.id&&Object.prototype.hasOwnProperty.call(d,'_val')){
         const _k=d.id;
+        if(_FS_SKIP_KEYS.includes(_k)) return; // segredo/legado (ex.: senhas): não baixa da nuvem
         if(_k==='_tomb'){ // mapa de exclusões: UNIÃO (nunca sobrescreve). Reenvia se a união local≠nuvem para a nuvem convergir.
           _tombMergeIncoming(d._val);
           if(JSON.stringify(ST._tomb||{})!==JSON.stringify(d._val||{})) _cfgKeepLocal.push('_tomb');
@@ -3277,6 +3278,7 @@ function _fsSubscribe(){
         const parsed=_fsParseDoc(ch.doc);
         if(parsed&&parsed.id&&('_val' in parsed)){
           const _k=parsed.id;
+          if(_FS_SKIP_KEYS.includes(_k)) return; // segredo/legado (ex.: senhas): ignora da nuvem
           if(_k==='_tomb'){ // mapa de exclusões: UNIÃO (nunca sobrescreve)
             if(_tombMergeIncoming(parsed._val)){ tombMudou=true; mudou=true; }
             return;
@@ -3365,6 +3367,7 @@ function load(){
     if(!ST.configsCom) ST.configsCom={};
     if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={};
     if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={};
+    if(ST.configNFe&&'apiKey'in ST.configNFe) delete ST.configNFe.apiKey; // purga segredo legado (NFE.io) do estado local
     _tombPrune(); // enxuga marcas de exclusão antigas no início
     // Migração: descarta tabela de financiamento antiga (formato {parcelas,taxa}) para usar novo (coeficientes)
     if(ST.tabelaFinanciamento&&ST.tabelaFinanciamento.length&&ST.tabelaFinanciamento[0].d30===undefined)
@@ -7905,8 +7908,8 @@ function rConfig(){
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div><label class="lbl">🔑 API Key (NFE.io) *</label>
-              <input class="inp" id="nfe-apikey" type="password" placeholder="Sua chave de API do NFE.io" value="${nfe.apiKey||''}"/></div>
+            <div><label class="lbl">🔒 Credencial fiscal</label>
+              <div style="font-size:11.5px;color:#166534;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:9px 11px;">A chave fica protegida no servidor (Worker), nunca no navegador. Nada a preencher aqui.</div></div>
             <div><label class="lbl">🏢 ID da Empresa (NFE.io) *</label>
               <input class="inp" id="nfe-empresa-id" placeholder="Ex: 5e4c7f3a..." value="${nfe.empresaId||''}"/>
               <div style="font-size:10px;color:var(--gl);margin-top:3px;">Em NFE.io → Empresas → ID da empresa</div></div>
@@ -7948,8 +7951,8 @@ function rConfig(){
                 <option value="ProductionEnvironment" ${nfe.ambiente==='ProductionEnvironment'?'selected':''}>✅ Produção (real)</option>
               </select></div>
             <div style="display:flex;align-items:flex-end;">
-              <div style="background:${nfe.apiKey?'#F0FDF4':'#FFF7ED'};border:1px solid ${nfe.apiKey?'#86EFAC':'#FED7AA'};border-radius:8px;padding:10px 14px;font-size:12px;color:${nfe.apiKey?'#166534':'#92400E'};width:100%;">
-                ${nfe.apiKey?'✅ API configurada — pronto para emitir':'⚠️ Configure a API Key para habilitar a emissão de NFe'}
+              <div style="background:${(ST.empresa&&ST.empresa.cnpj)?'#F0FDF4':'#FFF7ED'};border:1px solid ${(ST.empresa&&ST.empresa.cnpj)?'#86EFAC':'#FED7AA'};border-radius:8px;padding:10px 14px;font-size:12px;color:${(ST.empresa&&ST.empresa.cnpj)?'#166534':'#92400E'};width:100%;">
+                ${(ST.empresa&&ST.empresa.cnpj)?'✅ Emissão pronta (via servidor seguro)':'⚠️ Cadastre o CNPJ da empresa para habilitar a emissão'}
               </div>
             </div>
           </div>
@@ -14830,8 +14833,8 @@ async function nfeConsultarStatus(pedidoId){
 
 function nfeSalvarConfig(){
   if(!ST.configNFe) ST.configNFe={};
-  ST.configNFe.apiKey    =document.getElementById('nfe-apikey').value.trim();
-  ST.configNFe.empresaId =document.getElementById('nfe-empresa-id').value.trim();
+  delete ST.configNFe.apiKey; // segredo legado (NFE.io): nunca mais persistir/sincronizar — emissão usa os secrets do Worker
+  ST.configNFe.empresaId =document.getElementById('nfe-empresa-id')?.value.trim()||'';
   ST.configNFe.ie        =document.getElementById('nfe-ie').value.trim();
   ST.configNFe.serie     =document.getElementById('nfe-serie').value||'1';
   ST.configNFe.proxNum   =document.getElementById('nfe-proxnum').value||'';
@@ -14845,36 +14848,15 @@ function nfeSalvarConfig(){
 }
 
 async function nfeTestarConexao(){
-  const cfg=ST.configNFe||{};
-  if(!cfg.apiKey||!cfg.empresaId){toast('⚠️ Preencha API Key e ID da Empresa antes de testar');return;}
-  toast('🔌 Testando conexão com NFE.io...');
+  // Testa a ponte fiscal (Cloudflare Worker) — health check. A chave do provedor fica no servidor.
+  toast('🔌 Testando a ponte fiscal...');
   try{
-    // Tenta via proxy Netlify (deploy)
-    const resp=await fetch('/.netlify/functions/nfe-emit',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({payload:{_teste:true},apiKey:cfg.apiKey,empresaId:cfg.empresaId})
-    });
-    if(resp.status===404) throw new Error('LOCAL');
-    // qualquer resposta do servidor = proxy funcionando
-    toast('✅ Proxy NFE.io ativo! Emissão automática disponível.');
-    rConfig();
+    const r=await fetch(NFE_PROXY_URL+'/',{method:'GET'});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j&&j.ok) toast('✅ Ponte fiscal ativa ('+(j.provider||'provedor')+') — pronta para emitir.');
+    else toast('⚠️ A ponte respondeu status '+r.status+'. Tente novamente em instantes.');
   }catch(e){
-    if(e.message==='LOCAL'){
-      // Ambiente local — testa diretamente
-      try{
-        const r=await fetch(`https://api.nfe.io/v1/companies/${cfg.empresaId}/productinvoices`,{
-          method:'GET', headers:{'Authorization':`Bearer ${cfg.apiKey}`}
-        });
-        if(r.status===401) toast('❌ API Key inválida — verifique no painel NFE.io');
-        else if(r.ok||r.status===200||r.status===404) toast('✅ Conexão NFE.io OK! API Key válida.');
-        else toast('⚠️ NFE.io respondeu status '+r.status+'. Verifique as credenciais.');
-      }catch(e2){
-        toast('⚠️ Emissão automática disponível após deploy. Credenciais salvas.');
-      }
-    } else {
-      toast('⚠️ Erro: '+e.message);
-    }
+    toast('❌ Não consegui falar com a ponte fiscal. Verifique a conexão.');
   }
 }
 

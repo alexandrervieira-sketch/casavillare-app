@@ -163,6 +163,12 @@ test('fsConfigDocs inclui _uAt e exclui relógio/coleções', () => {
   assert(!docs.find(d => d.id === '_cfgUAt'), 'relógio local não sincroniza');
   assert(!docs.find(d => d.id === 'leads'), 'coleção não vira doc de config');
 });
+// Segurança: senhas NUNCA vão para a nuvem (auth real é o Firebase Auth; ST.senhas é só cache offline)
+test('fsConfigDocs NUNCA inclui senhas', () => {
+  T.ST.senhas = { 'fulano@x.com': 'hash123' };
+  const docs = T._fsConfigDocs();
+  assert(!docs.find(d => d.id === 'senhas'), 'senhas não pode sincronizar (segredo)');
+});
 
 // IDs: só dígitos e únicos (anti-colisão entre máquinas)
 test('newId é só dígitos e único', () => {
