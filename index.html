@@ -4718,9 +4718,7 @@ function pfRenderComsComercial(){
   ).map(l=>{
     const desc=l.desconto||0;
     const {pontos,pct}=_calcComVendaPontos(desc);
-    const taxaVal=l.condicoesPgto?_calcTaxaCartaoConds(l.condicoesPgto):(l.absorcao==='loja'?l.valor*(1-desc/100)*(l.taxaLoja/100):0);
-    const rtVal=(l.rtPct||0)>0?l.valor*(1-desc/100)*(l.rtPct/100):0;
-    const valorLiq=l.valor*(1-desc/100)-taxaVal-rtVal;
+    const {taxa:taxaVal,rt:rtVal,liquido:valorLiq}=_vendaLiquido(l);
     const valorLiqCom=_aplicarMargemErro(valorLiq);
     return {cliente:l.nome,valorBruto:l.valor,desconto:desc,pontos,comissaoPct:pct,valorLiq,valorCom:valorLiqCom*(pct/100),fromLead:true,rtPct:l.rtPct||0,rtVal};
   });
@@ -5854,7 +5852,7 @@ function rRelResumo(){
         const leadsG=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
         const vendasM=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno);
         const todas=[
-          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(d);const taxaVal=l.condicoesPgto?_calcTaxaCartaoConds(l.condicoesPgto):(l.absorcao==='loja'?l.valor*(1-d/100)*(l.taxaLoja/100):0);const vl=_aplicarMargemErro(l.valor*(1-d/100)-taxaVal);return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:vl*(pct/100)};}),
+          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(d);const vl=_aplicarMargemErro(_valorLiquidoVenda(l));return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:vl*(pct/100)};}),
           ...vendasM.map(v=>({pessoa:v.pessoa,cliente:v.cliente,valorBruto:v.valorBruto,desconto:v.desconto,pontos:v.pontos,comissaoPct:v.comissaoPct,valorCom:v.valorCom}))
         ];
         if(!todas.length) return`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda comercial neste mês.</td></tr>`;
@@ -6672,6 +6670,19 @@ function _leadValorVenda(lead){
   if(!lead) return 0;
   return (lead.valor||0)*(1-(lead.desconto||0)/100);
 }
+// ── FONTE ÚNICA do valor líquido da venda = base de comissão de TODOS os papéis ──
+// Líquido = bruto − desconto ao cliente − taxa (cartão/financiamento, quando a loja
+// assume) − RT do especificador. A margem de erro é aplicada por cima (_aplicarMargemErro).
+// Devolve o detalhamento para reuso na UI (evita recálculos divergentes).
+function _vendaLiquido(lead){
+  if(!lead) return {aposDesc:0,taxa:0,rt:0,liquido:0};
+  const desc=lead.desconto||0;
+  const aposDesc=(lead.valor||0)*(1-desc/100);
+  const taxa=lead.condicoesPgto?_calcTaxaCartaoConds(lead.condicoesPgto):(lead.absorcao==='loja'?aposDesc*((lead.taxaLoja||0)/100):0);
+  const rt=(lead.rtPct||0)>0?aposDesc*(lead.rtPct/100):0;
+  return {aposDesc,taxa,rt,liquido:aposDesc-taxa-rt};
+}
+function _valorLiquidoVenda(lead){ return _vendaLiquido(lead).liquido; }
 // Valor de venda oficial do pedido — puxado da fonte segura do CRM, já LÍQUIDO:
 // 1º lead vinculado (bruto + desconto → valor ao cliente), 2º contrato/cadastro
 // (soma dos ambientes brutos menos o desconto), 3º valor salvo.
@@ -6690,11 +6701,7 @@ function _pedidoValorBase(pedido){
   let valorBase=pedido.valor||0;
   if(pedido.leadId){
     const l=(ST.leads||[]).find(x=>String(x.id)===String(pedido.leadId));
-    if(l&&l.valor){
-      const desc=l.desconto||0;
-      const taxaVal=l.condicoesPgto?_calcTaxaCartaoConds(l.condicoesPgto):(l.absorcao==='loja'?l.valor*(1-desc/100)*(l.taxaLoja/100):0);
-      valorBase=l.valor*(1-desc/100)-taxaVal;
-    }
+    if(l&&l.valor) valorBase=_valorLiquidoVenda(l); // líquido único: − desconto − taxa − RT
   }
   return _aplicarMargemErro(valorBase);
 }
@@ -6767,12 +6774,13 @@ function _vcParcOptions(tipo){
 function _vcTaxaAuto(tipo,parc){
   if(tipo==='avista') return 0;
   if(tipo==='cartao'){
-    const tab=_getTabCartao();
-    return tab[parc-1]||0;
+    const e=_getTabCartao().find(x=>x.parcelas==(parc||1)); // busca por parcelas (não por índice)
+    return (e&&e.taxa)||0;
   }
   if(tipo==='financiamento'){
     const tab=_getTabFin();
-    return tab[parc-1]||0;
+    const row=tab.find(r=>r.p==(parc||1))||tab[tab.length-1];
+    return (row&&row.r30)||0; // retenção padrão (prazo d30)
   }
   return 0;
 }
@@ -7078,9 +7086,7 @@ function rComissoes(){
         ...leadsP.map(l=>{
           const desc=l.desconto||0;
           const {pontos,pct}=_calcComVendaPontos(desc);
-          const taxaVal=l.condicoesPgto?_calcTaxaCartaoConds(l.condicoesPgto):(l.absorcao==='loja'?l.valor*(1-desc/100)*(l.taxaLoja/100):0);
-          const rtVal=(l.rtPct||0)>0?l.valor*(1-desc/100)*(l.rtPct/100):0;
-          const valorLiq=l.valor*(1-desc/100)-taxaVal-rtVal;
+          const {taxa:taxaVal,rt:rtVal,liquido:valorLiq}=_vendaLiquido(l);
           return {
             id:l.id, cliente:l.nome,
             data:l.proxContato?new Date(l.proxContato+'T12:00').toLocaleDateString('pt-BR'):'',
@@ -12477,7 +12483,7 @@ function calcDRE(mesAno){
   const recLeadsParc=(ST.leads||[]).filter(l=>l.status==='ganho'&&l.condicoesPgto&&l.condicoesPgto.length)
     .reduce((a,l)=>a+(l.condicoesPgto||[]).filter(c=>(c.vencimento||'').startsWith(mesAno)).reduce((s,c)=>s+(c.valor||0),0),0);
   const recLeads=recLeadsCash+recLeadsParc;
-  const recVendasCom=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno).reduce((a,v)=>a+(v.valorBruto||v.valor||0),0);
+  const recVendasCom=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno).reduce((a,v)=>a+(v.valorApdesc!=null?v.valorApdesc:(v.valorBruto||0)*(1-(v.desconto||0)/100)),0); // receita líquida de desconto (igual aos leads)
   const recCRM=recLeads+recVendasCom;
   // Auto: despesas pessoal — separado por equipe operacional x prestadores
   const folhasMes=(ST.folhas||[]).filter(f=>f.mesAno===mesAno);

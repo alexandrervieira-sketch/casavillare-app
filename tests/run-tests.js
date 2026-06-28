@@ -70,6 +70,7 @@ vm.createContext(ctx);
 const EPILOGUE = `;try{ globalThis.__T = {
   ST: ST,
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
+  _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
@@ -99,6 +100,17 @@ test('comVendaPontos clamp em 40%', () => assert(T._calcComVendaPontos(999).pont
 
 // Base de comissão sem margem de erro e sem lead = valor cheio
 test('pedidoValorBase sem lead = valor', () => { T.ST.configsCom = {}; assertEq(T._pedidoValorBase({ valor: 1000 }), 1000); });
+
+// Fonte ÚNICA do valor líquido da venda = base de comissão de TODOS (− desconto − taxa − RT)
+const _close = (a, b) => Math.abs(a - b) < 0.01;
+test('valorLiquidoVenda só desconto', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, desconto: 10 }), 45000), 'aposDesc'));
+test('valorLiquidoVenda RT sem desconto', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, rtPct: 3 }), 48500), '50000 − 1500'));
+test('valorLiquidoVenda desconto + RT', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, desconto: 10, rtPct: 3 }), 43650), '45000 − 1350'));
+test('vendaLiquido detalha taxa/rt/liquido', () => {
+  const r = T._vendaLiquido({ valor: 50000, desconto: 10, rtPct: 3 });
+  assert(_close(r.aposDesc, 45000) && _close(r.taxa, 0) && _close(r.rt, 1350) && _close(r.liquido, 43650), 'breakdown');
+});
+test('vendaLiquido lead nulo = zeros', () => { const r = T._vendaLiquido(null); assertEq(r.liquido, 0); });
 
 // Tombstones (exclusão durável)
 test('tombstone add/has/clear', () => {
