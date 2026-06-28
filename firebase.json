@@ -3,15 +3,9 @@
     "public": ".",
     "ignore": [
       "firebase.json",
-      "netlify.toml",
-      "netlify/**",
-      "functions/**",
       "node_modules/**",
       "*.pptx",
       "*.pdf"
-    ],
-    "rewrites": [
-      { "source": "/api/nfe-emit", "function": "nfeEmit" }
     ],
     "headers": [
       {
@@ -19,10 +13,6 @@
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       }
     ]
-  },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs18"
   },
   "firestore": {
     "rules": "firestore.rules",

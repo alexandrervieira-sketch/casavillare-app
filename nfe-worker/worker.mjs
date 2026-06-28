@@ -5,7 +5,7 @@
 // traduz para o provedor (Adapter) e normaliza a resposta de volta. Trocar de
 // provedor no futuro = trocar/adicionar um adapter, SEM mexer no CRM.
 //
-//   CRM → emitirNota → [Adapter Focus | Adapter NFE.io | …] → Provedor → SEFAZ
+//   CRM → emitirNota → [Adapter Focus | outro adapter futuro | …] → Provedor → SEFAZ
 //
 // Os tokens dos provedores ficam como SECRETS deste Worker (env), nunca no
 // navegador nem no Git.

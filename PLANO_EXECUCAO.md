@@ -43,11 +43,11 @@
 - Achados: base sólida (Simples Nacional, CFOP interestadual automático). A corrigir no deploy: remover fallback que expõe a API Key no navegador; subir para Node 20.
 
 ### Fase 1.2 — Pré-requisitos (👤 você + contador)
-- [ ] Conta **NFE.io**: API Key + ID da empresa (Company ID).
-- [ ] **Certificado A1** (.pfx + senha) — subir no painel da NFE.io.
-- [ ] Dados fiscais confirmados: regime tributário, IE, natureza da operação, **CFOP padrão**, **CSOSN**, série.
-- [ ] **NCM** correto dos móveis planejados.
-- [ ] Habilitar **homologação** na NFE.io.
+- [x] Conta **Focus NFe**: token (homologação + produção) — guardados como secrets do Worker.
+- [x] **Certificado A1** (.pfx + senha) — subido no painel da Focus NFe.
+- [x] Dados fiscais confirmados: regime tributário, IE, natureza da operação, **CFOP padrão**, **CSOSN**, série.
+- [x] **NCM** correto dos móveis planejados.
+- [x] Habilitar **homologação** na Focus NFe.
 
 ### Fase 1.3 — Deploy + Homologação (🤖)  · *zero impacto na produção*
 - [ ] Bump da Cloud Function para **Node 20**.
@@ -58,7 +58,7 @@
 - **DoD:** nota de homologação emitida e lida corretamente no pedido.
 
 ### Fase 1.4 — Virada para Produção (🤖 + 👤)
-- [ ] Trocar credenciais/ambiente para produção na NFE.io.
+- [ ] Trocar o ambiente para produção (token de produção da Focus NFe, já guardado no Worker).
 - [ ] Emitir **1ª nota real** controlada e conferir XML/DANFE arquivados.
 - **DoD:** primeira NFe real autorizada pela SEFAZ.
 

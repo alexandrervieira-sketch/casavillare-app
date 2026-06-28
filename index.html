@@ -984,7 +984,7 @@ textarea.inp{resize:vertical;min-height:68px;}
     </div>
     <div class="modal-body">
       <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400E;margin-bottom:16px;">
-        Use quando a NFe foi emitida pelo portal SEBRAE/NFE.io diretamente e você quer registrar no sistema.
+        Use quando a NFe foi emitida por fora (pelo contador ou por um portal SEBRAE/SEFAZ) e você quer registrar no sistema.
       </div>
       <div class="fr r2">
         <div><label class="lbl">Número da NFe *</label>
@@ -998,7 +998,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         <input class="inp" id="nfe-manual-chave" placeholder="00000000000000000000000000000000000000000000" maxlength="44"/></div>
       <div><label class="lbl">Link do DANFE (PDF)</label>
         <input class="inp" id="nfe-manual-danfe" placeholder="Cole aqui a URL do PDF do DANFE" type="url"/>
-        <div style="font-size:11px;color:var(--gl);margin-top:3px;">Cole o link gerado pelo NFE.io, SEBRAE ou contador.</div></div>
+        <div style="font-size:11px;color:var(--gl);margin-top:3px;">Cole o link do DANFE gerado pelo seu emissor (contador, SEBRAE ou portal).</div></div>
       <div><label class="lbl">Observação</label>
         <input class="inp" id="nfe-manual-obs" placeholder="Ex: Emitida pelo portal SEBRAE em 07/06/2026"/></div>
     </div>
@@ -3367,7 +3367,8 @@ function load(){
     if(!ST.configsCom) ST.configsCom={};
     if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={};
     if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={};
-    if(ST.configNFe&&'apiKey'in ST.configNFe) delete ST.configNFe.apiKey; // purga segredo legado (NFE.io) do estado local
+    if(ST.configNFe&&'apiKey'in ST.configNFe) delete ST.configNFe.apiKey; // purga credencial fiscal legada do estado local (vive no servidor)
+    if(ST.configNFe&&'empresaId'in ST.configNFe) delete ST.configNFe.empresaId; // campo legado
     _tombPrune(); // enxuga marcas de exclusão antigas no início
     // Migração: descarta tabela de financiamento antiga (formato {parcelas,taxa}) para usar novo (coeficientes)
     if(ST.tabelaFinanciamento&&ST.tabelaFinanciamento.length&&ST.tabelaFinanciamento[0].d30===undefined)
@@ -7895,24 +7896,9 @@ function rConfig(){
         <div class="cfg-block-hdr"><h3>🧾 Configuração NFe — Focus NFe</h3></div>
         <div class="cfg-row" style="flex-direction:column;gap:14px;">
 
-          <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#166534;line-height:1.8;">
-            🚀 <strong>Como ativar a emissão automática de NFe (NFE.io — gratuito até 10/mês):</strong><br>
-            <ol style="margin:8px 0 0 18px;padding:0;">
-              <li>Acesse <a href="https://app.nfe.io" target="_blank" style="color:#15803D;font-weight:600;">app.nfe.io</a> → faça login na conta da Casa Villare</li>
-              <li>No menu lateral: <strong>Empresas</strong> → selecione Casa Villare → copie o <strong>ID da Empresa</strong></li>
-              <li>No menu lateral: <strong>Configurações → Integrações</strong> → copie a <strong>API Key</strong></li>
-              <li>Cole os dois valores abaixo e clique em <strong>Salvar</strong></li>
-              <li>Certifique-se de que o certificado digital está vinculado à empresa no painel NFE.io</li>
-            </ol>
-            <div style="margin-top:8px;font-size:11.5px;color:#166534;opacity:.85;">✅ Após o deploy no Netlify, a emissão será 100% automática diretamente do sistema, com 1 clique no pedido.</div>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div><label class="lbl">🔒 Credencial fiscal</label>
-              <div style="font-size:11.5px;color:#166534;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:9px 11px;">A chave fica protegida no servidor (Worker), nunca no navegador. Nada a preencher aqui.</div></div>
-            <div><label class="lbl">🏢 ID da Empresa (NFE.io) *</label>
-              <input class="inp" id="nfe-empresa-id" placeholder="Ex: 5e4c7f3a..." value="${nfe.empresaId||''}"/>
-              <div style="font-size:10px;color:var(--gl);margin-top:3px;">Em NFE.io → Empresas → ID da empresa</div></div>
+          <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#166534;line-height:1.7;">
+            🧾 <strong>Emissão de NFe — automática, com 1 clique no pedido.</strong><br>
+            A nota é emitida pela ponte fiscal segura (<strong>Focus NFe</strong>) no servidor — a credencial fica no servidor e <strong>nunca passa pelo navegador</strong>. Aqui você só ajusta os <strong>dados fiscais padrão</strong> abaixo. Use 🔌 <strong>Testar conexão</strong> para conferir a ponte.
           </div>
 
           <hr class="form-div"/>
@@ -7925,7 +7911,7 @@ function rConfig(){
               <input class="inp" type="number" id="nfe-serie" placeholder="1" value="${nfe.serie||'1'}"/></div>
             <div><label class="lbl">Próximo número NFe</label>
               <input class="inp" type="number" id="nfe-proxnum" placeholder="42" value="${nfe.proxNum||''}"/>
-              <div style="font-size:10px;color:var(--gl);margin-top:3px;">Automático pelo NFE.io</div></div>
+              <div style="font-size:10px;color:var(--gl);margin-top:3px;">Numeração controlada pela emissão</div></div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
@@ -7945,7 +7931,7 @@ function rConfig(){
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div><label class="lbl">Ambiente NFE.io</label>
+            <div><label class="lbl">Ambiente de emissão</label>
               <select class="inp" id="nfe-ambiente">
                 <option value="HomologationEnvironment" ${(nfe.ambiente||'HomologationEnvironment')==='HomologationEnvironment'?'selected':''}>🧪 Homologação (testes)</option>
                 <option value="ProductionEnvironment" ${nfe.ambiente==='ProductionEnvironment'?'selected':''}>✅ Produção (real)</option>
@@ -14705,7 +14691,7 @@ function salvarTodasMetas(){
 }
 
 // ══════════════════════════════════════════════════════
-// NFe — Módulo de Emissão via NFE.io
+// NFe — Módulo de Emissão via Focus NFe (ponte no Cloudflare Worker)
 // ══════════════════════════════════════════════════════
 let _nfePedidoId=null;
 let _nfeItens=[];
@@ -14833,8 +14819,8 @@ async function nfeConsultarStatus(pedidoId){
 
 function nfeSalvarConfig(){
   if(!ST.configNFe) ST.configNFe={};
-  delete ST.configNFe.apiKey; // segredo legado (NFE.io): nunca mais persistir/sincronizar — emissão usa os secrets do Worker
-  ST.configNFe.empresaId =document.getElementById('nfe-empresa-id')?.value.trim()||'';
+  delete ST.configNFe.apiKey;    // credencial fiscal vive no servidor (Worker), nunca no navegador
+  delete ST.configNFe.empresaId; // campo legado removido
   ST.configNFe.ie        =document.getElementById('nfe-ie').value.trim();
   ST.configNFe.serie     =document.getElementById('nfe-serie').value||'1';
   ST.configNFe.proxNum   =document.getElementById('nfe-proxnum').value||'';
@@ -14986,7 +14972,7 @@ function nfeCalcTotais(){
     document.getElementById('nfe-vtotal').value=(vbruto-desc).toFixed(2);
 }
 
-// Monta o payload JSON para NFE.io
+// Monta o payload da nota (formato canônico enviado à ponte fiscal)
 function nfeMontarPayload(){
   const cfg=ST.configNFe||{};
   const vtotal=parseFloat(document.getElementById('nfe-vtotal').value)||0;
@@ -15140,7 +15126,7 @@ async function nfeEmitir(){
   }
 }
 
-// Copia resumo formatado para colar no portal SEBRAE/NFE.io
+// Copia resumo formatado para colar em um emissor externo (contador/SEBRAE), se necessário
 function nfeCopiarDados(){
   const cfg=ST.configNFe||{};
   const emp=ST.empresa||{};
