@@ -1892,8 +1892,8 @@ textarea.inp{resize:vertical;min-height:68px;}
           <input class="inp" id="nfe-infcompl-modal" placeholder="NFe referente ao contrato de venda #"/></div>
         <div><label class="lbl">Ambiente</label>
           <select class="inp" id="nfe-amb-modal">
-            <option value="HomologationEnvironment">🧪 Homologação (teste)</option>
-            <option value="ProductionEnvironment">✅ Produção</option>
+            <option value="homologacao">🧪 Homologação (teste)</option>
+            <option value="producao">✅ Produção</option>
           </select></div>
       </div>
     </div>
@@ -3369,6 +3369,10 @@ function load(){
     if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={};
     if(ST.configNFe&&'apiKey'in ST.configNFe) delete ST.configNFe.apiKey; // purga credencial fiscal legada do estado local (vive no servidor)
     if(ST.configNFe&&'empresaId'in ST.configNFe) delete ST.configNFe.empresaId; // campo legado
+    if(ST.configNFe&&ST.configNFe.ambiente){ // migra vocabulário antigo de ambiente (NFE.io) → homologacao/producao
+      if(ST.configNFe.ambiente==='ProductionEnvironment') ST.configNFe.ambiente='producao';
+      else if(ST.configNFe.ambiente==='HomologationEnvironment') ST.configNFe.ambiente='homologacao';
+    }
     _tombPrune(); // enxuga marcas de exclusão antigas no início
     // Migração: descarta tabela de financiamento antiga (formato {parcelas,taxa}) para usar novo (coeficientes)
     if(ST.tabelaFinanciamento&&ST.tabelaFinanciamento.length&&ST.tabelaFinanciamento[0].d30===undefined)
@@ -7933,8 +7937,8 @@ function rConfig(){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Ambiente de emissão</label>
               <select class="inp" id="nfe-ambiente">
-                <option value="HomologationEnvironment" ${(nfe.ambiente||'HomologationEnvironment')==='HomologationEnvironment'?'selected':''}>🧪 Homologação (testes)</option>
-                <option value="ProductionEnvironment" ${nfe.ambiente==='ProductionEnvironment'?'selected':''}>✅ Produção (real)</option>
+                <option value="homologacao" ${(nfe.ambiente||'homologacao')!=='producao'?'selected':''}>🧪 Homologação (testes)</option>
+                <option value="producao" ${nfe.ambiente==='producao'?'selected':''}>✅ Produção (real)</option>
               </select></div>
             <div style="display:flex;align-items:flex-end;">
               <div style="background:${(ST.empresa&&ST.empresa.cnpj)?'#F0FDF4':'#FFF7ED'};border:1px solid ${(ST.empresa&&ST.empresa.cnpj)?'#86EFAC':'#FED7AA'};border-radius:8px;padding:10px 14px;font-size:12px;color:${(ST.empresa&&ST.empresa.cnpj)?'#166534':'#92400E'};width:100%;">
@@ -14919,7 +14923,7 @@ function abrirModalNFe(pedidoId){
   // Informações complementares
   const numContrato=cad?.numContrato||p.nContrato||'';
   document.getElementById('nfe-infcompl-modal').value=(cfg.infCompl||'NFe referente ao contrato de venda #')+numContrato;
-  document.getElementById('nfe-amb-modal').value=cfg.ambiente||'HomologationEnvironment';
+  document.getElementById('nfe-amb-modal').value=(cfg.ambiente==='producao')?'producao':'homologacao';
 
   nfeRenderItens();
   nfeAtualizarCFOP();
@@ -15073,7 +15077,12 @@ async function nfeEmitir(){
     toast('⚠️ Informe o CPF/CNPJ do destinatário');return;
   }
 
-  const amb=(cfg.ambiente==='producao')?'producao':'homologacao';
+  // Fonte ÚNICA do ambiente: o seletor que o usuário vê no modal (default vem da config).
+  const amb=(document.getElementById('nfe-amb-modal')?.value==='producao')?'producao':'homologacao';
+  if(amb==='producao'){
+    const _destNome=(document.getElementById('nfe-dest-nome')?.value||'o cliente').trim()||'o cliente';
+    if(!confirm(`⚠️ EMISSÃO EM PRODUÇÃO (NOTA REAL)\n\nDestinatário: ${_destNome}\n\nIsto gera uma NFe VÁLIDA na SEFAZ, com efeitos legais e fiscais. Não dá pra desfazer por aqui — só por cancelamento formal, dentro do prazo.\n\nConfirma emitir em PRODUÇÃO?`)) return;
+  }
   statusEl.style.display='';
   statusEl.innerHTML=`<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 16px;font-size:13px;color:#1E40AF;margin-bottom:12px;">⏳ Enviando para o Focus NFe (${amb==='producao'?'PRODUÇÃO':'homologação'})...</div>`;
   btnEmitir.disabled=true;
