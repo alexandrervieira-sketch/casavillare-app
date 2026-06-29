@@ -14810,6 +14810,39 @@ function nfeRefazerTeste(pedidoId){
   delete p.nfe; save(); toast('🧪 Pronto — voltou para Pendentes'); fiscalSubTab('pendentes');
 }
 // Consulta status e atualiza o MODAL aberto (botão manual + auto-polling após emitir)
+// Arquiva o XML (documento legal — guarda de 5 anos) e o DANFE no Firebase Storage.
+// Baixa via Worker (autenticado no Focus) e sobe ao Storage; guarda as URLs duráveis em p.nfe.
+async function nfeArquivarDocs(p){
+  if(!p||!p.nfe||p.nfe.status!=='emitida') return;
+  if(p.nfe.xmlArquivado&&p.nfe.danfeArquivado) return; // já arquivado
+  if(!_fbStorage){ console.warn('[CVP] Storage indisponível para arquivar NFe'); return; }
+  const ref=p.nfe.ref, amb=p.nfe.ambiente||'homologacao';
+  const chave=String(p.nfe.chaveAcesso||p.nfe.ref||'nota').replace(/[^0-9A-Za-z_-]/g,'');
+  try{
+    if(!p.nfe.xmlArquivado){
+      const xr=await fetch(NFE_PROXY_URL+'/arquivo?tipo=xml&ref='+encodeURIComponent(ref)+'&ambiente='+amb);
+      if(xr.ok){
+        const xmlText=await xr.text();
+        const xref=_fbStorage.ref('nfe/'+amb+'/'+chave+'.xml');
+        await xref.putString(xmlText,'raw',{contentType:'application/xml'});
+        p.nfe.xmlArquivado=await xref.getDownloadURL();
+      }
+    }
+    if(!p.nfe.danfeArquivado){
+      const dr=await fetch(NFE_PROXY_URL+'/arquivo?tipo=danfe&ref='+encodeURIComponent(ref)+'&ambiente='+amb);
+      if(dr.ok){
+        const blob=await dr.blob();
+        const dref=_fbStorage.ref('nfe/'+amb+'/'+chave+'.pdf');
+        await dref.put(blob,{contentType:'application/pdf'});
+        p.nfe.danfeArquivado=await dref.getDownloadURL();
+      }
+    }
+    p.nfe.arquivadoEm=new Date().toISOString();
+    save();
+    if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),200);
+    console.info('[CVP] NFe arquivada no Storage:',chave);
+  }catch(e){ console.warn('[CVP] arquivamento NFe falhou:',e&&e.message); }
+}
 async function nfeConsultarStatusUI(){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
   const statusEl=document.getElementById('nfe-status-box');
@@ -14829,11 +14862,13 @@ async function nfeConsultarStatusUI(){
     if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),300);
     if(!statusEl) return;
     if(novo==='emitida'){
+      nfeArquivarDocs(p); // arquiva XML/DANFE no Storage (guarda de 5 anos) em segundo plano
       statusEl.innerHTML=`<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534;margin-bottom:12px;">
         🟢 <strong>NFe autorizada!</strong><br>Número: <strong>${p.nfe.numero||'—'}</strong> · Série: ${p.nfe.serie||1}<br>
         Chave: <code style="font-size:10px;">${p.nfe.chaveAcesso||'—'}</code><br>
-        ${p.nfe.danfeUrl?`<a href="${p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
-        ${p.nfe.xmlUrl?`<a href="${p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
+        ${(p.nfe.danfeArquivado||p.nfe.danfeUrl)?`<a href="${p.nfe.danfeArquivado||p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
+        ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
+        <div style="font-size:11px;margin-top:8px;color:${p.nfe.xmlArquivado?'#166534':'#92400E'};">${p.nfe.xmlArquivado?'✅ XML arquivado com segurança (guarda de 5 anos)':'⏳ Arquivando XML/DANFE no sistema…'}</div>
       </div>`;
       const b=document.getElementById('nfe-btn-emitir'); if(b) b.textContent='🟢 Autorizada';
       toast('🟢 NFe autorizada!');
@@ -15158,12 +15193,14 @@ async function nfeEmitir(){
       save();
     }
     if(novoStatus==='emitida'){
+      if(p) nfeArquivarDocs(p); // arquiva XML/DANFE no Storage (guarda de 5 anos) em segundo plano
       statusEl.innerHTML=`<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534;margin-bottom:12px;">
         🟢 <strong>NFe autorizada!</strong><br>
         Número: <strong>${data.numero||'—'}</strong>&nbsp;|&nbsp;Série: ${data.serie||cfg.serie||1}<br>
         Chave: <code style="font-size:10px;">${data.chave||'—'}</code><br>
         ${data.danfeUrl?`<a href="${data.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
         ${data.xmlUrl?`<a href="${data.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
+        <div style="font-size:11px;margin-top:8px;color:#92400E;">⏳ Arquivando XML/DANFE no sistema (guarda de 5 anos)…</div>
       </div>`;
       btnEmitir.textContent='🟢 Autorizada';
       toast('🟢 NFe autorizada!');

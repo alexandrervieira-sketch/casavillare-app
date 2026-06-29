@@ -160,6 +160,27 @@ export default {
         return json({ ref, http: r.status, ...normalizeFocus(data, amb) });
       }
 
+      // Baixa o arquivo legal (XML autorizado) ou o DANFE (PDF) autenticado no Focus e
+      // devolve o conteúdo bruto — o CRM então arquiva no Firebase Storage (guarda de 5 anos).
+      if (req.method === 'GET' && url.pathname === '/arquivo') {
+        const ref = url.searchParams.get('ref');
+        const amb = url.searchParams.get('ambiente') === 'producao' ? 'producao' : 'homologacao';
+        const tipo = url.searchParams.get('tipo') === 'danfe' ? 'danfe' : 'xml';
+        const tok = focusToken(env, amb);
+        if (!ref) return json({ error: 'ref obrigatório' }, 400);
+        if (!tok) return json({ error: 'Token Focus não configurado para ' + amb }, 500);
+        // 1) consulta a nota para achar o caminho do arquivo
+        const r = await fetch(focusBase(amb) + '/v2/nfe/' + encodeURIComponent(ref), { headers: { 'Authorization': focusAuth(tok) } });
+        const data = await r.json().catch(() => ({}));
+        const path = tipo === 'danfe' ? data.caminho_danfe : data.caminho_xml_nota_fiscal;
+        if (!path) return json({ error: 'arquivo ainda não disponível', status: data.status || '' }, 404);
+        // 2) baixa o arquivo autenticado e repassa o conteúdo bruto
+        const f = await fetch(focusBase(amb) + path, { headers: { 'Authorization': focusAuth(tok) } });
+        if (!f.ok) return json({ error: 'falha ao baixar arquivo', http: f.status }, 502);
+        const buf = await f.arrayBuffer();
+        return new Response(buf, { headers: { ...CORS, 'Content-Type': tipo === 'danfe' ? 'application/pdf' : 'application/xml; charset=utf-8' } });
+      }
+
       return json({ error: 'rota não encontrada' }, 404);
     } catch (e) {
       return json({ error: String((e && e.message) || e) }, 500);
