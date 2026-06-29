@@ -679,6 +679,7 @@ textarea.inp{resize:vertical;min-height:68px;}
           <div id="_ls-bar-fill" style="height:100%;width:0%;background:#22C55E;transition:width .4s,background .4s;border-radius:4px;"></div>
         </div>
       </div>
+      <button onclick="trocarMinhaSenha()" style="width:100%;margin-bottom:6px;background:transparent;border:1px solid #3a3a3a;color:#cbb89a;border-radius:8px;padding:6px 8px;font-size:11.5px;font-weight:600;cursor:pointer;">🔑 Trocar minha senha</button>
       <button class="btn-logout" onclick="sair()">Sair</button>
     </div>
   </nav>
@@ -3523,6 +3524,35 @@ function lcMostrarLogin(){
   document.getElementById('lc-panel-login').style.display='';
   document.getElementById('l-erro').style.display='none';
 }
+// Bloqueia senhas óbvias/fracas (inclui a antiga "villare").
+const _SENHAS_FRACAS=['villare','casavillare','123456','1234567','12345678','123456789','senha','password','admin','000000','111111','qwerty','abc123','mudar123'];
+function _senhaFraca(s){ s=String(s||'').toLowerCase().trim(); return s.length<6 || _SENHAS_FRACAS.includes(s); }
+
+// Autoatendimento: usuário logado troca a própria senha (Firebase Auth).
+async function trocarMinhaSenha(){
+  if(typeof firebase==='undefined'||!firebase.auth||!firebase.auth().currentUser){ toast('Faça login primeiro.'); return; }
+  const nova=prompt('Nova senha (mín. 6 caracteres, não pode ser "villare"):'); if(nova===null) return;
+  if(_senhaFraca(nova)){ toast('Senha muito fácil. Escolha outra (6+ caracteres, nada de "villare").'); return; }
+  const conf=prompt('Repita a nova senha:'); if(conf===null) return;
+  if(nova!==conf){ toast('As senhas não coincidem.'); return; }
+  const user=firebase.auth().currentUser;
+  try{
+    await user.updatePassword(nova);
+    toast('✅ Senha alterada com sucesso!');
+  }catch(err){
+    if(err&&err.code==='auth/requires-recent-login'){
+      const atual=prompt('Por segurança, confirme sua senha ATUAL:'); if(atual===null) return;
+      try{
+        const cred=firebase.auth.EmailAuthProvider.credential(user.email, atual);
+        await user.reauthenticateWithCredential(cred);
+        await user.updatePassword(nova);
+        toast('✅ Senha alterada com sucesso!');
+      }catch(e2){ toast('❌ Não consegui ('+((e2&&e2.code)||'erro')+'). Verifique a senha atual.'); }
+    } else {
+      toast('❌ Não consegui alterar ('+((err&&err.code)||'erro')+').');
+    }
+  }
+}
 async function criarPrimeiraSenha(){
   const email = document.getElementById('pa-nome').value.trim().toLowerCase();
   const senha = document.getElementById('pa-senha').value;
@@ -3535,6 +3565,7 @@ async function criarPrimeiraSenha(){
   if(!email) return mostrarErro('Informe seu e-mail.');
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return mostrarErro('E-mail inválido.');
   if(senha.length<6) return mostrarErro('A senha deve ter pelo menos 6 caracteres.');
+  if(_senhaFraca(senha)) return mostrarErro('Essa senha é muito fácil (ex.: "villare"). Escolha outra.');
   if(senha!==conf) return mostrarErro('As senhas não coincidem.');
 
   // Verificar se e-mail existe na equipe

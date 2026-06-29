@@ -28,3 +28,5 @@ _check.js
 _purge_testes.js
 _purge_segredos.js
 _set_claims.js
+
+_check_villare.js
