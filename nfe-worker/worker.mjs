@@ -147,6 +147,24 @@ export default {
         return json({ ref, http: r.status, ...normalizeFocus(data, amb) });
       }
 
+      // Cancela uma NFe autorizada (dentro do prazo legal). Exige justificativa de 15 a 255 caracteres.
+      if (req.method === 'POST' && url.pathname === '/cancelar') {
+        const b = await req.json();
+        const amb = b.ambiente === 'producao' ? 'producao' : 'homologacao';
+        const tok = focusToken(env, amb);
+        const ref = b.ref;
+        const justificativa = String(b.justificativa || '').trim();
+        if (!ref || !tok) return json({ error: 'ref/token' }, 400);
+        if (justificativa.length < 15 || justificativa.length > 255) return json({ error: 'Justificativa deve ter de 15 a 255 caracteres' }, 400);
+        const r = await fetch(focusBase(amb) + '/v2/nfe/' + encodeURIComponent(ref), {
+          method: 'DELETE',
+          headers: { 'Authorization': focusAuth(tok), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ justificativa }),
+        });
+        const data = await r.json().catch(() => ({}));
+        return json({ http: r.status, ok: r.status >= 200 && r.status < 300, ...normalizeFocus(data, amb) });
+      }
+
       // Envia o DANFE+XML por e-mail aos destinatários (o Focus anexa e envia do servidor dele).
       if (req.method === 'POST' && url.pathname === '/email') {
         const b = await req.json();

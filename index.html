@@ -14887,6 +14887,32 @@ async function nfeEnviarEmail(){
     } else { toast('❌ Falha no envio'+(d.error?': '+d.error:(d.mensagem?': '+d.mensagem:''))); }
   }catch(e){ toast('❌ Erro ao enviar: '+((e&&e.message)||e)); }
 }
+// Cancela a NFe autorizada (dentro do prazo legal), com justificativa exigida pela SEFAZ.
+async function nfeCancelar(pedidoId){
+  const pid=pedidoId||_nfePedidoId;
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pid));
+  if(!p||!p.nfe||!p.nfe.ref){ toast('Sem nota para cancelar'); return; }
+  if(p.nfe.status!=='emitida'){ toast('Só dá para cancelar uma nota AUTORIZADA.'); return; }
+  const just=prompt('Justificativa do cancelamento (15 a 255 caracteres — exigência da SEFAZ):');
+  if(just===null) return;
+  const j=String(just).trim();
+  if(j.length<15||j.length>255){ toast('A justificativa precisa ter de 15 a 255 caracteres.'); return; }
+  if(!confirm(`⚠️ CANCELAR a NFe nº ${p.nfe.numero||''} — ${p.clienteNome||'cliente'}?\n\nÉ uma operação FISCAL DEFINITIVA na SEFAZ (só vale dentro do prazo legal, normalmente 24h).\n\nJustificativa:\n"${j}"\n\nConfirmar cancelamento?`)) return;
+  toast('Cancelando na SEFAZ…');
+  try{
+    const r=await fetch(NFE_PROXY_URL+'/cancelar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,justificativa:j})});
+    const d=await r.json().catch(()=>({}));
+    if(d.ok&&(d.status==='cancelado'||d.status==='processando_cancelamento')){
+      p.nfe.status='cancelada'; p.nfe.justificativaCancel=j; p.nfe.canceladaEm=new Date().toISOString(); save();
+      toast('✅ NFe cancelada!');
+      if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),200);
+      const sb=document.getElementById('nfe-status-box'); if(sb){ sb.style.display=''; sb.innerHTML='<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:14px 16px;font-size:13px;color:#991B1B;">🚫 <strong>NFe cancelada.</strong><br>Justificativa: '+_esc(j)+'</div>'; }
+      const b=document.getElementById('nfe-btn-emitir'); if(b) b.textContent='🚫 Cancelada';
+    } else {
+      toast('❌ Não foi possível cancelar'+(d.mensagem?': '+d.mensagem:(d.error?': '+d.error:'')));
+    }
+  }catch(e){ toast('❌ Erro ao cancelar: '+((e&&e.message)||e)); }
+}
 async function nfeConsultarStatusUI(){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
   const statusEl=document.getElementById('nfe-status-box');
@@ -14914,6 +14940,10 @@ async function nfeConsultarStatusUI(){
         ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:${p.nfe.xmlArquivado?'#166534':'#92400E'};">${p.nfe.xmlArquivado?'✅ XML arquivado com segurança (guarda de 5 anos)':'⏳ Arquivando XML/DANFE no sistema…'}</div>
         ${nfeEmailBoxHtml(p)}
+        <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;">
+          <button onclick="nfeCancelar()" class="btn btn-s btn-sm" style="font-size:11px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar esta nota</button>
+          <span style="font-size:10px;color:var(--gl);margin-left:6px;">dentro do prazo legal · exige justificativa</span>
+        </div>
       </div>`;
       const b=document.getElementById('nfe-btn-emitir'); if(b) b.textContent='🟢 Autorizada';
       toast('🟢 NFe autorizada!');
@@ -15248,6 +15278,10 @@ async function nfeEmitir(){
         ${data.xmlUrl?`<a href="${data.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:#92400E;">⏳ Arquivando XML/DANFE no sistema (guarda de 5 anos)…</div>
         ${p?nfeEmailBoxHtml(p):''}
+        <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;">
+          <button onclick="nfeCancelar()" class="btn btn-s btn-sm" style="font-size:11px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar esta nota</button>
+          <span style="font-size:10px;color:var(--gl);margin-left:6px;">dentro do prazo legal · exige justificativa</span>
+        </div>
       </div>`;
       btnEmitir.textContent='🟢 Autorizada';
       toast('🟢 NFe autorizada!');
@@ -15469,12 +15503,13 @@ function rFiscalEmitidas(){
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
             ${(p.nfe.ref&&p.nfe.status!=='emitida')?`<button onclick="nfeConsultarStatus('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">🔄 Consultar</button>`:''}
-            ${p.nfe.danfeUrl&&st==='emitida'
-              ?`<a href="${p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="font-size:11px;padding:5px 14px;">📄 DANFE</a>`
+            ${(p.nfe.danfeArquivado||p.nfe.danfeUrl)&&st==='emitida'
+              ?`<a href="${p.nfe.danfeArquivado||p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="font-size:11px;padding:5px 14px;">📄 DANFE</a>`
               :`<button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">📎 Informar DANFE</button>`}
-            ${p.nfe.xmlUrl&&st==='emitida'
-              ?`<a href="${p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="font-size:11px;padding:5px 14px;">📦 XML</a>`
+            ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)&&st==='emitida'
+              ?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="font-size:11px;padding:5px 14px;">📦 XML</a>`
               :''}
+            ${st==='emitida'?`<button onclick="nfeCancelar('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar</button>`:''}
             <button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">✏️ Editar</button>
             ${p.nfe.ambiente==='homologacao'?`<button onclick="nfeRefazerTeste('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;border-color:#A78B6D;color:#A78B6D;" title="Limpa a nota de teste e devolve para Pendentes">🧪 Refazer teste</button>`:''}
           </div>
