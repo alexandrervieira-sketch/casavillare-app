@@ -7964,6 +7964,12 @@ function rConfig(){
               <input class="inp" id="nfe-infcompl" placeholder="NFe referente ao contrato de venda #" value="${nfe.infCompl||'NFe referente ao contrato de venda #'}"/></div>
           </div>
 
+          <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+            <div><label class="lbl">📧 E-mail da contabilidade (opcional)</label>
+              <input class="inp" id="nfe-email-contador" type="email" placeholder="contabilidade@escritorio.com.br" value="${_esc(nfe.emailContador||'')}"/>
+              <div style="font-size:10px;color:var(--gl);margin-top:3px;">Quando preenchido, já vem junto na hora de enviar a NFe por e-mail (além do cliente).</div></div>
+          </div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Ambiente de emissão</label>
               <select class="inp" id="nfe-ambiente">
@@ -14843,6 +14849,44 @@ async function nfeArquivarDocs(p){
     console.info('[CVP] NFe arquivada no Storage:',chave);
   }catch(e){ console.warn('[CVP] arquivamento NFe falhou:',e&&e.message); }
 }
+// Pré-preenche os destinatários do e-mail: e-mail do cliente (cadastro/lead) + contador (config).
+function _nfeEmailsPrefill(p){
+  const cad=(ST.cadastros||[]).find(c=>String(c.id)===String(p.clienteCadId)||c.nome===p.clienteNome);
+  const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+  const clienteEmail=(cad&&cad.email)||(lead&&lead.email)||p.clienteEmail||'';
+  const contador=(ST.configNFe&&ST.configNFe.emailContador)||'';
+  const lista=[clienteEmail,contador].map(e=>String(e||'').trim()).filter(e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  return [...new Set(lista)].join(', ');
+}
+// HTML da seção "enviar por e-mail" (usada na caixa de nota autorizada).
+function nfeEmailBoxHtml(p){
+  const enviado=p.nfe&&p.nfe.emailEnviadoPara;
+  return `<div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:10px;">
+    <div style="font-size:11.5px;font-weight:700;color:#166534;margin-bottom:5px;">📧 Enviar DANFE + XML por e-mail</div>
+    <input id="nfe-email-dests" value="${_esc(_nfeEmailsPrefill(p))}" placeholder="cliente@email.com, contabilidade@escritorio.com" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px;box-sizing:border-box;"/>
+    <div style="font-size:10px;color:var(--gl);margin:3px 0 6px;">Cliente puxado do cadastro. Separe vários por vírgula (ex.: incluir o contador).</div>
+    <button onclick="nfeEnviarEmail()" class="btn btn-p btn-sm" style="font-size:12px;">📨 Enviar agora</button>
+    ${enviado?`<div style="font-size:10.5px;color:#166534;margin-top:5px;">✅ Já enviado para: ${_esc(enviado)}</div>`:''}
+  </div>`;
+}
+// Envia o DANFE/XML por e-mail (via Focus, que anexa os arquivos).
+async function nfeEnviarEmail(){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
+  if(!p||!p.nfe||!p.nfe.ref){ toast('Sem nota para enviar'); return; }
+  const inp=document.getElementById('nfe-email-dests');
+  const emails=(inp?inp.value:'').split(/[,;\s]+/).map(e=>e.trim()).filter(e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  if(!emails.length){ toast('Informe ao menos um e-mail válido'); return; }
+  toast('📨 Enviando…');
+  try{
+    const r=await fetch(NFE_PROXY_URL+'/email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,emails})});
+    const d=await r.json().catch(()=>({}));
+    if(d.ok){
+      p.nfe.emailEnviadoPara=emails.join(', '); p.nfe.emailEnviadoEm=new Date().toISOString(); save();
+      toast('✅ Enviado para '+emails.length+' destinatário(s)!');
+      const tag=document.getElementById('nfe-email-dests'); if(tag&&tag.parentElement&&!tag.parentElement.querySelector('.nfe-email-ok')){ const ok=document.createElement('div'); ok.className='nfe-email-ok'; ok.style.cssText='font-size:10.5px;color:#166534;margin-top:5px;'; ok.textContent='✅ Enviado para: '+emails.join(', '); tag.parentElement.appendChild(ok); }
+    } else { toast('❌ Falha no envio'+(d.error?': '+d.error:(d.mensagem?': '+d.mensagem:''))); }
+  }catch(e){ toast('❌ Erro ao enviar: '+((e&&e.message)||e)); }
+}
 async function nfeConsultarStatusUI(){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
   const statusEl=document.getElementById('nfe-status-box');
@@ -14869,6 +14913,7 @@ async function nfeConsultarStatusUI(){
         ${(p.nfe.danfeArquivado||p.nfe.danfeUrl)?`<a href="${p.nfe.danfeArquivado||p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
         ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:${p.nfe.xmlArquivado?'#166534':'#92400E'};">${p.nfe.xmlArquivado?'✅ XML arquivado com segurança (guarda de 5 anos)':'⏳ Arquivando XML/DANFE no sistema…'}</div>
+        ${nfeEmailBoxHtml(p)}
       </div>`;
       const b=document.getElementById('nfe-btn-emitir'); if(b) b.textContent='🟢 Autorizada';
       toast('🟢 NFe autorizada!');
@@ -14918,6 +14963,7 @@ function nfeSalvarConfig(){
   ST.configNFe.csosn     =document.getElementById('nfe-csosn').value||'102';
   ST.configNFe.natureza  =document.getElementById('nfe-natureza').value||'Venda de mercadorias';
   ST.configNFe.infCompl  =document.getElementById('nfe-infcompl').value||'NFe referente ao contrato de venda #';
+  ST.configNFe.emailContador=document.getElementById('nfe-email-contador')?.value.trim()||'';
   ST.configNFe.ambiente  =document.getElementById('nfe-ambiente').value;
   _cfgTouch('configNFe'); save(); toast('✅ Configuração NFe salva!'); rConfig();
 }
@@ -15201,6 +15247,7 @@ async function nfeEmitir(){
         ${data.danfeUrl?`<a href="${data.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
         ${data.xmlUrl?`<a href="${data.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:#92400E;">⏳ Arquivando XML/DANFE no sistema (guarda de 5 anos)…</div>
+        ${p?nfeEmailBoxHtml(p):''}
       </div>`;
       btnEmitir.textContent='🟢 Autorizada';
       toast('🟢 NFe autorizada!');

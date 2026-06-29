@@ -147,6 +147,24 @@ export default {
         return json({ ref, http: r.status, ...normalizeFocus(data, amb) });
       }
 
+      // Envia o DANFE+XML por e-mail aos destinatários (o Focus anexa e envia do servidor dele).
+      if (req.method === 'POST' && url.pathname === '/email') {
+        const b = await req.json();
+        const amb = b.ambiente === 'producao' ? 'producao' : 'homologacao';
+        const tok = focusToken(env, amb);
+        const ref = b.ref;
+        const emails = (Array.isArray(b.emails) ? b.emails : []).map(e => String(e || '').trim()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+        if (!ref || !tok) return json({ error: 'ref/token' }, 400);
+        if (!emails.length) return json({ error: 'Nenhum e-mail válido informado' }, 400);
+        const r = await fetch(focusBase(amb) + '/v2/nfe/' + encodeURIComponent(ref) + '/email', {
+          method: 'POST',
+          headers: { 'Authorization': focusAuth(tok), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails }),
+        });
+        const data = await r.json().catch(() => ({}));
+        return json({ http: r.status, ok: r.status >= 200 && r.status < 300, enviados: emails, ...data });
+      }
+
       if (req.method === 'GET' && url.pathname === '/status') {
         const ref = url.searchParams.get('ref');
         const amb = url.searchParams.get('ambiente') === 'producao' ? 'producao' : 'homologacao';
