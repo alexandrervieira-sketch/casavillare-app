@@ -3472,6 +3472,10 @@ function mesAnoStr(m,y){return y+'-'+(String(m+1).padStart(2,'0'));}
 function mesNomeStr(m,y){const s=new Date(y,m,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return s.charAt(0).toUpperCase()+s.slice(1);}
 function normTel(t){if(!t)return '';let s=t.replace(/\D/g,'');if(s.length===11||s.length===10)s='55'+s;return s;}
 function todosFunc(){return [...(ST.equipe.gestor||[]),...(ST.equipe.comercial||[]),...(ST.equipe.obras||[]),...(ST.equipe.outros||[])];}
+// Colaborador desligado? (campo situacao no cadastro). Usado para sumir das listas ATIVAS (metas/comissões),
+// preservando o histórico (continua aparecendo nos meses em que teve venda/comissão).
+function _estaDesligado(nome){ const c=ST.configs&&ST.configs[nome]; return !!(c&&c.situacao==='desligado'); }
+function _equipeAtiva(area){ return (ST.equipe[area]||[]).filter(p=>!_estaDesligado(p.nome)); }
 function infoFunc(nome){
   for(const area of['gestor','comercial','obras','outros']){
     const p=(ST.equipe[area]||[]).find(x=>x.nome===nome);
@@ -4146,7 +4150,7 @@ function rHomeMetas(){
   if(!ST.metas) ST.metas={};
   const metMes=ST.metas[mesKey]||{loja:0,vendedores:{}};
   const isG=ST.perfil==='gestor';
-  const todosVend=(ST.equipe.comercial||[]).map(v=>v.nome);
+  const todosVend=_equipeAtiva('comercial').map(v=>v.nome);
   const vends=todosVend; // todos veem a empresa inteira
 
   // Card total loja (visível a todos — dashboard da empresa inteira)
@@ -7115,6 +7119,7 @@ function rComissoes(){
     const cardsHtml=comercialLista.map((p,i)=>{
       const leadsP =leadsGanhosMes.filter(l=>l.responsavel===p.nome);
       const vendasP=vendasManMes.filter(v=>v.pessoa===p.nome);
+      if(_estaDesligado(p.nome)&&!leadsP.length&&!vendasP.length) return ''; // desligado sem vendas no mês → oculta (histórico preservado)
 
       // Combina leads + lançamentos manuais numa lista unificada
       const minhasVendas=[
@@ -7228,6 +7233,7 @@ function rComissoes(){
       const totalAndamento =pedsAndamento.reduce((a,pd)=>a+_calcComSupervisor(pd).valorCom,0);
       const totalGeral     =totalMan+totalSupLib;
       const pedsPend       =[...pedsBloq,...pedsAndamento];
+      if(_estaDesligado(p.nome)&&!comsMan.length&&!pedsLib.length&&!pedsPend.length) return ''; // desligado sem comissão no mês → oculta (histórico preservado)
 
       const _linhasPed=(lista)=>lista.map(pd=>{
         const c=_calcComSupervisor(pd);
@@ -13807,7 +13813,7 @@ function rMetas(){
   const metMes=ST.metas[_metMes]||{loja:0,vendedores:{}};
 
   // Vendedores comerciais
-  const vends=(ST.equipe.comercial||[]).map(v=>v.nome);
+  const vends=_equipeAtiva('comercial').map(v=>v.nome);
   // Gestor inclui si mesmo se tiver metas definidas
   const todosVend=isG
     ? vends
@@ -14696,7 +14702,7 @@ function abrirModalMeta(){
 
   document.getElementById('meta-loja-val').value=metMes.loja||'';
 
-  const vends=(ST.equipe.comercial||[]);
+  const vends=_equipeAtiva('comercial');
   const fmtMetaVal=v=>v>0?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   document.getElementById('meta-loja-val').value=fmtMetaVal(metMes.loja||0);
   document.getElementById('meta-vend-rows').innerHTML=vends.map(v=>`
