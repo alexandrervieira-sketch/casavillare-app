@@ -15320,8 +15320,14 @@ async function nfeEmitir(){
     const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
     const erroProvedor = data.error || (data.erros&&data.erros.length) || (data.http&&data.http>=400&&!data.autorizado&&data.status!=='processando_autorizacao');
     if(erroProvedor){
-      const msg=data.mensagem||data.error||(data.erros&&data.erros.length?data.erros.map(e=>e.mensagem||e.codigo||JSON.stringify(e)).join('; '):'')||'Falha na emissão';
-      statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">❌ <strong>Erro do Focus/SEFAZ:</strong> ${_esc(msg)}<br><span style="font-size:11px;">Confira CNPJ, IE, endereço e os fiscais (NCM/CFOP/CSOSN) e tente novamente.</span></div>`;
+      const _det=(data.erros&&data.erros.length)?data.erros.map(e=>e.mensagem||e.codigo||JSON.stringify(e)).join(' · '):'';
+      const _base=data.mensagem||data.error||'Falha na emissão';
+      const msg=_base+(_det&&_det!==_base?' — '+_det:'');
+      const _ehSchema=/schema/i.test(_base);
+      const _dica=(_ehSchema&&amb==='producao')
+        ? 'Os dados do destinatário validam (autorizam em homologação). Em PRODUÇÃO, verifique no painel da Focus se a empresa está <b>habilitada para produção</b> — certificado A1 vinculado e emissão de produção ativada (é configuração separada da homologação).'
+        : 'Confira CNPJ, IE, endereço e os fiscais (NCM/CFOP/CSOSN) e tente novamente.';
+      statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">❌ <strong>Erro do Focus/SEFAZ:</strong> ${_esc(msg)}<br><span style="font-size:11px;">${_dica}</span></div>`;
       btnEmitir.disabled=false; btnEmitir.textContent='🧾 Tentar novamente';
       return;
     }
