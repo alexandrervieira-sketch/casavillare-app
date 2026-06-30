@@ -11438,16 +11438,20 @@ let _pdFornsAdicionais=[];
 function pdAddFornecedor(){
   _pdFornsAdicionais.push({nome:'',valor:0,obs:''});
   pdRenderFornsLista(_pdFornsAdicionais);
+  pdCalcMargem();
 }
 function pdRemFornecedor(i){
   _pdFornsAdicionais.splice(i,1);
   pdRenderFornsLista(_pdFornsAdicionais);
+  pdCalcMargem();
 }
 function pdFornChange(sel,i){
   _pdFornsAdicionais[i].nome=sel.value;
+  pdCalcMargem();
 }
 function pdFornValorChange(inp,i){
   _pdFornsAdicionais[i].valor=_parseBRL(inp.value);
+  pdCalcMargem();
 }
 function pdFornObsChange(inp,i){
   _pdFornsAdicionais[i].obs=inp.value;
@@ -11731,6 +11735,7 @@ function abrirModalPedido(id){
     pdRenderFornsLista(_pdFornsAdicionais);
     _pdOutrosCustos=p.outrosCustos?_deepClone(p.outrosCustos):[];
     pdRenderOutrosCustos();
+    pdCalcMargem(); // recalcula DEPOIS de carregar forns/outros (o calc anterior rodava com os arrays ainda vazios)
     document.getElementById('pd-status').value         =p.status||'projeto';
     document.getElementById('pd-lead').value           =p.leadId||'';
     document.getElementById('pd-obs').value            =p.obs||'';
