@@ -3476,6 +3476,15 @@ function todosFunc(){return [...(ST.equipe.gestor||[]),...(ST.equipe.comercial||
 // preservando o histórico (continua aparecendo nos meses em que teve venda/comissão).
 function _estaDesligado(nome){ const c=ST.configs&&ST.configs[nome]; return !!(c&&c.situacao==='desligado'); }
 function _equipeAtiva(area){ return (ST.equipe[area]||[]).filter(p=>!_estaDesligado(p.nome)); }
+// Ativo NAQUELE mês? Desligado aparece até o mês da demissão (inclusive); do mês seguinte em diante, some.
+// Assim o passado é preservado e "da data pra frente" não aparece mais. Sem data → usa o mês atual como corte.
+function _ativoNoMes(nome, mes){
+  const c=ST.configs&&ST.configs[nome];
+  if(!c||c.situacao!=='desligado') return true;
+  const corte=((c.dataDemissao||'').slice(0,7))||new Date().toISOString().slice(0,7);
+  return String(mes||'')<=corte;
+}
+function _equipeAtivaMes(area, mes){ return (ST.equipe[area]||[]).filter(p=>_ativoNoMes(p.nome, mes)); }
 function infoFunc(nome){
   for(const area of['gestor','comercial','obras','outros']){
     const p=(ST.equipe[area]||[]).find(x=>x.nome===nome);
@@ -4150,7 +4159,7 @@ function rHomeMetas(){
   if(!ST.metas) ST.metas={};
   const metMes=ST.metas[mesKey]||{loja:0,vendedores:{}};
   const isG=ST.perfil==='gestor';
-  const todosVend=_equipeAtiva('comercial').map(v=>v.nome);
+  const todosVend=_equipeAtivaMes('comercial', mesKey).map(v=>v.nome);
   const vends=todosVend; // todos veem a empresa inteira
 
   // Card total loja (visível a todos — dashboard da empresa inteira)
@@ -7119,7 +7128,7 @@ function rComissoes(){
     const cardsHtml=comercialLista.map((p,i)=>{
       const leadsP =leadsGanhosMes.filter(l=>l.responsavel===p.nome);
       const vendasP=vendasManMes.filter(v=>v.pessoa===p.nome);
-      if(_estaDesligado(p.nome)&&!leadsP.length&&!vendasP.length) return ''; // desligado sem vendas no mês → oculta (histórico preservado)
+      if(!_ativoNoMes(p.nome, mesStr)) return ''; // desligado: some do mês seguinte à demissão em diante (passado preservado)
 
       // Combina leads + lançamentos manuais numa lista unificada
       const minhasVendas=[
@@ -7233,7 +7242,7 @@ function rComissoes(){
       const totalAndamento =pedsAndamento.reduce((a,pd)=>a+_calcComSupervisor(pd).valorCom,0);
       const totalGeral     =totalMan+totalSupLib;
       const pedsPend       =[...pedsBloq,...pedsAndamento];
-      if(_estaDesligado(p.nome)&&!comsMan.length&&!pedsLib.length&&!pedsPend.length) return ''; // desligado sem comissão no mês → oculta (histórico preservado)
+      if(!_ativoNoMes(p.nome, mesStr)) return ''; // desligado: some do mês seguinte à demissão em diante (passado preservado)
 
       const _linhasPed=(lista)=>lista.map(pd=>{
         const c=_calcComSupervisor(pd);
@@ -11899,9 +11908,9 @@ function cadSubTab(tipo){
         </div>
         ${(()=>{
           const todos=[
-            ...(ST.equipe.gestor||[]).map(p=>({...p,area:'Gestão'})),
-            ...(ST.equipe.comercial||[]).map(p=>({...p,area:'Comercial'})),
-            ...(ST.equipe.obras||[]).map(p=>({...p,area:'Obras'}))
+            ..._equipeAtiva('gestor').map(p=>({...p,area:'Gestão'})),
+            ..._equipeAtiva('comercial').map(p=>({...p,area:'Comercial'})),
+            ..._equipeAtiva('obras').map(p=>({...p,area:'Obras'}))
           ];
           if(!todos.length) return '';
           return `<div style="margin-top:28px;text-align:left;">
@@ -13813,7 +13822,7 @@ function rMetas(){
   const metMes=ST.metas[_metMes]||{loja:0,vendedores:{}};
 
   // Vendedores comerciais
-  const vends=_equipeAtiva('comercial').map(v=>v.nome);
+  const vends=_equipeAtivaMes('comercial', _metMes).map(v=>v.nome);
   // Gestor inclui si mesmo se tiver metas definidas
   const todosVend=isG
     ? vends
@@ -14702,7 +14711,7 @@ function abrirModalMeta(){
 
   document.getElementById('meta-loja-val').value=metMes.loja||'';
 
-  const vends=_equipeAtiva('comercial');
+  const vends=_equipeAtivaMes('comercial', _metMes);
   const fmtMetaVal=v=>v>0?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   document.getElementById('meta-loja-val').value=fmtMetaVal(metMes.loja||0);
   document.getElementById('meta-vend-rows').innerHTML=vends.map(v=>`
