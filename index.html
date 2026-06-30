@@ -10994,6 +10994,7 @@ function _rPedPipe(ped,hoje,statsHtml){
         ${(isG||ST.configsCom?.comissaoVisivel)?comMontBadge:''}
         <div class="ped-card-btns">
           <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
+          ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
           ${e.id!=='concluido'?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
         </div>
         ${e.id==='proj_exec'?(p.valorFabrica
@@ -11080,6 +11081,7 @@ function _rPedList(ped,hoje,statsHtml){
       <td><span class="badge" style="background:${e.cor}20;color:${e.cor};border:1px solid ${e.cor}40;white-space:nowrap;">${e.icon} ${e.label}</span></td>
       <td><div class="td-actions">
         <button class="btn btn-s btn-sm" onclick="abrirModalPedido('${_sid(p.id)}')">✏️</button>
+        ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button class="btn btn-s btn-sm" onclick="pedVoltar('${p.id}')" title="Voltar etapa (só gestor)">←</button>`:''}
         ${e.id!=='concluido'?`<button class="btn btn-s btn-sm" onclick="pedAvancar('${p.id}')" title="Avançar etapa">→</button>`:''}
       </div></td>
     </tr>`;
@@ -11099,6 +11101,21 @@ function pedAvancar(id){
   p.status=PED_ETAPAS[idx+1].id;
   p.statusChangedAt=new Date().toISOString().split('T')[0];
   save(); toast(`→ ${PED_ETAPAS[idx+1].icon} ${PED_ETAPAS[idx+1].label}`); rPedidos();
+}
+
+// Voltar etapa do pedido — exclusivo do gestor (corrigir avanço indevido, ex.: faltou anexar comprovante)
+function pedVoltar(id){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor pode voltar etapas.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
+  if(!p) return;
+  const idx=PED_ETAPAS.findIndex(e=>e.id===p.status);
+  if(idx<=0){ toast('Já na primeira etapa'); return; }
+  const anterior=PED_ETAPAS[idx-1];
+  if(!confirm(`Voltar este pedido de "${PED_ETAPAS[idx].label}" para "${anterior.label}"?`)) return;
+  p.status=anterior.id;
+  p.statusChangedAt=new Date().toISOString().split('T')[0];
+  p._uAt=Date.now();
+  save(); toast(`← ${anterior.icon} ${anterior.label}`); rPedidos();
 }
 
 function enviarComprovanteEmail(pedId){
