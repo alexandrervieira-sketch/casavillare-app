@@ -7871,10 +7871,10 @@ function rConfig(){
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
-              <label class="lbl">📧 E-mail para envio do comprovante <span style="color:#EF4444;">*</span></label>
-              <input class="inp" id="cfg-fab-email" type="email" value="${fab.email||''}" placeholder="pedidos@fabrica.com.br"
+              <label class="lbl">📧 E-mail(s) para envio do comprovante <span style="color:#EF4444;">*</span></label>
+              <input class="inp" id="cfg-fab-email" type="email" multiple value="${fab.email||''}" placeholder="pedidos@fabrica.com.br, financeiro@fabrica.com.br"
                 style="border-color:${fab.email?'#16A34A':'#C8A97A'};"/>
-              <div style="font-size:10px;color:var(--gl);margin-top:3px;">Este e-mail será usado no botão "Enviar à Fábrica" dos pedidos.</div>
+              <div style="font-size:10px;color:var(--gl);margin-top:3px;">Usado no botão "Enviar à Fábrica" dos pedidos. Para <b>vários e-mails</b>, separe por <b>vírgula</b> — todos recebem juntos.</div>
             </div>
             <div><label class="lbl">Telefone / WhatsApp</label>
               <input class="inp" id="cfg-fab-tel" value="${fab.tel||''}" placeholder="(11) 00000-0000"/></div>
@@ -11118,6 +11118,11 @@ function pedVoltar(id){
   save(); toast(`← ${anterior.icon} ${anterior.label}`); rPedidos();
 }
 
+// Aceita vários e-mails num campo só (separados por vírgula, ponto-e-vírgula, barra ou espaço) e devolve no formato do mailto.
+// NÃO separa por hífen — hífen é válido dentro de e-mails (ex.: meu-email@fabrica.com.br).
+function _emailsParaMailto(s){
+  return String(s||'').split(/[,;\/\s]+/).map(e=>e.trim()).filter(Boolean).join(',');
+}
 function enviarComprovanteEmail(pedId){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId));
   if(!p){toast('Pedido não encontrado');return;}
@@ -11167,7 +11172,7 @@ ${emp.email?'E-mail: '+emp.email:''}`
 
   // Abrir cliente de e-mail
   setTimeout(()=>{
-    window.location.href=`mailto:${fab.email}?subject=${assunto}&body=${corpo}`;
+    window.location.href=`mailto:${_emailsParaMailto(fab.email)}?subject=${assunto}&body=${corpo}`;
   },500); // aguarda o download iniciar
 
   // Registrar envio
@@ -11629,7 +11634,7 @@ function pdPgfabEnviarEmail(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   const assunto=encodeURIComponent(`Comprovante de Pagamento — ${nomeCliente}${nContrato!=='—'?' — Contrato '+nContrato:''}`);
   const corpo=encodeURIComponent(`Prezado(a) ${fab.contato||'Equipe'},\n\nSegue em anexo o comprovante de pagamento.\n\nCliente: ${nomeCliente}\nContrato: ${nContrato}\nValor: R$ ${fmtBRL(valor)}\nData: ${hoje}\n\n${fab.obs?'Obs: '+fab.obs+'\n\n':''}O comprovante foi baixado automaticamente — por favor anexe ao e-mail.\n\nAtenciosamente,\n${emp.nome||'Casa Villare Ambientes Planejados'}`);
-  setTimeout(()=>{ window.location.href=`mailto:${fab.email}?subject=${assunto}&body=${corpo}`; },500);
+  setTimeout(()=>{ window.location.href=`mailto:${_emailsParaMailto(fab.email)}?subject=${assunto}&body=${corpo}`; },500);
   if(_pdId){
     const idx=(ST.pedidos||[]).findIndex(x=>String(x.id)===String(_pdId));
     if(idx>=0){ ST.pedidos[idx].emailFabricaEnviado=hoje; save(); }
@@ -11662,7 +11667,7 @@ function pdAtEnviarEmail(){
   const tipoLabel=tipo==='fabrica'?'Erro de Fábrica':`Erro da Loja${subTipo?' — '+subTipo:''}`;
   const assunto=encodeURIComponent(`Assistência Técnica — ${nomeCliente}${nContrato!=='—'?' — Contrato '+nContrato:''}`);
   const corpo=encodeURIComponent(`Prezado(a) ${fab.contato||'Equipe'},\n\nInformamos a necessidade de Assistência Técnica para o pedido abaixo.\n\nCliente: ${nomeCliente}\nContrato: ${nContrato}\nTipo: ${tipoLabel}${custo>0?'\nCusto AT: R$ '+fmtBRL(custo):''}\nData: ${hoje}\n\n${_pdAtCompData?'Comprovante baixado automaticamente — por favor anexe ao e-mail.\n\n':''}Aguardamos retorno.\n\nAtenciosamente,\n${emp.nome||'Casa Villare Ambientes Planejados'}`);
-  setTimeout(()=>{ window.location.href=`mailto:${fab.email}?subject=${assunto}&body=${corpo}`; },500);
+  setTimeout(()=>{ window.location.href=`mailto:${_emailsParaMailto(fab.email)}?subject=${assunto}&body=${corpo}`; },500);
   if(_pdId){
     const idx=(ST.pedidos||[]).findIndex(x=>String(x.id)===String(_pdId));
     if(idx>=0){ ST.pedidos[idx].atEmailFabricaEnviado=hoje; save(); }
@@ -11695,12 +11700,16 @@ function abrirModalPedido(id){
   document.getElementById('pd-cliente-sel').innerHTML=
     '<option value="">— Selecione cliente cadastrado —</option>'+
     clis.map(c=>`<option value="${_sid(c.id)}">${_esc(c.nome)}${c.numContrato?' · Ctr '+_esc(c.numContrato):''}</option>`).join('');
-  // Popular select fábrica (só categoria "Fábrica de Móveis")
+  // Popular select fábrica: a fábrica PRINCIPAL (Configurações → Fábrica) + fábricas cadastradas como fornecedor
   const todasForns=(ST.cadastros||[]).filter(c=>c.tipo==='fornecedor');
-  const fabricas=todasForns.filter(f=>f.categoria==='Fábrica de Móveis');
+  const nomesFab=[
+    ...((ST.fabrica&&ST.fabrica.nome)?[ST.fabrica.nome]:[]),
+    ...todasForns.filter(f=>f.categoria==='Fábrica de Móveis').map(f=>f.nome)
+  ].filter(Boolean);
+  const fabricas=[...new Set(nomesFab)];
   let fabHtml='<option value="">— Selecionar fábrica —</option>';
-  if(!fabricas.length) fabHtml+='<option disabled>Nenhuma fábrica cadastrada</option>';
-  else fabHtml+=fabricas.map(f=>`<option value="${_esc(f.nome)}">${_esc(f.nome)}</option>`).join('');
+  if(!fabricas.length) fabHtml+='<option disabled>Cadastre a fábrica em Configurações → Fábrica (campo "Nome")</option>';
+  else fabHtml+=fabricas.map(n=>`<option value="${_esc(n)}">${_esc(n)}</option>`).join('');
   document.getElementById('pd-fornecedor').innerHTML=fabHtml;
   // Inicializa listas de custos vazias
   _pdFornsAdicionais=[];
