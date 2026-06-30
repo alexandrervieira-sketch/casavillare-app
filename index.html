@@ -1765,6 +1765,18 @@ textarea.inp{resize:vertical;min-height:68px;}
           </select></div>
       </div>
 
+      <!-- Datas retroativas — SÓ GESTOR (lançar vendas antigas no mês real, sem inflar o mês atual) -->
+      <div id="ld-datas-gestor" style="display:none;background:#F5F0FF;border:1px solid #DDD6FE;border-radius:10px;padding:12px 14px;margin-top:10px;">
+        <div style="font-size:11px;font-weight:700;color:#6D28D9;margin-bottom:6px;">🗓️ Datas (gestor) — use para lançar vendas retroativas no mês correto</div>
+        <div class="fr r2">
+          <div><label class="lbl">Data de entrada</label>
+            <input class="inp" type="date" id="ld-data-criacao"/></div>
+          <div><label class="lbl">Data de fechamento (venda)</label>
+            <input class="inp" type="date" id="ld-data-fechamento"/></div>
+        </div>
+        <div style="font-size:10px;color:var(--gl);margin-top:4px;">Deixe em branco para usar a data de hoje (vendas normais). Preencha só nas retroativas.</div>
+      </div>
+
       <!-- Motivo da Perda — exibido apenas quando status = perdido -->
       <div id="ld-motivo-perda-box" style="display:none;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:14px 16px;margin-top:10px;">
         <div style="font-size:12px;font-weight:700;color:#DC2626;margin-bottom:10px;">🔴 Motivo da Perda <span style="color:#DC2626;">*</span></div>
@@ -9338,6 +9350,7 @@ function abrirModalLead(id, etapaInicial){
   if(!_temPerm('crm')){ toast('🔒 Você não tem acesso ao CRM.'); return; }
   _ldId=id||null;
   _ldBaseUAt=id?(((ST.leads||[]).find(x=>String(x.id)===String(id))||{})._uAt||0):0; // base p/ detectar conflito ao salvar
+  { const _dg=document.getElementById('ld-datas-gestor'); if(_dg) _dg.style.display=(ST.perfil==='gestor')?'':'none'; } // datas retroativas só p/ gestor
   const resp=[...(ST.equipe.comercial||[]),...(ST.equipe.gestor||[])];
   document.getElementById('ld-resp').innerHTML=resp.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
   // Popular especificadores (parceiros)
@@ -9382,6 +9395,8 @@ function abrirModalLead(id, etapaInicial){
     ldAtualizarTaxaPreview();
     document.getElementById('ld-prox-contato').value=l.proxContato||'';
     document.getElementById('ld-status').value      =l.status||'ativo';
+    document.getElementById('ld-data-criacao').value   =l.dataCriacao||'';
+    document.getElementById('ld-data-fechamento').value=l.dataFechamento||'';
     // Motivo da perda
     const _mpSel=document.getElementById('ld-motivo-perda');
     const _mpObs=document.getElementById('ld-motivo-perda-obs');
@@ -9427,6 +9442,8 @@ function abrirModalLead(id, etapaInicial){
     document.getElementById('ld-resp').value=ST.area==='comercial'?ST.nome:(resp[0]?.nome||'');
     document.getElementById('ld-etapa').value=etapaInicial||'atendimento';
     document.getElementById('ld-status').value='ativo';
+    document.getElementById('ld-data-criacao').value='';
+    document.getElementById('ld-data-fechamento').value='';
     document.getElementById('ld-btn-delete').style.display='none';
     _ldXmlInfoList=[];
     ldAtualizarXmlInfo();
@@ -9477,7 +9494,17 @@ function salvarLead(){
   }
   const prevStatus=prevLead?.status||'ativo';
   const prevEtapa=prevLead?.etapa||'atendimento';
-  const dataCriacao=isEdit?(prevLead?.dataCriacao||new Date().toISOString().split('T')[0]):new Date().toISOString().split('T')[0];
+  const _hoje=new Date().toISOString().split('T')[0];
+  // Datas editáveis (SÓ gestor): em branco → comportamento normal (hoje). Preenchidas → venda retroativa.
+  const _ehGestor=ST.perfil==='gestor';
+  const _dtCriacaoCustom=_ehGestor?(document.getElementById('ld-data-criacao')?.value||''):'';
+  const _dtFechCustom=_ehGestor?(document.getElementById('ld-data-fechamento')?.value||''):'';
+  const _stGanho=document.getElementById('ld-status').value==='ganho';
+  const dataCriacao=_dtCriacaoCustom||(isEdit?(prevLead?.dataCriacao||_hoje):_hoje);
+  let _dataFech;
+  if(_dtFechCustom&&_stGanho) _dataFech=_dtFechCustom;                                  // gestor informou a data real da venda
+  else if(_stGanho) _dataFech=(isEdit&&prevStatus==='ganho')?(prevLead?.dataFechamento||_hoje):_hoje; // comportamento atual
+  else _dataFech=isEdit?(prevLead?.dataFechamento||null):null;                          // não-ganho: preserva o atual
   const lead={
     id:_ldId||_newId(), nome, _uAt:Date.now(),
     telefone:   document.getElementById('ld-tel').value.trim(),
@@ -9518,12 +9545,7 @@ function salvarLead(){
                       ? (document.getElementById('ld-motivo-perda-obs')?.value||'')
                       : (prevLead?.motivoPerdaObs||''),
     dataCriacao,
-    dataFechamento: isEdit
-      ? (document.getElementById('ld-status').value==='ganho' && prevStatus!=='ganho'
-          ? new Date().toISOString().split('T')[0]
-          : prevLead?.dataFechamento||(document.getElementById('ld-status').value==='ganho'?new Date().toISOString().split('T')[0]:null))
-      : (document.getElementById('ld-status').value==='ganho'
-          ? new Date().toISOString().split('T')[0] : null)
+    dataFechamento: _dataFech
   };
   // ── Rollback financeiro ao reverter lead de GANHO para outro status ──
   let _rollbackFinanceiro=false;
