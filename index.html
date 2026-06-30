@@ -1858,7 +1858,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div><label class="lbl">E-mail (envio automático)</label>
           <input class="inp" id="nfe-dest-email" placeholder="cliente@email.com"/></div>
         <div><label class="lbl">IE do destinatário</label>
-          <input class="inp" id="nfe-dest-ie" placeholder="Isento ou número"/></div>
+          <input class="inp" id="nfe-dest-ie" placeholder="IE do cliente — CNPJ exige; PF deixe em branco"/></div>
         <div><label class="lbl">Telefone</label>
           <input class="inp" id="nfe-dest-tel" placeholder="(19) 99999-9999"/></div>
       </div>
@@ -15092,7 +15092,7 @@ function abrirModalNFe(pedidoId){
   document.getElementById('nfe-dest-nome').value    =cad?.nome||p.clienteNome||'';
   document.getElementById('nfe-dest-doc').value     =cad?.cpfCli||cad?.documento||'';
   document.getElementById('nfe-dest-email').value   =cad?.email||lead?.email||'';
-  document.getElementById('nfe-dest-ie').value      ='Isento';
+  document.getElementById('nfe-dest-ie').value      =cad?.ie||cad?.inscricaoEstadual||''; // IE real do cadastro (não força "Isento"; SP exige a IE para CNPJ)
   document.getElementById('nfe-dest-tel').value     =cad?.telefone||lead?.telefone||'';
   // Logradouro e número separados
   const endRaw=cad?.enderecoCli||cad?.endereco||'';

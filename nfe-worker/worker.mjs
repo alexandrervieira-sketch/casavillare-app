@@ -35,9 +35,15 @@ function adapterFocus(nota) {
   const end = d.endereco || {};
   const doc = String(d.cpfCnpj || '').replace(/\D/g, '');
   const isCnpj = doc.length > 11;
-  // Contribuinte de ICMS? (tem IE de verdade, não "Isento"). Define indicador + consumidor final.
-  const ieDest = String(d.inscricaoEstadual || '').trim();
-  const contribuinte = !!ieDest && !/isent/i.test(ieDest);
+  // IE do destinatário (regra SEFAZ; SP NÃO aceita indicador 2 "isento"):
+  //   ind 1 = contribuinte com IE  → envia a IE (SP valida que a IE pertence ao CNPJ)
+  //   ind 9 = não contribuinte     → não envia IE (PF/consumidor; um CNPJ sem IE será
+  //                                   recusado pela SEFAZ pedindo a IE — ela é obrigatória p/ PJ)
+  const ieRaw = String(d.inscricaoEstadual || '').trim();
+  const ieNum = ieRaw.replace(/\D/g, '');
+  const temIE = ieNum.length > 0 && !/isent/i.test(ieRaw);
+  const indIE = temIE ? 1 : 9;
+  const ieOut = temIE ? ieNum : undefined;
   // Desconto da nota distribuído proporcionalmente entre os itens (último absorve o arredondamento).
   const itens = nota.itens || [];
   const totalBruto = itens.reduce((s, it) => s + (Number(it.valorBruto) || 0), 0);
@@ -48,12 +54,12 @@ function adapterFocus(nota) {
     data_emissao: new Date().toISOString(),
     tipo_documento: 1,        // 1 = saída
     finalidade_emissao: 1,    // 1 = normal
-    consumidor_final: contribuinte ? 0 : 1,   // não contribuinte → consumidor final (exigência SEFAZ)
+    consumidor_final: 1,   // móveis planejados: cliente é consumidor final (não revende)
     presenca_comprador: 1,
     cnpj_emitente: String((nota.emitente && nota.emitente.cnpj) || '').replace(/\D/g, ''),
     nome_destinatario: d.razaoSocial || '',
-    indicador_inscricao_estadual_destinatario: contribuinte ? 1 : 9, // 1=contribuinte, 9=não contribuinte
-    inscricao_estadual_destinatario: contribuinte ? ieDest : undefined,
+    indicador_inscricao_estadual_destinatario: indIE,
+    inscricao_estadual_destinatario: ieOut,
     logradouro_destinatario: end.logradouro || '',
     numero_destinatario: end.numero || 'S/N',
     bairro_destinatario: end.bairro || '',
