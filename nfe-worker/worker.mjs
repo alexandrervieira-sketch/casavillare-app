@@ -147,6 +147,24 @@ export default {
         return json({ ref, http: r.status, ...normalizeFocus(data, amb) });
       }
 
+      // Carta de Correção (CC-e): corrige erros de TEXTO de uma nota autorizada (15 a 1000 caracteres).
+      if (req.method === 'POST' && url.pathname === '/carta-correcao') {
+        const b = await req.json();
+        const amb = b.ambiente === 'producao' ? 'producao' : 'homologacao';
+        const tok = focusToken(env, amb);
+        const ref = b.ref;
+        const correcao = String(b.correcao || '').trim();
+        if (!ref || !tok) return json({ error: 'ref/token' }, 400);
+        if (correcao.length < 15 || correcao.length > 1000) return json({ error: 'A correção deve ter de 15 a 1000 caracteres' }, 400);
+        const r = await fetch(focusBase(amb) + '/v2/nfe/' + encodeURIComponent(ref) + '/carta_correcao', {
+          method: 'POST',
+          headers: { 'Authorization': focusAuth(tok), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ correcao }),
+        });
+        const data = await r.json().catch(() => ({}));
+        return json({ http: r.status, ok: r.status >= 200 && r.status < 300, ...normalizeFocus(data, amb) });
+      }
+
       // Cancela uma NFe autorizada (dentro do prazo legal). Exige justificativa de 15 a 255 caracteres.
       if (req.method === 'POST' && url.pathname === '/cancelar') {
         const b = await req.json();

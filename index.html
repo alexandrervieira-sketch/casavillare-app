@@ -14887,6 +14887,31 @@ async function nfeEnviarEmail(){
     } else { toast('❌ Falha no envio'+(d.error?': '+d.error:(d.mensagem?': '+d.mensagem:''))); }
   }catch(e){ toast('❌ Erro ao enviar: '+((e&&e.message)||e)); }
 }
+// Carta de Correção (CC-e): corrige erros de TEXTO de uma nota autorizada, sem cancelar.
+async function nfeCartaCorrecao(pedidoId){
+  const pid=pedidoId||_nfePedidoId;
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pid));
+  if(!p||!p.nfe||!p.nfe.ref){ toast('Sem nota para corrigir'); return; }
+  if(p.nfe.status!=='emitida'){ toast('Só dá para corrigir uma nota AUTORIZADA.'); return; }
+  const txt=prompt('Texto da Carta de Correção (15 a 1000 caracteres).\n\nNÃO pode alterar valores, impostos, datas, destinatário ou produtos — só corrige informações como dados complementares, transporte, observações, etc.:');
+  if(txt===null) return;
+  const c=String(txt).trim();
+  if(c.length<15||c.length>1000){ toast('A correção precisa ter de 15 a 1000 caracteres.'); return; }
+  if(!confirm(`Registrar Carta de Correção na NFe nº ${p.nfe.numero||''}?\n\n"${c}"`)) return;
+  toast('Registrando carta de correção na SEFAZ…');
+  try{
+    const r=await fetch(NFE_PROXY_URL+'/carta-correcao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,correcao:c})});
+    const d=await r.json().catch(()=>({}));
+    if(d.ok&&!d.error&&!(d.erros&&d.erros.length)){
+      if(!Array.isArray(p.nfe.cartasCorrecao)) p.nfe.cartasCorrecao=[];
+      p.nfe.cartasCorrecao.push({texto:c, em:new Date().toISOString()}); save();
+      toast('✅ Carta de correção registrada!');
+      if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),200);
+    } else {
+      toast('❌ Não registrou'+(d.mensagem?': '+d.mensagem:(d.error?': '+d.error:'')));
+    }
+  }catch(e){ toast('❌ Erro: '+((e&&e.message)||e)); }
+}
 // Cancela a NFe autorizada (dentro do prazo legal), com justificativa exigida pela SEFAZ.
 async function nfeCancelar(pedidoId){
   const pid=pedidoId||_nfePedidoId;
@@ -14940,9 +14965,10 @@ async function nfeConsultarStatusUI(){
         ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:${p.nfe.xmlArquivado?'#166534':'#92400E'};">${p.nfe.xmlArquivado?'✅ XML arquivado com segurança (guarda de 5 anos)':'⏳ Arquivando XML/DANFE no sistema…'}</div>
         ${nfeEmailBoxHtml(p)}
-        <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;">
-          <button onclick="nfeCancelar()" class="btn btn-s btn-sm" style="font-size:11px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar esta nota</button>
-          <span style="font-size:10px;color:var(--gl);margin-left:6px;">dentro do prazo legal · exige justificativa</span>
+        <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button onclick="nfeCartaCorrecao()" class="btn btn-s btn-sm" style="font-size:11px;">📝 Carta de correção</button>
+          <button onclick="nfeCancelar()" class="btn btn-s btn-sm" style="font-size:11px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar</button>
+          <span style="font-size:10px;color:var(--gl);">dentro do prazo legal</span>
         </div>
       </div>`;
       const b=document.getElementById('nfe-btn-emitir'); if(b) b.textContent='🟢 Autorizada';
@@ -15278,9 +15304,10 @@ async function nfeEmitir(){
         ${data.xmlUrl?`<a href="${data.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:#92400E;">⏳ Arquivando XML/DANFE no sistema (guarda de 5 anos)…</div>
         ${p?nfeEmailBoxHtml(p):''}
-        <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;">
-          <button onclick="nfeCancelar()" class="btn btn-s btn-sm" style="font-size:11px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar esta nota</button>
-          <span style="font-size:10px;color:var(--gl);margin-left:6px;">dentro do prazo legal · exige justificativa</span>
+        <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button onclick="nfeCartaCorrecao()" class="btn btn-s btn-sm" style="font-size:11px;">📝 Carta de correção</button>
+          <button onclick="nfeCancelar()" class="btn btn-s btn-sm" style="font-size:11px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar</button>
+          <span style="font-size:10px;color:var(--gl);">dentro do prazo legal</span>
         </div>
       </div>`;
       btnEmitir.textContent='🟢 Autorizada';
@@ -15509,6 +15536,7 @@ function rFiscalEmitidas(){
             ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)&&st==='emitida'
               ?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="font-size:11px;padding:5px 14px;">📦 XML</a>`
               :''}
+            ${st==='emitida'?`<button onclick="nfeCartaCorrecao('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">📝 CC-e</button>`:''}
             ${st==='emitida'?`<button onclick="nfeCancelar('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar</button>`:''}
             <button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">✏️ Editar</button>
             ${p.nfe.ambiente==='homologacao'?`<button onclick="nfeRefazerTeste('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;border-color:#A78B6D;color:#A78B6D;" title="Limpa a nota de teste e devolve para Pendentes">🧪 Refazer teste</button>`:''}
