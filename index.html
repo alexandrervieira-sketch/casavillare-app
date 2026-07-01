@@ -3598,22 +3598,25 @@ async function criarPrimeiraSenha(){
   if(_senhaFraca(senha)) return mostrarErro('Essa senha é muito fácil (ex.: "villare"). Escolha outra.');
   if(senha!==conf) return mostrarErro('As senhas não coincidem.');
 
-  // Verificar se e-mail existe na equipe
-  const pessoa=todosFunc().find(p=>_emailDePessoa(p)===email);
-  if(!pessoa) return mostrarErro('E-mail não encontrado. Verifique com o administrador.');
-  const emailKey=_emailDePessoa(pessoa);
+  // Autoriza pelo DOMÍNIO corporativo (a equipe da nuvem carrega após criar a conta).
+  if(!/@casavillare\.com\.br$/i.test(email)) return mostrarErro('Use seu e-mail corporativo @casavillare.com.br.');
 
   if(!(_fbReady && typeof firebase!=='undefined' && firebase.auth)) return mostrarErro('Sem conexão com o servidor. Tente novamente em instantes.');
-  const st=await _fbAuthCriar(emailKey, senha);
+  const st=await _fbAuthCriar(email, senha);
   if(st==='existe')  return mostrarErro('Este e-mail já tem senha. Use o login normal — ou “Esqueci a senha” para redefinir.');
   if(st==='fraca')   return mostrarErro('Senha muito fraca. Use ao menos 6 caracteres.');
   if(st==='offline') return mostrarErro('Sem conexão com o servidor. Tente novamente.');
   if(st!=='ok')      return mostrarErro('Não foi possível criar agora. Tente novamente.');
 
-  // createUser já autenticou a sessão. Carrega a nuvem e entra.
+  // createUser já autenticou a sessão. Carrega a nuvem (inclui a equipe) e entra.
   toast('Senha criada! Entrando...');
   try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
   catch(err){ console.warn('[CVP] load no 1º acesso falhou:',err&&err.message); }
+  const pessoa=todosFunc().find(p=>_emailDePessoa(p)===email); // equipe da NUVEM
+  if(!pessoa){
+    await _fbAuthLogout();
+    return mostrarErro('Conta criada, mas você ainda não está na Equipe. Peça ao gestor para te adicionar em Configurações → Equipe e faça o login.');
+  }
   const info=infoFunc(pessoa.nome);
   entrar(pessoa.nome, pessoa.perfil, info.area);
 }
@@ -3643,24 +3646,28 @@ async function fazerLogin(e){
   const erroEl=document.getElementById('l-erro');
   erroEl.style.display='none';
 
-  const todos=todosFunc();
-  const pessoa=todos.find(p=>_emailDePessoa(p)===input);
-  if(!pessoa){
-    erroEl.textContent='E-mail não encontrado. Verifique com o administrador.';
+  // Autoriza pelo DOMÍNIO corporativo. A equipe da NUVEM só carrega APÓS o login, então não dá
+  // pra exigir a equipe local aqui (isso bloqueava quem foi adicionado depois do setup inicial).
+  if(!/@casavillare\.com\.br$/i.test(input)){
+    erroEl.textContent='Use seu e-mail corporativo @casavillare.com.br.';
     erroEl.style.display='block'; return;
   }
-  const emailKey=_emailDePessoa(pessoa);
-
   // Firebase Auth é a ÚNICA autoridade. Sem login local nem senha padrão.
   if(!(_fbReady && typeof firebase!=='undefined' && firebase.auth)){
     erroEl.textContent='Sem conexão com o servidor. Aguarde alguns segundos e tente de novo.';
     erroEl.style.display='block'; return;
   }
-  const st=await _fbAuthLogin(emailKey, pass);
+  const st=await _fbAuthLogin(input, pass);
   if(st==='ok'){
-    // Nuvem é a fonte de verdade — carrega os dados de lá antes de entrar
+    // Nuvem é a fonte de verdade — carrega os dados (inclui a equipe) antes de entrar
     try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
     catch(err){ console.warn('[CVP] load da nuvem no login falhou:',err&&err.message); }
+    const pessoa=todosFunc().find(p=>_emailDePessoa(p)===input); // agora com a equipe da NUVEM
+    if(!pessoa){
+      await _fbAuthLogout();
+      erroEl.innerHTML='Sua conta existe, mas você não está na <b>Equipe</b>. Peça ao gestor para te adicionar em Configurações → Equipe.';
+      erroEl.style.display='block'; return;
+    }
     const info=infoFunc(pessoa.nome);
     entrar(pessoa.nome, pessoa.perfil, info.area);
     return;
