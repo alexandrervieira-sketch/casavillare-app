@@ -2736,6 +2736,9 @@ let _idSeq=0;
 // ao criar registros no mesmo milissegundo (colisão → um sobrescrevia o outro na nuvem).
 const _idSalt=Math.floor(Math.random()*1000).toString().padStart(3,'0');
 function _newId(){ return String(Date.now())+_idSalt+String((++_idSeq)%1000).padStart(3,'0'); }
+// Data/mês LOCAIS — evita o bug do toISOString() (que usa UTC e, à noite no Brasil, grava o DIA SEGUINTE).
+function _hojeLocal(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _mesLocal(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 // Sanitiza IDs usados em atributos onclick — permite apenas dígitos (todos os IDs são numéricos)
 function _sid(id){ return String(id||'').replace(/\D/g,''); }
 function _esc(s){
@@ -3481,7 +3484,7 @@ function _equipeAtiva(area){ return (ST.equipe[area]||[]).filter(p=>!_estaDeslig
 function _ativoNoMes(nome, mes){
   const c=ST.configs&&ST.configs[nome];
   if(!c||c.situacao!=='desligado') return true;
-  const corte=((c.dataDemissao||'').slice(0,7))||new Date().toISOString().slice(0,7);
+  const corte=((c.dataDemissao||'').slice(0,7))||_mesLocal();
   return String(mes||'')<=corte;
 }
 function _equipeAtivaMes(area, mes){ return (ST.equipe[area]||[]).filter(p=>_ativoNoMes(p.nome, mes)); }
@@ -3823,7 +3826,7 @@ function rHome(){
 // ── Central de Alertas / Pendências ───────────────────────────────────
 // Calcula pendências acionáveis filtradas pelo perfil. Tudo client-side.
 function _calcAlertas(){
-  const hoje=new Date().toISOString().slice(0,10);
+  const hoje=_hojeLocal();
   const _add=(d,n)=>{const x=new Date(hoje+'T12:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
   const lim7=_add(hoje,7), ago7=_add(hoje,-7);
   const perfil=ST.perfil, nome=ST.nome, area=ST.area, isG=perfil==='gestor';
@@ -4037,7 +4040,7 @@ function rHomeChart(){
 }
 
 function rHomeAgenda(){
-  const hoje=new Date().toISOString().slice(0,10);
+  const hoje=_hojeLocal();
   const proximos=(ST.eventos||[])
     .filter(e=>e.data>=hoje)
     .sort((a,b)=>a.data.localeCompare(b.data)||(a.horaIni||'').localeCompare(b.horaIni||''))
@@ -4681,7 +4684,7 @@ function abrirModalFolha(id, pessoaHint){
     document.getElementById('pf-adiant').value   =_fmtInputBRL(cfg.adiantamento);
     ['pf-pct','pf-rec','pf-bonus','pf-desco','pf-val-pago','pf-obs'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('pf-status').value   ='pendente';
-    document.getElementById('pf-data-pag').value =new Date().toISOString().split('T')[0];
+    document.getElementById('pf-data-pag').value =_hojeLocal();
     document.getElementById('pf-metodo').value   ='pix';
     document.getElementById('pf-titulo').textContent='Nova Folha';
     document.getElementById('pf-sub').textContent='';
@@ -4957,7 +4960,7 @@ function abrirModalComissao(id, fromFolha){
     document.getElementById('cn-obra').value ='';
     document.getElementById('cn-desc').value ='';
     document.getElementById('cn-valor').value='';
-    document.getElementById('cn-data').value =new Date().toISOString().split('T')[0];
+    document.getElementById('cn-data').value =_hojeLocal();
     document.getElementById('cn-obs').value  ='';
     document.getElementById('cn-titulo').textContent='Lançar Comissão';
     document.getElementById('cn-btn-delete').style.display='none';
@@ -5047,7 +5050,7 @@ function _syncAgendaLead(lead, prevLead){
   const entrouApres=lead.etapa==='apresentacao'&&prevLead?.etapa!=='apresentacao';
   if(entrouApres&&!evA){
     _tombClear('eventos','aga_'+lid); // recriou apresentação → limpa marca anterior
-    const dataEv=lead.proxContato||new Date().toISOString().slice(0,10);
+    const dataEv=lead.proxContato||_hojeLocal();
     ST.eventos.push({id:'aga_'+lid,agTipo:'apres',autoGerado:true,leadId:lid,
       data:dataEv,tipo:'apres',
       titulo:`📊 Apresentação: ${lead.nome}`,
@@ -5166,8 +5169,8 @@ function abrirModalAusencia(id){
     document.getElementById('aus-titulo').textContent='Solicitar Ausência';
     document.getElementById('aus-btn-del').style.display='none';
     document.getElementById('aus-tipo').value  ='folga';
-    document.getElementById('aus-inicio').value=new Date().toISOString().split('T')[0];
-    document.getElementById('aus-fim').value   =new Date().toISOString().split('T')[0];
+    document.getElementById('aus-inicio').value=_hojeLocal();
+    document.getElementById('aus-fim').value   =_hojeLocal();
     document.getElementById('aus-obs').value   ='';
     if(isG) document.getElementById('aus-status').value='pendente';
   }
@@ -5186,7 +5189,7 @@ function salvarAusencia(){
   if(fim<inicio){toast('Data fim deve ser igual ou posterior ao início');return;}
   if(!ST.ausencias) ST.ausencias=[];
   if(!_conflOk('ausencias',ST.ausencias,_ausId,'registro de ausência')) return;
-  const entrada={id:_ausId||_newId(),_uAt:Date.now(),pessoa,tipo,inicio,fim,obs,status,dataSolicitacao:new Date().toISOString().split('T')[0]};
+  const entrada={id:_ausId||_newId(),_uAt:Date.now(),pessoa,tipo,inicio,fim,obs,status,dataSolicitacao:_hojeLocal()};
   const idx=ST.ausencias.findIndex(a=>String(a.id)===String(_ausId));
   if(idx>=0) ST.ausencias[idx]=entrada; else ST.ausencias.push(entrada);
   _ausId=null; save(); toast('Ausência salva!');
@@ -5353,7 +5356,7 @@ function abrirModalEvento(id, dataPre){
     document.getElementById('ev-titulo-hdr').textContent='Novo Evento';
     document.getElementById('ev-titulo-inp').value='';
     document.getElementById('ev-tipo').value='reuniao';
-    document.getElementById('ev-data').value=dataPre||_agDiaSel||new Date().toISOString().slice(0,10);
+    document.getElementById('ev-data').value=dataPre||_agDiaSel||_hojeLocal();
     document.getElementById('ev-hora-ini').value='09:00';
     document.getElementById('ev-hora-fim').value='10:00';
     respSel.value=ST.nome||'';
@@ -5385,7 +5388,7 @@ function salvarEvento(){
     cliente:document.getElementById('ev-cliente').value.trim(),
     desc:document.getElementById('ev-desc').value.trim(),
     criadoPor:ST.nome||'',
-    criadoEm:new Date().toISOString().slice(0,10)
+    criadoEm:_hojeLocal()
   };
   if(!ST.eventos) ST.eventos=[];
   const idx=ST.eventos.findIndex(e=>String(e.id)===String(_agEvId));
@@ -6652,7 +6655,7 @@ function _coefFin(n, prazo){
 // ══════════════════════════════════════════════════════
 // COMISSÕES
 // ══════════════════════════════════════════════════════
-let _comMes = new Date().toISOString().slice(0,7); // 'YYYY-MM'
+let _comMes = _mesLocal(); // 'YYYY-MM'
 
 function comNavMes(d){
   const [a,m]=_comMes.split('-').map(Number);
@@ -6934,7 +6937,7 @@ function abrirModalVendaCom(id, pessoaNome){
     document.getElementById('vc-btn-delete').style.display='none';
     document.getElementById('vc-sub').textContent='Preencha os dados para calcular a comissão';
     if(pessoaNome) document.getElementById('vc-pessoa').value=pessoaNome;
-    document.getElementById('vc-data').value   =new Date().toISOString().split('T')[0];
+    document.getElementById('vc-data').value   =_hojeLocal();
     document.getElementById('vc-cliente').value='';
     document.getElementById('vc-bruto').value  ='';
     document.getElementById('vc-desconto').value='';
@@ -7027,7 +7030,7 @@ function abrirAdiantMont(pedidoId, valorTotal, totalAdiant){
     pessoa: 'Montagem',
     tipo: 'adiantamento_mont',
     valor,
-    mesAno: new Date().toISOString().slice(0,7),
+    mesAno: _mesLocal(),
     obs: `Adiantamento — ${clienteNome}`,
     criadoEm: new Date().toISOString()
   });
@@ -7603,7 +7606,7 @@ function abrirModalTrei(id){
   } else {
     document.getElementById('trei-modal-titulo').textContent='Novo Treinamento';
     document.getElementById('trei-titulo').value='';
-    document.getElementById('trei-data').value=new Date().toISOString().slice(0,10);
+    document.getElementById('trei-data').value=_hojeLocal();
     document.getElementById('trei-cat').value='vendas';
     document.getElementById('trei-dest').value='todos';
     document.getElementById('trei-desc').value='';
@@ -8871,7 +8874,7 @@ async function ldAnexarArquivos(files){
       const reader=new FileReader();
       reader.onload=async e=>{
         await cvDB.put({id,data:e.target.result});  // cache local (rápido p/ esta máquina)
-        _ldAnexos.push({id,nome:file.name,tipo:file.type,tamanho:file.size,dataUpload:new Date().toISOString().slice(0,10)}); _ldAnexosTouched=true;
+        _ldAnexos.push({id,nome:file.name,tipo:file.type,tamanho:file.size,dataUpload:_hojeLocal()}); _ldAnexosTouched=true;
         res();
       };
       reader.readAsDataURL(file);
@@ -9168,7 +9171,7 @@ function rCrm(){
 
   const valorPipe=visiveis.reduce((a,l)=>a+(l.valor||0),0);
   const valorFechado=ganhos.reduce((a,l)=>a+_leadValorVenda(l),0); // valor ao cliente (com desconto)
-  const hoje=new Date().toISOString().split('T')[0];
+  const hoje=_hojeLocal();
   const atrasados=ativos.filter(l=>l.proxContato&&l.proxContato<hoje).length;
   const _d12s=new Date();_d12s.setMonth(_d12s.getMonth()-12);
   const _corte12s=_d12s.toISOString().split('T')[0];
@@ -9329,7 +9332,7 @@ function togglePerdidos(){
 }
 
 function leadCardHtml(l,etapa){
-  const hoje=new Date().toISOString().split('T')[0];
+  const hoje=_hojeLocal();
   const atrasado=l.proxContato&&l.proxContato<hoje;
   const _d12=new Date();_d12.setMonth(_d12.getMonth()-12);
   const _corte12=_d12.toISOString().split('T')[0];
@@ -9509,7 +9512,7 @@ function salvarLead(){
   }
   const prevStatus=prevLead?.status||'ativo';
   const prevEtapa=prevLead?.etapa||'atendimento';
-  const _hoje=new Date().toISOString().split('T')[0];
+  const _hoje=_hojeLocal();
   // Datas editáveis (SÓ gestor): em branco → comportamento normal (hoje). Preenchidas → venda retroativa.
   const _ehGestor=ST.perfil==='gestor';
   const _dtCriacaoCustom=_ehGestor?(document.getElementById('ld-data-criacao')?.value||''):'';
@@ -9609,7 +9612,7 @@ function salvarLead(){
         responsavel:lead.responsavel||'',
         fornecedor:'', valor:_leadValorVenda(lead), valorFab:0,
         descricao:lead.ambiente||'',
-        data:new Date().toISOString().split('T')[0],
+        data:_hojeLocal(),
         prevProd:'', prevEntrega:'', prevMontagem:'',
         dataEntrega:'', dataMontagem:'',
         status:'venda_prog',
@@ -10870,7 +10873,7 @@ let _pdBaseUAt=0;  // _uAt do pedido no momento em que o modal abriu (detecção
 
 function rPedidos(){
   const ped=ST.pedidos||[];
-  const hoje=new Date().toISOString().split('T')[0];
+  const hoje=_hojeLocal();
   const vendaProg=ped.filter(p=>p.status==='venda_prog').length;
   const emProd=ped.filter(p=>p.status!=='concluido'&&p.status!=='venda_prog').length;
   const concluidos=ped.filter(p=>p.status==='concluido').length;
@@ -11099,7 +11102,7 @@ function pedAvancar(id){
   const idx=PED_ETAPAS.findIndex(e=>e.id===p.status);
   if(idx<0||idx>=PED_ETAPAS.length-1){toast('Já na última etapa');return;}
   p.status=PED_ETAPAS[idx+1].id;
-  p.statusChangedAt=new Date().toISOString().split('T')[0];
+  p.statusChangedAt=_hojeLocal();
   save(); toast(`→ ${PED_ETAPAS[idx+1].icon} ${PED_ETAPAS[idx+1].label}`); rPedidos();
 }
 
@@ -11113,7 +11116,7 @@ function pedVoltar(id){
   const anterior=PED_ETAPAS[idx-1];
   if(!confirm(`Voltar este pedido de "${PED_ETAPAS[idx].label}" para "${anterior.label}"?`)) return;
   p.status=anterior.id;
-  p.statusChangedAt=new Date().toISOString().split('T')[0];
+  p.statusChangedAt=_hojeLocal();
   p._uAt=Date.now();
   save(); toast(`← ${anterior.icon} ${anterior.label}`); rPedidos();
 }
@@ -11794,7 +11797,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-valor-fab').value='';
     document.getElementById('pd-valor').value='';
     document.getElementById('pd-descricao').value='';
-    document.getElementById('pd-data').value=new Date().toISOString().split('T')[0];
+    document.getElementById('pd-data').value=_hojeLocal();
     document.getElementById('pd-prev-prod').value='';
     document.getElementById('pd-prev-entrega').value='';
     document.getElementById('pd-prev-montagem').value='';
@@ -11867,7 +11870,7 @@ function salvarPedido(){
     pedido.comprovante     = _pdPgfabCompData||prev.comprovante||'';
     pedido.comprovanteNome = _pdPgfabCompNome||prev.comprovanteNome||'';
     // Atualiza statusChangedAt só quando a etapa realmente muda
-    const hoje=new Date().toISOString().split('T')[0];
+    const hoje=_hojeLocal();
     pedido.statusChangedAt = (prev.status!==pedido.status) ? hoje : (prev.statusChangedAt||pedido.data);
     // Preservar datas de marcos — se já existe mantém; se nulo e pedido já está nessa etapa, backfill com hoje
     pedido.dateExecAssn  = prev.dateExecAssn  || (pedido.status==='exec_assn'  ? hoje : null);
@@ -12238,7 +12241,7 @@ function abrirModalCadastro(id,tipo,dadosLead){
      'cad-cli-cidade-ent','cad-cli-uf-ent','cad-cli-cep-ent','cad-cli-prazo','cad-cli-condicao']
       .forEach(fid=>{const el=document.getElementById(fid);if(el)el.value='';});
     document.getElementById('cad-cli-numcontrato').value =_proxNumContrato();
-    document.getElementById('cad-cli-datacontrato').value=new Date().toISOString().split('T')[0];
+    document.getElementById('cad-cli-datacontrato').value=_hojeLocal();
     document.getElementById('cad-cli-mesmo-end').checked =false;
     document.getElementById('cad-cli-entrega-wrap').style.display='';
     _cadXmlInfoList=[];
@@ -12443,11 +12446,11 @@ function salvarCadastro(){
   const idx=ST.cadastros.findIndex(c=>String(c.id)===String(_cadId));
   if(idx>=0){
     // preserva dataCriacao e cadastradoPor originais na edição
-    cad.dataCriacao   = ST.cadastros[idx].dataCriacao   || new Date().toISOString().slice(0,10);
+    cad.dataCriacao   = ST.cadastros[idx].dataCriacao   || _hojeLocal();
     cad.cadastradoPor = ST.cadastros[idx].cadastradoPor || ST.nome;
     ST.cadastros[idx]=cad;
   } else {
-    cad.dataCriacao   = new Date().toISOString().slice(0,10);
+    cad.dataCriacao   = _hojeLocal();
     cad.cadastradoPor = ST.nome;
     ST.cadastros.push(cad);
   }
@@ -12460,7 +12463,7 @@ function salvarCadastro(){
     const lIdx=ST.leads.findIndex(l=>String(l.id)===String(cad.leadId));
     if(lIdx>=0 && ST.leads[lIdx].status!=='ganho'){
       ST.leads[lIdx].status='ganho';
-      ST.leads[lIdx].dataFechamento=new Date().toISOString().split('T')[0];
+      ST.leads[lIdx].dataFechamento=_hojeLocal();
     }
   }
 
@@ -12488,7 +12491,7 @@ function salvarCadastro(){
       ST.pedidos.push({
         id:_newId(),
         ...pedData,
-        fornecedor:'', data:new Date().toISOString().split('T')[0],
+        fornecedor:'', data:_hojeLocal(),
         prevProd:'', prevEntrega:'', prevMontagem:'',
         dataEntrega:'', dataMontagem:'',
         status:'venda_prog',
@@ -12867,7 +12870,7 @@ function cpTogglePago(){
 function cpPagarConta(id){
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
   if(!c||!confirm(`Confirmar pagamento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.descricao}?`)) return;
-  c.pago=true; c.dataPagamento=new Date().toISOString().slice(0,10);
+  c.pago=true; c.dataPagamento=_hojeLocal();
   save(); toast('✅ Pagamento registrado!'); rFinCP();
 }
 function cpEstornarConta(id){
@@ -12930,7 +12933,7 @@ function salvarCP(){
     valor,
     recorrencia:document.getElementById('cp-recorrencia').value,
     pago,
-    dataPagamento:pago?document.getElementById('cp-data-pag').value||new Date().toISOString().slice(0,10):null,
+    dataPagamento:pago?document.getElementById('cp-data-pag').value||_hojeLocal():null,
     obs:document.getElementById('cp-obs').value.trim()
   };
   if(!ST.contasPagar) ST.contasPagar=[];
@@ -13167,7 +13170,7 @@ function crReceberMassa(){
   const total=checks.reduce((a,el)=>a+parseFloat(el.dataset.valor||0),0);
   const fmtL=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   if(!confirm(`Confirmar recebimento de ${checks.length} parcela${checks.length!==1?'s':''} — total ${fmtL(total)}?`)) return;
-  const hoje=new Date().toISOString().slice(0,10);
+  const hoje=_hojeLocal();
   checks.forEach(el=>{
     const leadId=el.dataset.lead, condId=el.dataset.cond; // id é string de 19 dígitos — NUNCA coagir para Number (perde precisão)
     const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
@@ -13193,7 +13196,7 @@ function crAtualizarBarra(){
   if(totalEl) totalEl.textContent=fmtL(total);
 }
 function crExportarCSV(){
-  const hoje=new Date().toISOString().slice(0,10);
+  const hoje=_hojeLocal();
   const fmtL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const todasParcelas=[];
   const _csvSeenKeys=new Set();
@@ -13250,7 +13253,7 @@ function crReceberParcela(leadId, condId){
   if(!c) return;
   if(!confirm(`Confirmar recebimento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.desc}?`)) return;
   c.pago=true;
-  c.dataPagamento=new Date().toISOString().slice(0,10);
+  c.dataPagamento=_hojeLocal();
   save(); toast('✅ Recebimento registrado!'); rFinCR();
 }
 function crEstornarParcela(leadId, condId){
@@ -13265,7 +13268,7 @@ function crEstornarParcela(leadId, condId){
 let _crFiltroInicio='', _crFiltroFim='';
 function crFiltroRapido(meses){
   const hoje=new Date();
-  const ini=hoje.toISOString().slice(0,10);
+  const ini=_hojeLocal();
   const fim=new Date(hoje.getFullYear(), hoje.getMonth()+meses, hoje.getDate()).toISOString().slice(0,10);
   _crFiltroInicio=ini; _crFiltroFim=fim;
   const elI=document.getElementById('cr-filtro-ini');
@@ -13289,7 +13292,7 @@ function crFiltroLimpar(){
 function rFinCR(){
   if(ST.perfil!=='gestor'){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const fmtL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  const hoje=new Date().toISOString().slice(0,10);
+  const hoje=_hojeLocal();
 
   // Coleta TODAS as parcelas de todos os leads (dedup por leadId+condId)
   const todasParcelas=[];
@@ -13751,7 +13754,7 @@ if('serviceWorker' in navigator){
 // ══════════════════════════════════════════════════════
 // METAS
 // ══════════════════════════════════════════════════════
-let _metMes = new Date().toISOString().slice(0,7);
+let _metMes = _mesLocal();
 let _metSemana = 0; // 0=mês todo, 1-4=semana
 let _metChartInst = null;
 
@@ -15364,7 +15367,7 @@ async function nfeEmitir(){
     }
     const novoStatus=data.autorizado?'emitida':'processing';
     if(p){
-      p.nfe={ provider:'focus', ambiente:amb, ref, status:novoStatus, numero:data.numero||'', serie:data.serie||cfg.serie||'1', chaveAcesso:data.chave||'', danfeUrl:data.danfeUrl||'', xmlUrl:data.xmlUrl||'', mensagem:data.mensagem||'', emitidaEm:new Date().toISOString().slice(0,10) };
+      p.nfe={ provider:'focus', ambiente:amb, ref, status:novoStatus, numero:data.numero||'', serie:data.serie||cfg.serie||'1', chaveAcesso:data.chave||'', danfeUrl:data.danfeUrl||'', xmlUrl:data.xmlUrl||'', mensagem:data.mensagem||'', emitidaEm:_hojeLocal() };
       if(novoStatus==='emitida'&&ST.configNFe?.proxNum) ST.configNFe.proxNum=String(parseInt(ST.configNFe.proxNum||0)+1);
       save();
     }
@@ -15629,7 +15632,7 @@ function abrirModalNFeManual(pedidoId){
   const nfe=p.nfe||{};
   document.getElementById('nfe-manual-numero').value=nfe.numero||'';
   document.getElementById('nfe-manual-serie').value=nfe.serie||(ST.configNFe?.serie||'1');
-  document.getElementById('nfe-manual-data').value=nfe.emitidaEm||new Date().toISOString().slice(0,10);
+  document.getElementById('nfe-manual-data').value=nfe.emitidaEm||_hojeLocal();
   document.getElementById('nfe-manual-chave').value=nfe.chaveAcesso||'';
   document.getElementById('nfe-manual-danfe').value=nfe.danfeUrl||'';
   document.getElementById('nfe-manual-obs').value=nfe.obsManual||'';
@@ -15669,7 +15672,7 @@ initFirebase();
   let n=0;
   (ST.leads||[]).forEach(l=>{
     if(l.status==='ganho'&&!l.dataFechamento){
-      l.dataFechamento=l.dataCriacao||new Date().toISOString().split('T')[0];
+      l.dataFechamento=l.dataCriacao||_hojeLocal();
       n++;
     }
   });

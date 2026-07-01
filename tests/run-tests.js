@@ -196,6 +196,17 @@ test('newId é só dígitos e único', () => {
   assert(/^\d+$/.test(String(a)), 'só dígitos'); assert(a !== b, 'ids diferentes');
 });
 
+// Data local: _hojeLocal/_mesLocal usam fuso LOCAL (não UTC) — evita gravar "amanhã" à noite no Brasil
+test('hojeLocal formato YYYY-MM-DD e bate com a data local', () => {
+  const d = new Date();
+  const esperado = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(T._hojeLocal()), 'formato YYYY-MM-DD');
+  assertEq(T._hojeLocal(), esperado);
+});
+test('mesLocal é o prefixo YYYY-MM de hojeLocal', () => {
+  assertEq(T._mesLocal(), T._hojeLocal().slice(0, 7));
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);
