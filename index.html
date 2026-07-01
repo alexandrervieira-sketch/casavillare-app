@@ -6294,6 +6294,9 @@ function rRelRentabilidade(){
   const totalLucro=totalVenda-totalCusto;
   const margemGeral=totalVenda>0?totalLucro/totalVenda*100:0;
   const totalFornGeral=comCusto.reduce((a,p)=>a+(p.fornecedoresAdicionais||[]).reduce((s,f)=>s+(f.valor||0),0),0);
+  // Cascata completa (com projetista/montagem/supervisor): lucro Previsto × Realizado da loja
+  const totLucroPrev=comCusto.reduce((a,p)=>a+_cascataProjeto(p).previsto.lucro,0);
+  const totLucroReal=comCusto.reduce((a,p)=>a+_cascataProjeto(p).realizado.lucro,0);
 
   // Top fornecedores
   const fornMap={};
@@ -6311,7 +6314,7 @@ function rRelRentabilidade(){
     const r=calcRent(p);
     const corMargem=r.margem>=30?'#166534':r.margem>=15?'#D97706':'#DC2626';
     const fornNomes=(p.fornecedoresAdicionais||[]).filter(f=>f.nome).map(f=>_esc(f.nome)).join(', ')||'—';
-    return `<tr>
+    return `<tr onclick="abrirFichaRentab('${_sid(p.id)}')" style="cursor:pointer;" title="Ver cascata completa (previsto × real)">
       <td class="td-bold" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(p.clienteNome||'—')}</td>
       <td style="font-size:12px;color:var(--gl);">${_esc(r.lead?.responsavel||'—')}</td>
       <td style="text-align:right;font-weight:700;">${fmt(r.valorLiq)}</td>
@@ -6348,6 +6351,16 @@ function rRelRentabilidade(){
         <div style="font-size:11px;color:#6D28D9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Custo Fornecedores</div>
         <div style="font-size:18px;font-weight:800;color:#7C3AED;">${fmt(totalFornGeral)}</div>
         <div style="font-size:10px;color:#9CA3AF;">${topForn.length} fornecedor(es)</div>
+      </div>
+      <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Lucro Previsto (completo)</div>
+        <div style="font-size:18px;font-weight:800;color:${totLucroPrev>=0?'#166534':'#DC2626'};">${fmt(totLucroPrev)}</div>
+        <div style="font-size:10px;color:#9CA3AF;">c/ todas as comissões</div>
+      </div>
+      <div style="background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Lucro Realizado (completo)</div>
+        <div style="font-size:18px;font-weight:800;color:${totLucroReal>=0?'#047857':'#DC2626'};">${fmt(totLucroReal)}</div>
+        <div style="font-size:10px;color:#9CA3AF;">efetivado até agora</div>
       </div>
     </div>
 
@@ -6392,7 +6405,7 @@ function rRelRentabilidade(){
 
     <!-- Tabela por projeto -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;">Rentabilidade por Projeto (Top 30)</div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;">Rentabilidade por Projeto (Top 30) <span style="font-size:11px;font-weight:400;color:var(--gl);">— clique num projeto para ver a cascata completa (previsto × real)</span></div>
       <div class="tbl-wrap"><table>
         <thead><tr>
           <th>Cliente</th><th>Vendedor</th><th>Receita Líq.</th>
@@ -6404,6 +6417,73 @@ function rRelRentabilidade(){
     </div>
   </div>`;
 }
+
+// Ficha de rentabilidade de UM projeto — cascata completa em duas colunas (Previsto × Realizado)
+function abrirFichaRentab(pedId){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId));
+  if(!p){toast('Pedido não encontrado');return;}
+  const c=_cascataProjeto(p), P=c.previsto, R=c.realizado;
+  const nome=p.clienteNome||c.lead?.nome||p.descricao||'Projeto';
+  const neg=v=>v>0?`<span style="color:#DC2626;">− ${fmt(v)}</span>`:'—';
+  const linha=(lbl,vp,vr,o={})=>`
+    <tr>
+      <td style="padding:7px 14px;font-size:13px;${o.sub?'padding-left:26px;color:#6B7280;':'font-weight:600;'}">${lbl}</td>
+      <td style="padding:7px 14px;text-align:right;font-size:13px;">${o.raw?fmt(vp):neg(vp)}</td>
+      <td style="padding:7px 14px;text-align:right;font-size:13px;">${o.raw?fmt(vr):neg(vr)}</td>
+    </tr>`;
+  const corM=m=>m>=30?'#166534':m>=15?'#D97706':'#DC2626';
+  const html=`
+  <div id="ficha-rentab-bg" onclick="if(event.target===this)fecharFichaRentab()" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto;">
+    <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #E5E7EB;">
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#1F2937;">📊 Rentabilidade do Projeto</div>
+          <div style="font-size:13px;color:#6B7280;">${_esc(nome)}${p.nContrato?' · Contrato '+_esc(p.nContrato):''}</div>
+        </div>
+        <button onclick="fecharFichaRentab()" style="background:none;border:none;font-size:22px;color:#9CA3AF;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:8px 8px 4px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th style="text-align:left;padding:6px 14px;"></th>
+            <th style="text-align:right;padding:6px 14px;font-size:11px;color:#B45309;text-transform:uppercase;letter-spacing:.5px;">Previsto</th>
+            <th style="text-align:right;padding:6px 14px;font-size:11px;color:#047857;text-transform:uppercase;letter-spacing:.5px;">Realizado</th>
+          </tr></thead>
+          <tbody>
+            ${linha('Valor de Venda',P.vendaBruta,R.vendaBruta,{raw:true})}
+            ${P.desconto>0?linha('(−) Desconto',P.desconto,R.desconto):''}
+            ${P.taxa>0?linha('(−) Taxa cartão / financ.',P.taxa,R.taxa):''}
+            ${P.rt>0?linha('(−) RT',P.rt,R.rt):''}
+            <tr style="border-top:1px solid #E5E7EB;background:#F8FAFC;">
+              <td style="padding:7px 14px;font-size:13px;font-weight:800;">= Valor líquido</td>
+              <td style="padding:7px 14px;text-align:right;font-size:13px;font-weight:800;">${fmt(P.liquido)}</td>
+              <td style="padding:7px 14px;text-align:right;font-size:13px;font-weight:800;">${fmt(R.liquido)}</td>
+            </tr>
+            ${linha('(−) Comissão vendedor',P.comVend,R.comVend,{sub:true})}
+            ${linha('(−) Comissão projetista',P.comProj,R.comProj,{sub:true})}
+            ${linha('(−) Custo fábrica',P.custoFab,R.custoFab,{sub:true})}
+            ${P.custoForn>0?linha('(−) Custo fornecedores',P.custoForn,R.custoForn,{sub:true}):''}
+            ${P.custoOutros>0?linha('(−) Outros custos',P.custoOutros,R.custoOutros,{sub:true}):''}
+            ${linha('(−) Comissão montagem',P.comMont,R.comMont,{sub:true})}
+            ${linha('(−) Comissão supervisor de obra',P.comSup,R.comSup,{sub:true})}
+            <tr style="border-top:2px solid #CBD5E1;background:#F0FDF4;">
+              <td style="padding:11px 14px;font-size:14px;font-weight:800;">= LUCRO LÍQUIDO</td>
+              <td style="padding:11px 14px;text-align:right;font-size:14px;font-weight:800;color:${P.lucro>=0?'#166534':'#DC2626'};">${fmt(P.lucro)}<div style="font-size:11px;font-weight:700;color:${corM(P.margem)};">${Math.round(P.margem)}%</div></td>
+              <td style="padding:11px 14px;text-align:right;font-size:14px;font-weight:800;color:${R.lucro>=0?'#166534':'#DC2626'};">${fmt(R.lucro)}<div style="font-size:11px;font-weight:700;color:${corM(R.margem)};">${Math.round(R.margem)}%</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:10px 20px 18px;font-size:11px;color:#9CA3AF;line-height:1.5;">
+        <b>Previsto</b> = estimativa pelas fórmulas oficiais (comissões cheias). <b>Realizado</b> = custos lançados + comissões já liberadas${c.concluido?' — projeto concluído, valores finais.':'. Montagem e supervisor liberam quando o projeto é concluído.'}
+      </div>
+    </div>
+  </div>`;
+  let host=document.getElementById('ficha-rentab-host');
+  if(!host){ host=document.createElement('div'); host.id='ficha-rentab-host'; document.body.appendChild(host); }
+  host.innerHTML=html;
+}
+function fecharFichaRentab(){ const h=document.getElementById('ficha-rentab-host'); if(h) h.innerHTML=''; }
 
 // Etapas que indicam "atendimento/apresentação realizado"
 const _ETAPAS_ATEND=['apresentacao','projeto','execucao','pos_venda','concluido'];
@@ -6835,6 +6915,33 @@ function _calcComMontador(pedido){
   const totalAdiant=adiantamentos.reduce((a,c)=>a+(c.valor||0),0);
   const saldo=Math.max(0,valorCom-totalAdiant);
   return{valorBase,valorCom,pct,visivel,liberada,semValor:valorBase===0,mesAno,totalAdiant,saldo};
+}
+
+// Cascata completa de rentabilidade de um projeto (pedido): PREVISTO (estimativa) × REALIZADO (efetivado até agora).
+// Reusa as fórmulas oficiais: venda→desconto→taxa→RT→líquido, e as 4 comissões (vendedor, projetista, montador, supervisor) + custos.
+function _cascataProjeto(p){
+  const lead=p&&p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+  const vl=_vendaLiquido(lead||{});                 // {aposDesc, taxa, rt, liquido}
+  const vendaBruta=(lead&&lead.valor)||(p&&p.valor)||0;
+  const desconto=Math.max(0, vendaBruta - vl.aposDesc);
+  const liquido=vl.liquido;
+  const {pct:vendPct}=lead?_calcComVendaPontos(lead.desconto||0):{pct:0};
+  const comVend=liquido>0?Math.round(liquido*vendPct/100*100)/100:0;
+  const proj=_calcComProjetista(p), mont=_calcComMontador(p), sup=_calcComSupervisor(p);
+  const custoFab=(p&&p.valorFabrica)||0;
+  const custoForn=((p&&p.fornecedoresAdicionais)||[]).reduce((a,f)=>a+(f.valor||0),0);
+  const custoOutros=((p&&p.outrosCustos)||[]).reduce((a,c)=>a+(c.valor||0),0);
+  const base={vendaBruta,desconto,taxa:vl.taxa,rt:vl.rt,liquido,comVend,custoFab,custoForn,custoOutros};
+  const monta=(comProj,comMont,comSup)=>{
+    const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+comMont+comSup;
+    const lucro=liquido-custoTotal;
+    return {...base,comProj,comMont,comSup,custoTotal,lucro,margem:liquido>0?lucro/liquido*100:0};
+  };
+  return {
+    lead, concluido:(p&&p.status==='concluido'),
+    previsto:  monta(proj.comA+proj.comB+proj.comC, mont.valorCom, sup.valorCom),
+    realizado: monta(proj.totalLiberado, mont.liberada?mont.valorCom:0, sup.liberada?sup.valorCom:0)
+  };
 }
 
 function _vcParcOptions(tipo){
@@ -11020,6 +11127,7 @@ function _rPedPipe(ped,hoje,statsHtml){
         ${(isG||ST.configsCom?.comissaoVisivel)?comMontBadge:''}
         <div class="ped-card-btns">
           <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
+          ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();abrirFichaRentab('${p.id}')" title="Rentabilidade do projeto (previsto × real)">📊</button>`:''}
           ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
           ${e.id!=='concluido'?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
         </div>

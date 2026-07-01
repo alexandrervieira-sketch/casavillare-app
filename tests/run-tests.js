@@ -72,7 +72,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
-  _hojeLocal, _mesLocal
+  _hojeLocal, _mesLocal, _cascataProjeto
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -195,6 +195,17 @@ test('fsConfigDocs NUNCA inclui senhas', () => {
 test('newId é só dígitos e único', () => {
   const a = T._newId(), b = T._newId();
   assert(/^\d+$/.test(String(a)), 'só dígitos'); assert(a !== b, 'ids diferentes');
+});
+
+// Cascata de rentabilidade: lucro = líquido − custo total; realizado nunca custa mais que o previsto
+test('cascataProjeto: lucro = líquido − custoTotal e realizado ≤ previsto', () => {
+  T.ST.leads = [{ id: 'L1', valor: 100000, desconto: 0, responsavel: 'x' }];
+  const p = { id: 'P1', leadId: 'L1', valorFabrica: 20000, status: 'medicao' };
+  const c = T._cascataProjeto(p);
+  assert(_close(c.previsto.liquido, 100000), 'líquido = 100k (sem desc/taxa/RT)');
+  assert(_close(c.previsto.lucro, c.previsto.liquido - c.previsto.custoTotal), 'lucro = líquido − custoTotal');
+  assert(c.realizado.custoTotal <= c.previsto.custoTotal + 0.01, 'realizado nunca custa mais que previsto');
+  assert(_close(c.previsto.custoFab, 20000), 'custo fábrica entra na cascata');
 });
 
 // Data local: _hojeLocal/_mesLocal usam fuso LOCAL (não UTC) — evita gravar "amanhã" à noite no Brasil
