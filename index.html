@@ -12558,6 +12558,11 @@ function salvarCadastro(){
                   : (existente?.xmlInfoList || null);
   if(!ST.cadastros) ST.cadastros=[];
   const idx=ST.cadastros.findIndex(c=>String(c.id)===String(_cadId));
+  // Trava de duplicidade: novo cadastro de cliente para um lead que JÁ tem cadastro
+  if(idx<0 && tipo==='cliente' && cad.leadId){
+    const dup=(ST.cadastros||[]).find(c=>c.tipo==='cliente'&&String(c.leadId)===String(cad.leadId));
+    if(dup){ toast('⚠️ Já existe um cadastro de cliente para este lead — abra o existente para editar.'); return; }
+  }
   if(idx>=0){
     // preserva dataCriacao e cadastradoPor originais na edição
     cad.dataCriacao   = ST.cadastros[idx].dataCriacao   || _hojeLocal();
@@ -12599,8 +12604,16 @@ function salvarCadastro(){
       descricao:ambDesc||''
     };
     if(pidx>=0){
-      // Atualiza pedido existente preservando etapa e datas já preenchidas
-      ST.pedidos[pidx]={...ST.pedidos[pidx],...pedData};
+      // Pedido JÁ existe: atualiza só identidade + nº do contrato (não editáveis no pedido).
+      // PRESERVA valor / responsável / descrição — que o usuário pode ter editado na aba Pedidos
+      // (só preenche esses se estiverem vazios). Evita clobber silencioso.
+      const pe=ST.pedidos[pidx];
+      pe.clienteNome=cad.nome; pe.cliente=cad.nome; pe.clienteCadId=String(cad.id);
+      pe.nContrato=cad.numContrato||pe.nContrato||'';
+      if(!pe.valor)       pe.valor=pedData.valor;
+      if(!pe.responsavel) pe.responsavel=cad.respVenda||'';
+      if(!pe.descricao)   pe.descricao=pedData.descricao;
+      pe._uAt=Date.now();
     } else {
       ST.pedidos.push({
         id:_newId(),
@@ -12619,9 +12632,21 @@ function salvarCadastro(){
   fecharModal('modal-cadastro'); rCadastros();
 }
 
+// Antes de excluir um cadastro: avisa se há pedidos vinculados e LIMPA o vínculo (clienteCadId),
+// preservando o nome no pedido — evita pedido órfão e NFe emitida com dados fiscais em branco/errados.
+function _cadastroLimparVinculos(id){
+  const vinc=(ST.pedidos||[]).filter(p=>String(p.clienteCadId)===String(id));
+  if(!vinc.length) return true;
+  if(!confirm(`⚠️ Este cadastro tem ${vinc.length} pedido(s) vinculado(s).\nAo excluir, esses pedidos PERDEM o vínculo com os dados do cliente (endereço/CNPJ/IE usados na NFe) — o nome é mantido.\n\nContinuar mesmo assim?`)) return false;
+  const cad=(ST.cadastros||[]).find(c=>String(c.id)===String(id));
+  vinc.forEach(p=>{ if(cad&&!p.clienteNome) p.clienteNome=cad.nome; p.clienteCadId=''; p._uAt=Date.now(); });
+  return true;
+}
+
 function excluirCadastroModal(){
   if(!_gestorPodeExcluir()) return;
   if(!_cadId||!confirm('Excluir este cadastro?'))return;
+  if(!_cadastroLimparVinculos(_cadId)) return;
   _tombAdd('cadastros',_cadId);
   ST.cadastros=(ST.cadastros||[]).filter(c=>String(c.id)!==String(_cadId));
   _cadId=null;
@@ -12632,6 +12657,7 @@ function excluirCadastroModal(){
 function excluirCadastro(id){
   if(!_gestorPodeExcluir()) return;
   if(!confirm('Remover este cadastro?'))return;
+  if(!_cadastroLimparVinculos(id)) return;
   _tombAdd('cadastros',id);
   ST.cadastros=(ST.cadastros||[]).filter(c=>String(c.id)!==String(id));
   save(); toast('Removido'); rCadastros();
