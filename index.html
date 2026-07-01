@@ -3399,7 +3399,7 @@ function load(){
         }
       });
     });
-    ['comissoes','vendas','folhas','agenda','vendasCom','ausencias','leads','pedidos','cadastros','avisos','dre','treinamentos','repositorio'].forEach(k=>{if(!ST[k])ST[k]=[];});
+    ['comissoes','vendas','folhas','agenda','eventos','vendasCom','ausencias','leads','pedidos','cadastros','avisos','dre','treinamentos','repositorio'].forEach(k=>{if(!ST[k])ST[k]=[];});
     if(!ST.configs)    ST.configs={};
     if(!ST.senhas)     ST.senhas={};
     if(!ST.metas)      ST.metas={};
@@ -5459,11 +5459,12 @@ function rRelCustosFabrica(){
   const pedsAt=todosped.filter(p=>p.atErroTipo==='nosso'&&(p.atCusto||0)>0);
 
   // KPIs fábrica
+  // Denominador de % = venda LÍQUIDA (pós desconto+taxa+RT), coerente com Rentabilidade/ficha. % é PONDERADO (Σcusto/Σvenda).
+  const _liqPed=p=>_cascataProjeto(p).previsto.liquido;
   const totalFab=peds.reduce((s,p)=>s+(p.valorFabrica||0),0);
   const mediaFab=peds.length?totalFab/peds.length:0;
-  const pctMedio=peds.filter(p=>p.valor>0).length
-    ? peds.filter(p=>p.valor>0).reduce((s,p)=>s+((p.valorFabrica/p.valor)*100),0)/peds.filter(p=>p.valor>0).length
-    : 0;
+  const _vendaLiqFab=peds.reduce((s,p)=>s+_liqPed(p),0);
+  const pctMedio=_vendaLiqFab>0?(totalFab/_vendaLiqFab)*100:0;
   // KPIs AT
   const totalAt=pedsAt.reduce((s,p)=>s+(p.atCusto||0),0);
 
@@ -5474,10 +5475,10 @@ function rRelCustosFabrica(){
   const totalForn=todosped.reduce((s,p)=>s+_custoFornPed(p),0);
   const totalOutros=todosped.reduce((s,p)=>s+_custoOutrosPed(p),0);
   const totalReal=totalFab+totalForn+totalOutros;
-  const pedsRealVenda=todosped.filter(p=>p.valor>0&&_custoProjPed(p)>0);
-  const pctReal=pedsRealVenda.length
-    ? pedsRealVenda.reduce((s,p)=>s+((_custoProjPed(p)/p.valor)*100),0)/pedsRealVenda.length
-    : 0;
+  const pedsRealVenda=todosped.filter(p=>_custoProjPed(p)>0&&_liqPed(p)>0);
+  const _vendaLiqReal=pedsRealVenda.reduce((s,p)=>s+_liqPed(p),0);
+  const _custoRealSel=pedsRealVenda.reduce((s,p)=>s+_custoProjPed(p),0);
+  const pctReal=_vendaLiqReal>0?(_custoRealSel/_vendaLiqReal)*100:0;
 
   // Agrupar por mês (últimos 12)
   const meses=[];
@@ -5491,9 +5492,8 @@ function rRelCustosFabrica(){
     const mAt=pedsAt.filter(p=>{const d=new Date(p.dataCriacao||p.data||0);return d.getFullYear()===m.ano&&d.getMonth()===m.mes;});
     const totMes=mPeds.reduce((s,p)=>s+(p.valorFabrica||0),0);
     const totAt=mAt.reduce((s,p)=>s+(p.atCusto||0),0);
-    const pctMes=mPeds.filter(p=>p.valor>0).length
-      ? mPeds.filter(p=>p.valor>0).reduce((s,p)=>s+((p.valorFabrica/p.valor)*100),0)/mPeds.filter(p=>p.valor>0).length
-      : null;
+    const _liqMes=mPeds.reduce((s,p)=>s+_liqPed(p),0);
+    const pctMes=_liqMes>0?(totMes/_liqMes)*100:null;
     return {label:m.label, total:totMes, totalAt:totAt, pct:pctMes};
   });
 
@@ -5512,7 +5512,7 @@ function rRelCustosFabrica(){
   const linhasTabela=itensTabela.map(({ped:p, custo, tipo, sub, custoFab, custoForn, custoOutros})=>{
     const cli=(ST.clientes||[]).find(c=>String(c.id)===String(p.clienteId||p.clienteCadId));
     const nomeAmbiente=p.nomeAmbiente||(p.ambientes&&p.ambientes[0]&&p.ambientes[0].nome)||'—';
-    const pctP=p.valor?Math.round((custo/p.valor)*100):null;
+    const _liq=_liqPed(p); const pctP=_liq>0?Math.round((custo/_liq)*100):null;
     const cor=pctP==null?'':pctP<=35?'#166534':pctP<=45?'#D97706':'#DC2626';
     const tipoBadge=tipo==='at'
       ?`<span style="font-size:10px;background:#FFF1F2;color:#9F1239;border-radius:4px;padding:1px 5px;font-weight:700;">🛠️ AT${sub?' · '+sub:''}</span>`
@@ -6258,32 +6258,13 @@ function rRelRentabilidade(){
   const el=document.getElementById('rel-content');
   if(!el) return;
 
-  // Helper: calcula rentabilidade de um pedido
+  // Helper: rentabilidade de um pedido — FONTE ÚNICA = _cascataProjeto (líquido pós desconto+taxa+RT + as 4 comissões).
+  // Mesma base da ficha, para a tabela e a ficha reconciliarem.
   function calcRent(p){
-    const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
-    const valorBruto=p.valor||lead?.valor||0;
-    const desc=lead?.desconto||0;
-    const valorLiq=Math.round(valorBruto*(1-desc/100)*100)/100;
-
-    const custoFab=p.valorFabrica||0;
-    const custoForn=(p.fornecedoresAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0);
-    const custoOutros=(p.outrosCustos||[]).reduce((a,c)=>a+(c.valor||0),0);
-
-    // Comissão vendedor (simplificado: usa pct da folha se disponível, senão 0)
-    const mesRef=p.dataConcluido||p.data||'';
-    const mesAno=mesRef.substring(0,7);
-    const folhaVend=mesAno?(ST.folhas||[]).find(f=>f.pessoa===lead?.responsavel&&f.mesAno===mesAno):null;
-    const comVend=folhaVend
-      ?(folhaVend.vendas||[]).filter(v=>String(v.id)===String(lead?.id)).reduce((a,v)=>a+(v.valor||0)*(folhaVend.pct||0)/100,0)
-      :0;
-
-    // RT
-    const rt=lead?.rtPct&&valorLiq?Math.round(valorLiq*lead.rtPct/100*100)/100:0;
-
-    const custoTotal=custoFab+custoForn+custoOutros+comVend+rt;
-    const lucroBruto=valorLiq-custoTotal;
-    const margem=valorLiq>0?lucroBruto/valorLiq*100:0;
-    return {valorBruto,valorLiq,custoFab,custoForn,custoOutros,comVend,rt,custoTotal,lucroBruto,margem,lead};
+    const c=_cascataProjeto(p), r=c.previsto;
+    return {valorBruto:r.vendaBruta, valorLiq:r.liquido, custoFab:r.custoFab, custoForn:r.custoForn, custoOutros:r.custoOutros,
+      comVend:r.comVend, comProj:r.comProj, comMont:r.comMont, comSup:r.comSup, rt:r.rt,
+      custoTotal:r.custoTotal, lucroBruto:r.lucro, margem:r.margem, lead:c.lead, cascata:c};
   }
 
   const peds=(ST.pedidos||[]).filter(p=>p.valor||p.valorFabrica||(p.fornecedoresAdicionais||[]).length);
@@ -6338,10 +6319,6 @@ function rRelRentabilidade(){
       <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
         <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Custo Total</div>
         <div style="font-size:18px;font-weight:800;color:#B45309;">${fmt(totalCusto)}</div>
-      </div>
-      <div style="background:${totalLucro>=0?'#F0FDF4':'#FEF2F2'};border:1.5px solid ${totalLucro>=0?'#86EFAC':'#FCA5A5'};border-radius:12px;padding:14px 16px;">
-        <div style="font-size:11px;color:${totalLucro>=0?'#166534':'#DC2626'};text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Lucro Bruto</div>
-        <div style="font-size:18px;font-weight:800;color:${totalLucro>=0?'#166534':'#DC2626'};">${fmt(totalLucro)}</div>
       </div>
       <div style="background:${margemGeral>=25?'#F0FDF4':margemGeral>=10?'#FFFBEB':'#FEF2F2'};border:1.5px solid ${margemGeral>=25?'#86EFAC':margemGeral>=10?'#FDE68A':'#FCA5A5'};border-radius:12px;padding:14px 16px;">
         <div style="font-size:11px;color:var(--gl);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Margem Geral</div>
@@ -6921,17 +6898,23 @@ function _calcComMontador(pedido){
 // Reusa as fórmulas oficiais: venda→desconto→taxa→RT→líquido, e as 4 comissões (vendedor, projetista, montador, supervisor) + custos.
 function _cascataProjeto(p){
   const lead=p&&p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
-  const vl=_vendaLiquido(lead||{});                 // {aposDesc, taxa, rt, liquido}
-  const vendaBruta=(lead&&lead.valor)||(p&&p.valor)||0;
-  const desconto=Math.max(0, vendaBruta - vl.aposDesc);
-  const liquido=vl.liquido;
+  let vendaBruta, desconto, taxa, rt, liquido;
+  if(lead&&lead.valor){
+    const vl=_vendaLiquido(lead);                    // cascata desconto→taxa→RT
+    vendaBruta=lead.valor; desconto=Math.max(0,vendaBruta-vl.aposDesc);
+    taxa=vl.taxa; rt=vl.rt; liquido=vl.liquido;
+  } else {
+    // Sem lead vinculado: usa o valor de venda oficial do CRM (pós-desconto) como líquido; taxa/RT desconhecidos
+    liquido=_pedValorVendaCRM(p); vendaBruta=(p&&p.valor)||liquido;
+    desconto=Math.max(0,vendaBruta-liquido); taxa=0; rt=0;
+  }
   const {pct:vendPct}=lead?_calcComVendaPontos(lead.desconto||0):{pct:0};
-  const comVend=liquido>0?Math.round(liquido*vendPct/100*100)/100:0;
+  const comVend=liquido>0?Math.round(_aplicarMargemErro(liquido)*vendPct/100*100)/100:0;
   const proj=_calcComProjetista(p), mont=_calcComMontador(p), sup=_calcComSupervisor(p);
   const custoFab=(p&&p.valorFabrica)||0;
   const custoForn=((p&&p.fornecedoresAdicionais)||[]).reduce((a,f)=>a+(f.valor||0),0);
   const custoOutros=((p&&p.outrosCustos)||[]).reduce((a,c)=>a+(c.valor||0),0);
-  const base={vendaBruta,desconto,taxa:vl.taxa,rt:vl.rt,liquido,comVend,custoFab,custoForn,custoOutros};
+  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoForn,custoOutros};
   const monta=(comProj,comMont,comSup)=>{
     const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+comMont+comSup;
     const lucro=liquido-custoTotal;
@@ -10000,9 +9983,9 @@ function ldAtualizarTaxaPreview(){
         _condsFull.push({forma:_pendForma,valor:_pendValor,parcelas:_pendParc,absorcao:_pendAbs,prazoFin:_pendPrazo});
       }
       const taxaCartao    = _calcTaxaCartaoConds(_condsFull);
-      // RT do especificador (% sobre valor após desconto)
+      // RT do especificador (% sobre valor após desconto E taxa — igual a _vendaLiquido)
       const rtPct         = parseFloat(document.getElementById('ld-rt-pct')?.value)||0;
-      const rtValor       = rtPct>0?valorApdesc*(rtPct/100):0;
+      const rtValor       = rtPct>0?(valorApdesc-taxaCartao)*(rtPct/100):0;
       const valorLiq      = valorApdesc - taxaCartao - rtValor;
       const margemPct     = parseFloat(_getCfgCom().margemErro)||0;
       const valorLiqCom   = _aplicarMargemErro(valorLiq);
@@ -11372,8 +11355,8 @@ function pdCalcMargem(){
     ?_calcTaxaCartaoConds(lead.condicoesPgto)
     :(lead?.absorcao==='loja'&&lead?.taxaLoja>0?valorApdesc*(lead.taxaLoja/100):0);
 
-  // RT
-  const rt=(lead?.rtPct||0)>0?Math.round(valorApdesc*(lead.rtPct/100)*100)/100:0;
+  // RT — sobre o valor após desconto E taxa (igual a _vendaLiquido)
+  const rt=(lead?.rtPct||0)>0?Math.round((valorApdesc-taxaCartao)*(lead.rtPct/100)*100)/100:0;
 
   // Comissão vendedor (estimada — base no desconto do lead)
   const valorLiqCom=_aplicarMargemErro(valorApdesc-taxaCartao-rt);
@@ -14039,6 +14022,7 @@ function rMetas(){
       <div class="meta-loja-card" style="grid-column:1/-1">
         <div class="meta-loja-title">🏪 Meta da Loja — ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
         <div class="meta-loja-valor">${fmt(vendLoja)}</div>
+        <div style="font-size:10px;opacity:.75;margin:-2px 0 4px;">vendas em valor bruto (antes do desconto)</div>
         <div class="meta-loja-sub">Meta: ${metaLoja>0?fmt(metaLoja):'Não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pctLoja}%;background:#fff;opacity:.9;"></div></div>
         <div class="meta-pct">${pctLoja}% ${prazoTxt?'· '+prazoTxt:''}</div>
@@ -14050,6 +14034,7 @@ function rMetas(){
       <div class="meta-loja-card">
         <div class="meta-loja-title">🏪 Meta da Loja — ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
         <div class="meta-loja-valor">${fmt(vendLoja)}</div>
+        <div style="font-size:10px;opacity:.75;margin:-2px 0 4px;">vendas em valor bruto (antes do desconto)</div>
         <div class="meta-loja-sub">Meta: ${metaLoja>0?fmt(metaLoja):'Não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pctLoja}%;background:#fff;opacity:.9;"></div></div>
         <div class="meta-pct">${pctLoja}% ${prazoTxt?'· '+prazoTxt:''}</div>
