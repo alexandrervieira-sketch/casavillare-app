@@ -1719,7 +1719,7 @@ textarea.inp{resize:vertical;min-height:68px;}
           </div>
           <div id="ld-nadd-abs-wrap" style="display:none;flex-direction:column;gap:3px;width:95px;">
             <label id="ld-nadd-abs-lbl" style="font-size:10px;font-weight:600;color:var(--gl);text-transform:uppercase;">Taxa / Retenção</label>
-            <select id="ld-nadd-abs" onchange="ldAtualizarTaxaPreview()" style="padding:5px 8px;border:1.5px solid #E0D8CE;border-radius:7px;font-size:12px;background:#fff;">
+            <select id="ld-nadd-abs" onchange="ldAtualizarTaxaPreview();ldCondPreviewParcela()" style="padding:5px 8px;border:1.5px solid #E0D8CE;border-radius:7px;font-size:12px;background:#fff;">
               <option value="cliente">👤 Cliente</option>
               <option value="loja">🏪 Loja</option>
             </select>
@@ -9078,8 +9078,6 @@ function ldCondPreviewParcela(){
   const valorBruto=parseMoeda(document.getElementById('ld-valor')?.value);
   const desc=parseFloat(document.getElementById('ld-desconto')?.value)||0;
   const valorLiq=valorBruto*(1-desc/100);
-  const parcVal=valorLiq*coef;
-  const total=parcVal*n;
   const pv=document.getElementById('ld-nadd-preview-parc');
   if(!pv||!valorLiq) return;
   const fmtL=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -9087,15 +9085,25 @@ function ldCondPreviewParcela(){
   const row=tab.find(r=>r.p===n)||tab[tab.length-1];
   const retCol={d30:'r30',d60:'r60',d90:'r90'}[prazo]||'r30';
   const ret=row[retCol]||0;
-  pv.innerHTML=`${n}x de ${fmtL(parcVal)} = ${fmtL(total)} total · Retenção: ${ret}%`;
   // Auto-preenche o VALOR A FINANCIAR (o que falta alocar da venda), NÃO a parcela.
-  // A retenção e o fechamento das condições são sobre o valor financiado (ex.: 59.800), não sobre uma parcela.
   const valEl=document.getElementById('ld-nadd-valor');
-  if(valEl&&!_parseBRL(valEl.value)){
-    const jaAloc=(_ldCondPgto||[]).reduce((a,c)=>a+(parseFloat(c.valor)||0),0);
-    const restante=Math.round(Math.max(0,valorLiq-jaAloc)*100)/100;
-    valEl.value=_fmtInputBRL(restante);
+  const jaAloc=(_ldCondPgto||[]).reduce((a,c)=>a+(parseFloat(c.valor)||0),0);
+  const restante=Math.round(Math.max(0,valorLiq-jaAloc)*100)/100;
+  if(valEl&&!_parseBRL(valEl.value)) valEl.value=_fmtInputBRL(restante);
+  const financiado=_parseBRL(valEl?.value)||restante; // quanto está sendo financiado nesta condição
+  // A parcela depende de QUEM assume a retenção:
+  const abs=document.getElementById('ld-nadd-abs')?.value||'cliente';
+  let parcVal, total, extra;
+  if(abs==='loja'){
+    // Loja assume: o CLIENTE paga o próprio valor financiado (sem juros repassados); a retenção é CUSTO DA LOJA
+    parcVal=financiado/n; total=financiado;
+    extra=` · retenção ${ret}% = ${fmtL(financiado*ret/100)} (custo da loja)`;
+  } else {
+    // Cliente assume: parcela com coeficiente (juros do financiamento embutidos)
+    parcVal=financiado*coef; total=parcVal*n;
+    extra=` total · retenção ${ret}% (no cliente)`;
   }
+  pv.innerHTML=`${n}x de ${fmtL(parcVal)} = ${fmtL(total)}${extra}`;
 }
 function ldConfirmarAddCond(){
   const forma=document.getElementById('ld-nadd-forma')?.value||'pix';
