@@ -9088,8 +9088,14 @@ function ldCondPreviewParcela(){
   const retCol={d30:'r30',d60:'r60',d90:'r90'}[prazo]||'r30';
   const ret=row[retCol]||0;
   pv.innerHTML=`${n}x de ${fmtL(parcVal)} = ${fmtL(total)} total · Retenção: ${ret}%`;
+  // Auto-preenche o VALOR A FINANCIAR (o que falta alocar da venda), NÃO a parcela.
+  // A retenção e o fechamento das condições são sobre o valor financiado (ex.: 59.800), não sobre uma parcela.
   const valEl=document.getElementById('ld-nadd-valor');
-  if(valEl&&!_parseBRL(valEl.value)) valEl.value=_fmtInputBRL(parcVal);
+  if(valEl&&!_parseBRL(valEl.value)){
+    const jaAloc=(_ldCondPgto||[]).reduce((a,c)=>a+(parseFloat(c.valor)||0),0);
+    const restante=Math.round(Math.max(0,valorLiq-jaAloc)*100)/100;
+    valEl.value=_fmtInputBRL(restante);
+  }
 }
 function ldConfirmarAddCond(){
   const forma=document.getElementById('ld-nadd-forma')?.value||'pix';
