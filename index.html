@@ -5467,6 +5467,18 @@ function rRelCustosFabrica(){
   // KPIs AT
   const totalAt=pedsAt.reduce((s,p)=>s+(p.atCusto||0),0);
 
+  // Custo REAL do projeto = fábrica + fornecedores adicionais + outros custos
+  const _custoFornPed=p=>(p.fornecedoresAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0);
+  const _custoOutrosPed=p=>(p.outrosCustos||[]).reduce((a,c)=>a+(c.valor||0),0);
+  const _custoProjPed=p=>(p.valorFabrica||0)+_custoFornPed(p)+_custoOutrosPed(p);
+  const totalForn=todosped.reduce((s,p)=>s+_custoFornPed(p),0);
+  const totalOutros=todosped.reduce((s,p)=>s+_custoOutrosPed(p),0);
+  const totalReal=totalFab+totalForn+totalOutros;
+  const pedsRealVenda=todosped.filter(p=>p.valor>0&&_custoProjPed(p)>0);
+  const pctReal=pedsRealVenda.length
+    ? pedsRealVenda.reduce((s,p)=>s+((_custoProjPed(p)/p.valor)*100),0)/pedsRealVenda.length
+    : 0;
+
   // Agrupar por mês (últimos 12)
   const meses=[];
   const hoje=new Date();
@@ -5493,11 +5505,11 @@ function rRelCustosFabrica(){
   // Tabela unificada — custo fábrica + AT (nosso), top 20 por custo
   const subLabels={projetos:'Projetos',medicao:'Medição',supervisao:'Supervisão',montagem:'Montagem'};
   const itensTabela=[
-    ...peds.map(p=>({ped:p, custo:p.valorFabrica, tipo:'fab'})),
+    ...peds.map(p=>({ped:p, custo:_custoProjPed(p), custoFab:p.valorFabrica||0, custoForn:_custoFornPed(p), custoOutros:_custoOutrosPed(p), tipo:'fab'})),
     ...pedsAt.map(p=>({ped:p, custo:p.atCusto, tipo:'at', sub:subLabels[p.atErroSubTipo]||''}))
   ].sort((a,b)=>b.custo-a.custo).slice(0,25);
 
-  const linhasTabela=itensTabela.map(({ped:p, custo, tipo, sub})=>{
+  const linhasTabela=itensTabela.map(({ped:p, custo, tipo, sub, custoFab, custoForn, custoOutros})=>{
     const cli=(ST.clientes||[]).find(c=>String(c.id)===String(p.clienteId||p.clienteCadId));
     const nomeAmbiente=p.nomeAmbiente||(p.ambientes&&p.ambientes[0]&&p.ambientes[0].nome)||'—';
     const pctP=p.valor?Math.round((custo/p.valor)*100):null;
@@ -5510,7 +5522,7 @@ function rRelCustosFabrica(){
       <td style="padding:7px 10px;font-size:12px;color:#6B7280;">${nomeAmbiente}</td>
       <td style="padding:7px 10px;">${tipoBadge}</td>
       <td style="padding:7px 10px;font-size:13px;text-align:right;">${p.valor?fmt(p.valor):'—'}</td>
-      <td style="padding:7px 10px;font-size:13px;text-align:right;font-weight:700;color:${tipo==='at'?'#9F1239':'#F59E0B'};">${fmt(custo)}</td>
+      <td style="padding:7px 10px;font-size:13px;text-align:right;font-weight:700;color:${tipo==='at'?'#9F1239':'#F59E0B'};">${fmt(custo)}${tipo==='fab'&&((custoForn||0)>0||(custoOutros||0)>0)?`<div style="font-size:10px;font-weight:400;color:#9CA3AF;white-space:nowrap;">🏭 ${fmt(custoFab)}${(custoForn||0)>0?' · 🔩 '+fmt(custoForn):''}${(custoOutros||0)>0?' · 📦 '+fmt(custoOutros):''}</div>`:''}</td>
       <td style="padding:7px 10px;text-align:center;"><span style="font-weight:700;font-size:12px;color:${cor};">${pctP!=null?pctP+'%':'—'}</span></td>
     </tr>`;
   }).join('');
@@ -5532,8 +5544,19 @@ function rRelCustosFabrica(){
         <div style="font-size:18px;font-weight:800;color:#B45309;">${fmt(mediaFab)}</div>
       </div>
       <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
-        <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">% Médio Custo/Venda</div>
-        <div style="font-size:24px;font-weight:800;color:${pctMedio<=35?'#166534':pctMedio<=45?'#D97706':'#DC2626'};">${pctMedio?Math.round(pctMedio)+'%':'—'}</div>
+        <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🔩 Custo Fornecedores</div>
+        <div style="font-size:18px;font-weight:800;color:#B45309;">${fmt(totalForn)}</div>
+        ${totalOutros>0?`<div style="font-size:10px;color:#9CA3AF;margin-top:2px;">+ 📦 ${fmt(totalOutros)} outros</div>`:''}
+      </div>
+      <div style="background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">💰 Custo Total (real)</div>
+        <div style="font-size:18px;font-weight:800;color:#047857;">${fmt(totalReal)}</div>
+        <div style="font-size:10px;color:#9CA3AF;margin-top:2px;">Fáb. + Fornec. + Outros</div>
+      </div>
+      <div style="background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">% Real Custo/Venda</div>
+        <div style="font-size:24px;font-weight:800;color:${pctReal<=35?'#166534':pctReal<=45?'#D97706':'#DC2626'};">${pctReal?Math.round(pctReal)+'%':'—'}</div>
+        <div style="font-size:10px;color:#9CA3AF;margin-top:2px;">só fáb.: ${pctMedio?Math.round(pctMedio)+'%':'—'}</div>
       </div>
       <div style="background:#FFF1F2;border:1.5px solid #FECDD3;border-radius:12px;padding:14px 16px;">
         <div style="font-size:11px;color:#9F1239;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🛠️ Custo AT (Loja)</div>
@@ -5611,7 +5634,7 @@ function rRelCustosFabrica(){
 
     <!-- Tabela -->
     <div style="background:var(--card);border:1px solid var(--brd);border-radius:12px;overflow:hidden;">
-      <div style="padding:12px 16px;border-bottom:1px solid var(--brd);font-size:13px;font-weight:700;color:var(--txt);">Top 25 — Maiores Custos (Fábrica + AT)</div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--brd);font-size:13px;font-weight:700;color:var(--txt);">Top 25 — Maiores Custos por Projeto (Fáb. + Fornec. + Outros) e AT</div>
       <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;">
           <thead>
