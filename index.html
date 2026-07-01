@@ -8235,6 +8235,7 @@ function colabAtualizarTipoPessoa(){
 // Permissões padrão por perfil (usadas ao criar novo colaborador ou ao trocar perfil sem permissões salvas)
 const _PERMS_PADRAO={
   gestor:     {crm:1,ped:1,agenda:1,metas:1,com:1,cad:1,fin:1,rel:1,repo:1,trei:1,fiscal:1,config:1},
+  financeiro: {crm:0,ped:1,agenda:1,metas:0,com:1,cad:1,fin:1,rel:1,repo:1,trei:1,fiscal:1,config:0},
   vendedor:   {crm:1,ped:1,agenda:1,metas:1,com:1,cad:1,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
   supervisor: {crm:0,ped:1,agenda:1,metas:1,com:1,cad:1,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
   projetista: {crm:0,ped:1,agenda:1,metas:1,com:1,cad:1,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},

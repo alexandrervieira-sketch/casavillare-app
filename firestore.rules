@@ -8,7 +8,7 @@ rules_version = '2';
 // P0-4 FASE 1 (permissões por perfil no servidor):
 //   - O perfil vem do custom claim `request.auth.token.perfil` (carimbado via Admin).
 //   - Coleções financeiras (dre, folhas, comissoes, vendasCom): leitura E escrita
-//     SÓ para gestor. As demais (leads, pedidos, agenda, cadastros, _config…)
+//     para gestor OU financeiro. As demais (leads, pedidos, agenda, cadastros, _config…)
 //     seguem para qualquer autenticado.
 //   - _audit: leitura SÓ gestor; create por qualquer autenticado (o app registra);
 //     update/delete NUNCA (trilha inviolável).
@@ -30,6 +30,13 @@ service cloud.firestore {
     function isGestor() {
       return autenticado() && request.auth.token.perfil == 'gestor';
     }
+    function isFinanceiro() {
+      return autenticado() && request.auth.token.perfil == 'financeiro';
+    }
+    // Quem pode ler/escrever as coleções financeiras: gestor OU financeiro
+    function podeFinanceiro() {
+      return isGestor() || isFinanceiro();
+    }
     function isFinanceira(c) {
       return c == 'dre' || c == 'folhas' || c == 'comissoes' || c == 'vendasCom';
     }
@@ -43,8 +50,8 @@ service cloud.firestore {
 
     // ── Demais coleções: financeiras só gestor (read+write); resto, autenticado ──
     match /{collection}/{doc} {
-      allow read:  if collection != '_audit' && autenticado() && (isFinanceira(collection) ? isGestor() : true);
-      allow write: if collection != '_audit' && autenticado() && (isFinanceira(collection) ? isGestor() : true);
+      allow read:  if collection != '_audit' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow write: if collection != '_audit' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
     }
   }
 }
