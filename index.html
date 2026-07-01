@@ -8206,7 +8206,30 @@ function rConfig(){
         </div>
       </div>`;
   }
+  _configRO();
 }
+
+// Configurações em SOMENTE LEITURA para quem não é gestor (ex.: financeiro): consulta, não altera.
+function _configRO(){
+  if(ST.perfil==='gestor') return;
+  const root=document.getElementById('tab-config');
+  if(!root) return;
+  root.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled=true; });
+  root.querySelectorAll('button').forEach(b=>{
+    const oc=b.getAttribute('onclick')||'';
+    // preserva a navegação das sub-abas/tabelas; esconde as AÇÕES (salvar/adicionar/editar/resetar/excluir)
+    if(b.classList.contains('fin-sub-btn')||(b.id&&b.id.indexOf('cfg-sub-')===0)||/cfgSubTab|cfgFinPrazo|cfgFinTab|taxaPrazoTab/.test(oc)) return;
+    b.style.display='none';
+  });
+  if(!root.querySelector('.cfg-ro-aviso')){
+    const av=document.createElement('div');
+    av.className='cfg-ro-aviso';
+    av.style.cssText='background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;border-radius:8px;padding:9px 13px;font-size:12.5px;margin:0 0 14px;font-weight:600;';
+    av.innerHTML='🔒 Somente leitura — você consulta as configurações, mas não altera. Alterações são exclusivas do gestor.';
+    root.insertBefore(av, root.firstChild);
+  }
+}
+
 // ── Controla sub-aba ativa de Configurações ──
 let _cfgSubAtivo='empresa';
 function cfgSubTab(sub){
@@ -8622,6 +8645,7 @@ function cfgEditPessoa(area,i){
 }
 
 async function cfgSalvarColab(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor edita a equipe.'); return; }
   if(!_cfgSyncPronto()) return;
   const nome=document.getElementById('colab-nome').value.trim();
   if(!nome){toast('Informe o nome');return;}
