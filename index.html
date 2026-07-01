@@ -12748,7 +12748,18 @@ function calcDRE(mesAno){
 
   const recOutra    =soma('rec_outra');
   const ded         =soma('ded_imposto');
-  const cpv         =soma('cpv');
+  // CPV = manual (lançamentos DRE/contas, com recorrência) + AUTO custo de produção dos pedidos do mês.
+  // Auto = fábrica + fornecedores + outros custos, na competência da VENDA (fechamento do lead), alinhado à receita.
+  const cpvManual   =soma('cpv');
+  const cpvPedidos  =(ST.pedidos||[]).reduce((a,p)=>{
+    const _l=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+    const ref=_l?.dataFechamento||_l?.dataCriacao||p.data||'';
+    if(!String(ref).startsWith(mesAno)) return a;
+    return a+(p.valorFabrica||0)
+            +(p.fornecedoresAdicionais||[]).reduce((s,f)=>s+(f.valor||0),0)
+            +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0);
+  },0);
+  const cpv         =cpvManual+cpvPedidos;
 
   // Custos Fixos (novos + legado)
   const cfAluguel   =soma('cf_aluguel')   +soma('desp_aluguel');
@@ -12779,7 +12790,7 @@ function calcDRE(mesAno){
   const margemBruta=recLiq>0?lucroBruto/recLiq*100:0;
   const margemOp   =recLiq>0?resultado/recLiq*100:0;
 
-  return {recCRM,recOutra,recBruta,ded,recLiq,cpv,lucroBruto,
+  return {recCRM,recOutra,recBruta,ded,recLiq,cpv,cpvManual,cpvPedidos,lucroBruto,
           despPessoal,despPessoalOp,despPrestadores,
           cfAluguel,cfEnergia,cfAgua,cfInternet,cfSistema,cfDiarista,cfHigiene,cfManutencao,cfOutras,totalCF,
           cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,totalCV,
@@ -13639,7 +13650,7 @@ function rFinanceiro(){
 
     <div class="dre-sec-hdr"><span>Custos</span></div>
     <div class="dre-row dre-indent">
-      <span class="dre-lbl sm">CPV — Custo dos Produtos/Serviços</span>
+      <span class="dre-lbl sm">CPV — Custo dos Produtos/Serviços${d.cpvPedidos>0?`<span style="font-size:10px;color:var(--gl);"> · 🏭 ${fmt(d.cpvPedidos)} pedidos (auto)${d.cpvManual>0?` + ${fmt(d.cpvManual)} manual`:''}</span>`:''}</span>
       <div class="dre-right"><span class="dre-val fail">${fmt(d.cpv)}</span></div>
     </div>
     <div class="dre-row dre-subtotal">
