@@ -72,7 +72,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
-  _hojeLocal, _mesLocal, _cascataProjeto
+  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -120,6 +120,45 @@ test('vendaLiquido em cascata (desconto→taxa→RT)', () => {
   assert(_close(r.liquido, 120960), 'líquido final = 120.960');
 });
 test('vendaLiquido lead nulo = zeros', () => { const r = T._vendaLiquido(null); assertEq(r.liquido, 0); });
+
+// ── Financiamento / retenção (tabela default): 24x, 1º venc 60 dias ──
+test('coefFin 24x d60 = 0.05933 (coeficiente da parcela)', () => {
+  assertEq(T._coefFin(24, 'd60'), 0.05933);
+});
+test('taxa financiamento LOJA assume d60 24x = 29,77% do valor (retenção = custo da loja)', () => {
+  const conds = [{ forma: 'financiamento', valor: 59800, parcelas: 24, prazoFin: 'd60', absorcao: 'loja' }];
+  assert(_close(T._calcTaxaCartaoConds(conds), 17802.46), 'retenção 59.800 × 29,77% = 17.802,46');
+});
+test('taxa financiamento CLIENTE assume = 0 para a loja', () => {
+  const conds = [{ forma: 'financiamento', valor: 59800, parcelas: 24, prazoFin: 'd60', absorcao: 'cliente' }];
+  assertEq(T._calcTaxaCartaoConds(conds), 0);
+});
+test('vendaLiquido c/ financiamento LOJA: líquido = valor − retenção, RT=0', () => {
+  const lead = { valor: 59800, desconto: 0, condicoesPgto: [{ forma: 'financiamento', valor: 59800, parcelas: 24, prazoFin: 'd60', absorcao: 'loja' }] };
+  const vl = T._vendaLiquido(lead);
+  assert(_close(vl.taxa, 17802.46), 'taxa = retenção');
+  assert(_close(vl.rt, 0), 'sem RT');
+  assert(_close(vl.liquido, 41997.54), 'líquido 59.800 − 17.802,46 = 41.997,54');
+});
+test('prazo d90 muda a retenção (24x d90 = 31,68%)', () => {
+  const conds = [{ forma: 'financiamento', valor: 59800, parcelas: 24, prazoFin: 'd90', absorcao: 'loja' }];
+  assert(_close(T._calcTaxaCartaoConds(conds), 59800 * 0.3168), 'd90 usa r90=31,68%');
+});
+test('taxa cartão LOJA 12x = 11,68% do valor (tabela default)', () => {
+  const conds = [{ forma: 'cartao', valor: 10000, parcelas: 12, absorcao: 'loja' }];
+  assert(_close(T._calcTaxaCartaoConds(conds), 1168), '10.000 × 11,68% = 1.168');
+});
+test('taxa cartão CLIENTE assume = 0 para a loja', () => {
+  const conds = [{ forma: 'cartao', valor: 10000, parcelas: 12, absorcao: 'cliente' }];
+  assertEq(T._calcTaxaCartaoConds(conds), 0);
+});
+test('múltiplas condições: só cartão/financiamento (loja) geram taxa; pix não', () => {
+  const conds = [
+    { forma: 'pix', valor: 5000, absorcao: 'loja' },
+    { forma: 'cartao', valor: 10000, parcelas: 12, absorcao: 'loja' }
+  ];
+  assert(_close(T._calcTaxaCartaoConds(conds), 1168), 'pix não adiciona taxa');
+});
 
 // Tombstones (exclusão durável)
 test('tombstone add/has/clear', () => {
