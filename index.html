@@ -934,7 +934,6 @@ textarea.inp{resize:vertical;min-height:68px;}
         <button class="fin-sub-btn active" id="fab-sub-custos"    onclick="fabSubTab('custos')">💰 Custos de Fábrica</button>
         <button class="fin-sub-btn"        id="fab-sub-pagamentos" onclick="fabSubTab('pagamentos')">💳 Pagamentos à Fábrica</button>
         <button class="fin-sub-btn"        id="fab-sub-bipartido" onclick="fabSubTab('bipartido')">🏭 Bipartido / Financiamento</button>
-        <button class="fin-sub-btn"        id="fab-sub-xmls"      onclick="fabSubTab('xmls')">📄 XMLs / NFe da Fábrica</button>
       </div>
       <div id="fab-content"></div>
     </div>
@@ -13287,11 +13286,10 @@ function fabNavMes(d){
   rBipartido('fab-content');
 }
 function rFabrica(){
-  ['custos','pagamentos','bipartido','xmls'].forEach(s=>{ const b=document.getElementById('fab-sub-'+s); if(b) b.classList.toggle('active',s===_fabSubAtivo); });
+  ['custos','pagamentos','bipartido'].forEach(s=>{ const b=document.getElementById('fab-sub-'+s); if(b) b.classList.toggle('active',s===_fabSubAtivo); });
   const nav=document.getElementById('fab-mes-nav'); if(nav) nav.style.display=(_fabSubAtivo==='bipartido')?'':'none';
   if(_fabSubAtivo==='bipartido')        rBipartido('fab-content');
   else if(_fabSubAtivo==='pagamentos')  rFabPagamentos();
-  else if(_fabSubAtivo==='xmls')        rFabXmls();
   else                                  rRelCustosFabrica('fab-content');
 }
 
@@ -13350,24 +13348,6 @@ function rFabPagamentos(){
         </tr></thead>
         <tbody>${linhas||'<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gl);">Nenhum pedido com custo de fábrica.</td></tr>'}</tbody>
       </table></div>
-    </div>
-  </div>`;
-}
-
-// XMLs / NFe da fábrica — hoje o sistema só extrai o VALOR do XML, não arquiva o arquivo
-function rFabXmls(){
-  const el=document.getElementById('fab-content'); if(!el) return;
-  const comXml=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0).length;
-  el.innerHTML=`
-  <div style="padding:8px 0;">
-    <div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:12px;padding:18px 20px;">
-      <div style="font-size:15px;font-weight:700;color:#1E40AF;margin-bottom:6px;">📄 Arquivamento de XML da fábrica — a implementar</div>
-      <div style="font-size:13px;color:#374151;line-height:1.6;">
-        Hoje, ao importar o XML da fábrica no pedido, o sistema <b>extrai só o valor</b> (custo de fábrica) e <b>não guarda o arquivo XML</b>.
-        Por isso ainda não há XMLs para listar aqui.<br><br>
-        <b>${comXml}</b> pedido(s) têm custo de fábrica importado. Se você quiser, eu adiciono o <b>arquivamento do XML</b>
-        (guardando no Firebase Storage, como já fazemos com a DANFE) — aí esta aba passa a listar e baixar cada XML por pedido.
-      </div>
     </div>
   </div>`;
 }
