@@ -661,6 +661,7 @@ textarea.inp{resize:vertical;min-height:68px;}
       <button class="tab"        data-tab="tab-fin"       onclick="navTo('tab-fin')"       id="tab-fin-btn">💰 Financeiro</button>
       <button class="tab" data-tab="tab-pag" onclick="navTo('tab-fin');finSubTab('pag')" style="display:none;">💳 Pagamentos</button>
       <button class="tab"        data-tab="tab-rel"       onclick="navTo('tab-rel')"       id="tab-rel-btn">📋 Relatórios</button>
+      <button class="tab"        data-tab="tab-fabrica"   onclick="navTo('tab-fabrica')" id="tab-fabrica-btn">🏭 Fábrica</button>
       <button class="tab"        data-tab="tab-repo"      onclick="navTo('tab-repo')"      id="tab-repo-btn">🗂️ Repositório</button>
       <button class="tab"        data-tab="tab-trei"      onclick="navTo('tab-trei')"      id="tab-trei-btn">🎓 Treinamentos</button>
       <div class="tab-sep"></div>
@@ -918,7 +919,25 @@ textarea.inp{resize:vertical;min-height:68px;}
     </div>
 
     <!-- REPOSITÓRIO -->
-    <div class="panel" id="tab-repo">
+    <div class="panel" id="tab-fabrica">
+      <div class="pg-hdr">
+        <h2>🏭 Fábrica</h2>
+        <div class="pg-actions" id="fab-mes-nav" style="display:none;">
+          <div class="mes-nav">
+            <button onclick="fabNavMes(-1)">‹</button>
+            <span class="mes-label" id="fab-mes-label">—</span>
+            <button onclick="fabNavMes(1)">›</button>
+          </div>
+        </div>
+      </div>
+      <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
+        <button class="fin-sub-btn active" id="fab-sub-custos"    onclick="fabSubTab('custos')">💰 Custos de Fábrica</button>
+        <button class="fin-sub-btn"        id="fab-sub-bipartido" onclick="fabSubTab('bipartido')">🏭 Bipartido / Financiamento</button>
+      </div>
+      <div id="fab-content"></div>
+    </div>
+
+    <div class="panel" id="tab-repo"
       <div class="pg-hdr">
         <h2>🗂️ Repositório de Arquivos</h2>
         <div class="pg-actions">
@@ -1474,6 +1493,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">👥 Cadastros<select class="inp" id="perm-cad" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">💰 Financeiro<select class="inp" id="perm-fin" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">📋 Relatórios<select class="inp" id="perm-rel" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🏭 Fábrica<select class="inp" id="perm-fab" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🗂️ Repositório<select class="inp" id="perm-repo" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🎓 Treinamentos<select class="inp" id="perm-trei" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🧾 Fiscal<select class="inp" id="perm-fiscal" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
@@ -3718,6 +3738,7 @@ function entrar(nome,perfil,area){
   document.getElementById('tab-com-btn').style.display    = '';
   document.getElementById('tab-fin-btn').style.display    = isG?'':'none';
   document.getElementById('tab-rel-btn').style.display    = isG?'':'none';
+  { const _fb=document.getElementById('tab-fabrica-btn'); if(_fb) _fb.style.display=isG?'':'none'; }
   { const _drb=document.getElementById('dash-rel-btn'); if(_drb) _drb.style.display=isG?'':'none'; } // "Ver relatório completo" só p/ gestor
   document.getElementById('tab-fiscal-btn').style.display = isG?'':'none';
   document.getElementById('tab-config-btn').style.display = isG?'':'none';
@@ -3736,6 +3757,7 @@ function entrar(nome,perfil,area){
     _tab('tab-cad-btn',   _perms.cad);
     _tab('tab-fin-btn',   _perms.fin);
     _tab('tab-rel-btn',   _perms.rel);
+    _tab('tab-fabrica-btn', _perms.fab);
     _tab('tab-repo-btn',  _perms.repo);
     _tab('tab-trei-btn',  _perms.trei);
     _tab('tab-fiscal-btn',_perms.fiscal);
@@ -3799,6 +3821,7 @@ function navTo(tabId){
   if(tabId==='tab-pag')     rPag();
   if(tabId==='tab-agenda')  rAgenda();
   if(tabId==='tab-rel')        rRel();
+  if(tabId==='tab-fabrica')    rFabrica();
   if(tabId==='tab-metas')      rMetas();
   if(tabId==='tab-comissoes')  rComissoes();
   if(tabId==='tab-repo')       rRepositorio();
@@ -5459,8 +5482,8 @@ function rRel(){
 // ── Custos Fábrica ──────────────────────────────────────
 let _chartFabBar=null, _chartFabLine=null;
 
-function rRelCustosFabrica(){
-  const el=document.getElementById('rel-content');
+function rRelCustosFabrica(tgt){
+  const el=document.getElementById(tgt||'rel-content'); // reutilizável (Relatórios e aba Fábrica)
   if(!el) return;
 
   const todosped=ST.pedidos||[];
@@ -8260,15 +8283,15 @@ function colabAtualizarTipoPessoa(){
 // Permissões padrão por perfil (usadas ao criar novo colaborador ou ao trocar perfil sem permissões salvas)
 const _PERMS_PADRAO={
   // Modos: 0 = sem acesso · 1 = só leitura · 2 = edição
-  gestor:     {crm:2,ped:2,agenda:2,metas:2,com:2,cad:2,fin:2,rel:2,repo:2,trei:2,fiscal:2,config:2},
-  financeiro: {crm:0,ped:2,agenda:2,metas:0,com:2,cad:2,fin:2,rel:2,repo:2,trei:2,fiscal:2,config:1},
-  vendedor:   {crm:2,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
-  supervisor: {crm:0,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
-  projetista: {crm:0,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
-  montador:   {crm:0,ped:2,agenda:2,metas:0,com:2,cad:0,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
-  prestador:  {crm:0,ped:0,agenda:2,metas:0,com:2,cad:0,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
+  gestor:     {crm:2,ped:2,agenda:2,metas:2,com:2,cad:2,fin:2,rel:2,fab:2,repo:2,trei:2,fiscal:2,config:2},
+  financeiro: {crm:0,ped:2,agenda:2,metas:0,com:2,cad:2,fin:2,rel:2,fab:1,repo:2,trei:2,fiscal:2,config:1},
+  vendedor:   {crm:2,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,fab:0,repo:2,trei:2,fiscal:0,config:0},
+  supervisor: {crm:0,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,fab:0,repo:2,trei:2,fiscal:0,config:0},
+  projetista: {crm:0,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,fab:0,repo:2,trei:2,fiscal:0,config:0},
+  montador:   {crm:0,ped:2,agenda:2,metas:0,com:2,cad:0,fin:0,rel:0,fab:0,repo:2,trei:2,fiscal:0,config:0},
+  prestador:  {crm:0,ped:0,agenda:2,metas:0,com:2,cad:0,fin:0,rel:0,fab:0,repo:2,trei:2,fiscal:0,config:0},
 };
-const _PERMS_KEYS=['crm','ped','agenda','metas','com','cad','fin','rel','repo','trei','fiscal','config'];
+const _PERMS_KEYS=['crm','ped','agenda','metas','com','cad','fin','rel','fab','repo','trei','fiscal','config'];
 // Permissão efetiva do usuário logado (espelha a lógica do entrar(): perms explícitas mandam;
 // sem perms explícitas → permissivo). Gestor sempre pode.
 function _temPerm(k){
@@ -8290,7 +8313,7 @@ function _lerPermsUI(){
   return {permissoes:acesso, permissoesEd:edicao};
 }
 // Aba (painel) → chave de permissão. Usado para bloquear navegação a áreas sem acesso.
-const _TAB_PERM={'tab-crm':'crm','tab-pedidos':'ped','tab-agenda':'agenda','tab-metas':'metas','tab-comissoes':'com','tab-cad':'cad','tab-fin':'fin','tab-pag':'fin','tab-rel':'rel','tab-repo':'repo','tab-trei':'trei','tab-fiscal':'fiscal','tab-config':'config'};
+const _TAB_PERM={'tab-crm':'crm','tab-pedidos':'ped','tab-agenda':'agenda','tab-metas':'metas','tab-comissoes':'com','tab-cad':'cad','tab-fin':'fin','tab-pag':'fin','tab-rel':'rel','tab-fabrica':'fab','tab-repo':'repo','tab-trei':'trei','tab-fiscal':'fiscal','tab-config':'config'};
 
 function _permDefaults(perfil){ return _PERMS_PADRAO[perfil]||_PERMS_PADRAO.prestador; }
 
@@ -13239,6 +13262,22 @@ function bipNavMes(d){
   rBipartido();
 }
 
+// ── Aba 🏭 Fábrica: hub que reaproveita as telas de fábrica com permissão própria ──
+let _fabSubAtivo='custos';
+function fabSubTab(sub){ _fabSubAtivo=sub; rFabrica(); }
+function fabNavMes(d){
+  _bipMes+=d;
+  if(_bipMes<0){_bipMes=11;_bipAno--;}
+  if(_bipMes>11){_bipMes=0;_bipAno++;}
+  rBipartido('fab-content');
+}
+function rFabrica(){
+  ['custos','bipartido'].forEach(s=>{ const b=document.getElementById('fab-sub-'+s); if(b) b.classList.toggle('active',s===_fabSubAtivo); });
+  const nav=document.getElementById('fab-mes-nav'); if(nav) nav.style.display=(_fabSubAtivo==='bipartido')?'':'none';
+  if(_fabSubAtivo==='bipartido') rBipartido('fab-content');
+  else rRelCustosFabrica('fab-content');
+}
+
 function bipAtualizarStatus(leadId,condId,status){
   if(!ST.bipartido) ST.bipartido=[];
   const chave=leadId+'_'+condId;
@@ -13257,9 +13296,9 @@ function bipAtualizarStatus(leadId,condId,status){
   save(); rBipartido();
 }
 
-function rBipartido(){
-  const mesLabel=document.getElementById('bip-mes-label');
-  if(mesLabel) mesLabel.textContent=mesNomeStr(_bipMes,_bipAno);
+function rBipartido(tgt){
+  const _tgt=tgt||'fin-content'; // reutilizável (Financeiro e aba Fábrica)
+  ['bip-mes-label','fab-mes-label'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=mesNomeStr(_bipMes,_bipAno);});
   const mesStr=mesAnoStr(_bipMes,_bipAno); // 'AAAA-MM'
   const fmt2=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtD=v=>{if(!v)return'—';const[a,m,d]=(v+'T12:00').split('T')[0].split('-');return d+'/'+m+'/'+a;};
@@ -13272,7 +13311,7 @@ function rBipartido(){
   );
 
   if(!leadsGanhos.length){
-    document.getElementById('fin-content').innerHTML=`
+    document.getElementById(_tgt).innerHTML=`
       <div style="text-align:center;padding:60px 20px;color:var(--gl);">
         <div style="font-size:40px;margin-bottom:12px;">🏭</div>
         <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Nenhum financiamento em ${mesNomeStr(_bipMes,_bipAno)}</div>
@@ -13312,7 +13351,7 @@ function rBipartido(){
     return `<span style="font-size:11px;color:var(--gl);">Confirmado em ${r.dataConf}</span>`;
   };
 
-  document.getElementById('fin-content').innerHTML=`
+  document.getElementById(_tgt).innerHTML=`
     <!-- KPIs -->
     <div class="stats-grid" style="margin-bottom:20px;">
       <div class="stat-card">
