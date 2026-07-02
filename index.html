@@ -9255,15 +9255,15 @@ function ldRenderConds(){
     const parcTxt=showParc?` · ${c.parcelas}x`:'';
     const absTxt=showParc?(c.absorcao==='loja'?' · 🏪 loja':' · 👤 cliente'):'';
     const vencTxt=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'sem data';
-    // Calcula taxa/retenção para exibir inline
-    let taxaTxt='';
+    // Calcula taxa/retenção para exibir inline (e o líquido da LOJA, só p/ gestor)
+    let taxaTxt=''; let _deducao=0;
     if(c.absorcao==='loja'){
       if(c.forma==='cartao'){
         const tab=_getTabCartao();
         const entry=tab.find(e=>e.parcelas===(c.parcelas||1));
         if(entry&&entry.taxa){
-          const taxaVal=c.valor*(entry.taxa/100);
-          taxaTxt=`<span style="font-size:10px;color:#EF4444;margin-left:4px;">−${fmtL(taxaVal)} (${entry.taxa}% loja)</span>`;
+          _deducao=c.valor*(entry.taxa/100);
+          taxaTxt=`<span style="font-size:10px;color:#EF4444;margin-left:4px;">−${fmtL(_deducao)} (${entry.taxa}% loja)</span>`;
         }
       } else if(c.forma==='financiamento'){
         const tab=_getTabFin();
@@ -9272,12 +9272,16 @@ function ldRenderConds(){
           const retCol={d30:'r30',d60:'r60',d90:'r90'}[c.prazoFin||'d30']||'r30';
           const retPct=row[retCol]||0;
           if(retPct){
-            const retVal=c.valor*(retPct/100);
-            taxaTxt=`<span style="font-size:10px;color:#EF4444;margin-left:4px;">−${fmtL(retVal)} (${retPct}% retenção)</span>`;
+            _deducao=c.valor*(retPct/100);
+            taxaTxt=`<span style="font-size:10px;color:#EF4444;margin-left:4px;">−${fmtL(_deducao)} (${retPct}% retenção)</span>`;
           }
         }
       }
     }
+    // Valor líquido que a LOJA recebe nesta condição — visível SÓ para o gestor
+    const lojaTxt=(ST.perfil==='gestor'&&_deducao>0)
+      ? `<span style="font-size:10px;color:#166534;margin-left:4px;font-weight:700;" title="Valor líquido que a loja recebe (após a retenção)">🏪 loja ${fmtL(c.valor-_deducao)}</span>`
+      : '';
     // Boleto parcelado: valor e data editáveis por parcela (o usuário pode deixar parcelas diferentes).
     const isBolPar=c.forma==='boleto'; // qualquer boleto: valor e data editáveis por linha
     const valorCell=isBolPar
@@ -9291,6 +9295,7 @@ function ldRenderConds(){
       <span style="flex:1;font-size:12.5px;color:var(--dark);">${c.desc}</span>
       ${valorCell}
       ${taxaTxt}
+      ${lojaTxt}
       ${vencCell}
       <button type="button" style="background:none;border:none;color:#9CA3AF;cursor:pointer;font-size:15px;padding:0 2px;" onclick="ldRemoveCond(${c.id})">✕</button>
     </div>`;
