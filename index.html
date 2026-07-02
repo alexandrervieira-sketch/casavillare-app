@@ -932,7 +932,9 @@ textarea.inp{resize:vertical;min-height:68px;}
       </div>
       <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
         <button class="fin-sub-btn active" id="fab-sub-custos"    onclick="fabSubTab('custos')">💰 Custos de Fábrica</button>
+        <button class="fin-sub-btn"        id="fab-sub-pagamentos" onclick="fabSubTab('pagamentos')">💳 Pagamentos à Fábrica</button>
         <button class="fin-sub-btn"        id="fab-sub-bipartido" onclick="fabSubTab('bipartido')">🏭 Bipartido / Financiamento</button>
+        <button class="fin-sub-btn"        id="fab-sub-xmls"      onclick="fabSubTab('xmls')">📄 XMLs / NFe da Fábrica</button>
       </div>
       <div id="fab-content"></div>
     </div>
@@ -13285,10 +13287,89 @@ function fabNavMes(d){
   rBipartido('fab-content');
 }
 function rFabrica(){
-  ['custos','bipartido'].forEach(s=>{ const b=document.getElementById('fab-sub-'+s); if(b) b.classList.toggle('active',s===_fabSubAtivo); });
+  ['custos','pagamentos','bipartido','xmls'].forEach(s=>{ const b=document.getElementById('fab-sub-'+s); if(b) b.classList.toggle('active',s===_fabSubAtivo); });
   const nav=document.getElementById('fab-mes-nav'); if(nav) nav.style.display=(_fabSubAtivo==='bipartido')?'':'none';
-  if(_fabSubAtivo==='bipartido') rBipartido('fab-content');
-  else rRelCustosFabrica('fab-content');
+  if(_fabSubAtivo==='bipartido')        rBipartido('fab-content');
+  else if(_fabSubAtivo==='pagamentos')  rFabPagamentos();
+  else if(_fabSubAtivo==='xmls')        rFabXmls();
+  else                                  rRelCustosFabrica('fab-content');
+}
+
+// Pagamentos à fábrica — lista os pedidos com custo de fábrica, status do comprovante e ações
+function rFabPagamentos(){
+  const el=document.getElementById('fab-content'); if(!el) return;
+  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0)
+    .sort((a,b)=>(b.valorFabrica||0)-(a.valorFabrica||0));
+  const total=peds.reduce((s,p)=>s+(p.valorFabrica||0),0);
+  const comComp=peds.filter(p=>p.comprovante).length;
+  const semComp=peds.length-comComp;
+  const linhas=peds.map(p=>{
+    const fab=p.fornecedor||'—';
+    const temComp=!!p.comprovante;
+    const compCell=temComp
+      ? `<button class="btn btn-s btn-sm" onclick="verComprovante('${p.id}')">👁️ Ver</button>
+         <button class="btn btn-s btn-sm" onclick="enviarComprovanteEmail('${p.id}')" title="Enviar à fábrica por e-mail">📧</button>`
+      : `<button class="btn btn-s btn-sm" onclick="anexarComprovante('${p.id}')">📎 Anexar</button>`;
+    const et=PED_ETAPAS.find(e=>e.id===p.status)||{label:p.status||'—',cor:'#6B7280',icon:''};
+    return `<tr>
+      <td style="padding:7px 10px;font-size:13px;">${_esc(p.clienteNome||p.cliente||'—')}</td>
+      <td style="padding:7px 10px;font-size:12px;color:#6B7280;">${_esc(fab)}</td>
+      <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:700;color:#B45309;">${fmt(p.valorFabrica)}</td>
+      <td style="padding:7px 10px;"><span class="badge" style="background:${et.cor}20;color:${et.cor};border:1px solid ${et.cor}40;white-space:nowrap;font-size:11px;">${et.icon} ${et.label}</span></td>
+      <td style="padding:7px 10px;">${temComp?'<span style="font-size:11px;color:#166534;font-weight:700;">✅ anexado</span>':'<span style="font-size:11px;color:#B45309;font-weight:700;">⏳ pendente</span>'}</td>
+      <td style="padding:7px 10px;white-space:nowrap;">${compCell}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML=`
+  <div style="padding:8px 0;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;">
+      <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total à Fábrica</div>
+        <div style="font-size:18px;font-weight:800;color:#B45309;">${fmt(total)}</div>
+        <div style="font-size:10px;color:#9CA3AF;">${peds.length} pedido(s)</div>
+      </div>
+      <div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#166534;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Comprovante anexado</div>
+        <div style="font-size:26px;font-weight:800;color:#166534;">${comComp}</div>
+      </div>
+      <div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;color:#B91C1C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Comprovante pendente</div>
+        <div style="font-size:26px;font-weight:800;color:#B91C1C;">${semComp}</div>
+      </div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--brd);border-radius:12px;overflow:hidden;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--brd);font-size:13px;font-weight:700;color:var(--txt);">💳 Pagamentos à Fábrica</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th style="text-align:left;padding:8px 10px;">Cliente</th>
+          <th style="text-align:left;padding:8px 10px;">Fábrica</th>
+          <th style="text-align:right;padding:8px 10px;">Custo Fáb.</th>
+          <th style="text-align:left;padding:8px 10px;">Etapa</th>
+          <th style="text-align:left;padding:8px 10px;">Comprovante</th>
+          <th style="text-align:left;padding:8px 10px;">Ações</th>
+        </tr></thead>
+        <tbody>${linhas||'<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gl);">Nenhum pedido com custo de fábrica.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+  </div>`;
+}
+
+// XMLs / NFe da fábrica — hoje o sistema só extrai o VALOR do XML, não arquiva o arquivo
+function rFabXmls(){
+  const el=document.getElementById('fab-content'); if(!el) return;
+  const comXml=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0).length;
+  el.innerHTML=`
+  <div style="padding:8px 0;">
+    <div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:12px;padding:18px 20px;">
+      <div style="font-size:15px;font-weight:700;color:#1E40AF;margin-bottom:6px;">📄 Arquivamento de XML da fábrica — a implementar</div>
+      <div style="font-size:13px;color:#374151;line-height:1.6;">
+        Hoje, ao importar o XML da fábrica no pedido, o sistema <b>extrai só o valor</b> (custo de fábrica) e <b>não guarda o arquivo XML</b>.
+        Por isso ainda não há XMLs para listar aqui.<br><br>
+        <b>${comXml}</b> pedido(s) têm custo de fábrica importado. Se você quiser, eu adiciono o <b>arquivamento do XML</b>
+        (guardando no Firebase Storage, como já fazemos com a DANFE) — aí esta aba passa a listar e baixar cada XML por pedido.
+      </div>
+    </div>
+  </div>`;
 }
 
 function bipAtualizarStatus(leadId,condId,status){
