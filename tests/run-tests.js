@@ -73,7 +73,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
-  _vendaComExib, _pctVenda
+  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -323,6 +323,30 @@ test('pctVenda: arredonda e tira zeros à toa', () => {
   assertEq(T._pctVenda(10), '10');
   assertEq(T._pctVenda(14.5), '14,5');
   assertEq(T._pctVenda(0), '0');
+});
+
+// ── Custo de fábrica = BIPARTIDO (40% do financiado) na rentabilidade ──
+test('bipartidoLead: 40% do financiado (59.800 → 23.920)', () => {
+  const lead = { id: 'Lb', valor: 59800, desconto: 0, condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 59800, absorcao: 'cliente' }] };
+  assert(_close(T._bipartidoLead(lead), 23920), '59800 × 0,40 = 23920');
+});
+test('bipartidoLead: sem financiamento = 0', () => {
+  assertEq(T._bipartidoLead({ condicoesPgto: [{ forma: 'avista', valor: 50000 }] }), 0);
+  assertEq(T._bipartidoLead(null), 0);
+});
+test('cascataProjeto: custo fábrica assume o bipartido quando não há valorFabrica manual', () => {
+  const lead = { id: 'Lbip', valor: 100000, desconto: 0, condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] };
+  T.ST.leads.push(lead);
+  const c = T._cascataProjeto({ id: 'Pbip', leadId: 'Lbip', status: 'aberto' });
+  assert(_close(c.previsto.custoFab, 40000), 'custoFab = 40% de 100000');
+  assert(c.previsto.custoFabBip === true, 'sinaliza origem bipartido');
+});
+test('cascataProjeto: valorFabrica manual tem precedência sobre o bipartido', () => {
+  const lead = { id: 'Lbip2', valor: 100000, desconto: 0, condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] };
+  T.ST.leads.push(lead);
+  const c = T._cascataProjeto({ id: 'Pbip2', leadId: 'Lbip2', valorFabrica: 15000, status: 'aberto' });
+  assertEq(c.previsto.custoFab, 15000);
+  assert(c.previsto.custoFabBip === false, 'manual → não marca bipartido');
 });
 
 // ── relatório ──

@@ -6308,7 +6308,7 @@ function rRelRentabilidade(){
   }
 
   const peds=(ST.pedidos||[]).filter(p=>p.valor||p.valorFabrica||(p.fornecedoresAdicionais||[]).length);
-  const comCusto=peds.filter(p=>(p.valorFabrica||0)+(p.fornecedoresAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0)>0);
+  const comCusto=peds.filter(p=>(p.valorFabrica||0)+(p.fornecedoresAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0)+_bipartidoPed(p)>0);
 
   const totalVenda=comCusto.reduce((a,p)=>a+calcRent(p).valorLiq,0);
   const totalCusto=comCusto.reduce((a,p)=>a+calcRent(p).custoTotal,0);
@@ -6478,7 +6478,7 @@ function abrirFichaRentab(pedId){
             </tr>
             ${linha('(−) Comissão vendedor',P.comVend,R.comVend,{sub:true})}
             ${linha('(−) Comissão projetista',P.comProj,R.comProj,{sub:true})}
-            ${linha('(−) Custo fábrica',P.custoFab,R.custoFab,{sub:true})}
+            ${linha(P.custoFabBip?'(−) Custo fábrica (bipartido 40%)':'(−) Custo fábrica',P.custoFab,R.custoFab,{sub:true})}
             ${P.custoForn>0?linha('(−) Custo fornecedores',P.custoForn,R.custoForn,{sub:true}):''}
             ${P.custoOutros>0?linha('(−) Outros custos',P.custoOutros,R.custoOutros,{sub:true}):''}
             ${linha('(−) Comissão montagem',P.comMont,R.comMont,{sub:true})}
@@ -6848,6 +6848,18 @@ function _vendaComExib(v){
 }
 // % de desconto para exibição: 2 casas, sem zeros à toa (14,23823→"14,24"; 10→"10").
 function _pctVenda(x){ return (+x||0).toFixed(2).replace(/\.?0+$/,'').replace('.',','); }
+// Total BIPARTIDO de um lead = 40% (BIP_PCT) do valor financiado — o que vai à
+// fábrica para liberar o pedido. Em venda financiada é o CUSTO DE FÁBRICA efetivo.
+// Mesma fórmula do rBipartido() e do card do pedido.
+function _bipartidoLead(lead){
+  if(!lead) return 0;
+  return (lead.condicoesPgto||[]).filter(c=>c.forma==='financiamento')
+    .reduce((a,c)=>a+(c.valor||0),0)*BIP_PCT;
+}
+function _bipartidoPed(p){
+  const lead=p&&p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+  return _bipartidoLead(lead);
+}
 // ── FONTE ÚNICA do valor líquido da venda = base de comissão de TODOS os papéis ──
 // Cálculo EM CASCATA (cada etapa sobre o resultado da anterior):
 //   1) desconto ao cliente   → após desconto
@@ -6974,10 +6986,14 @@ function _cascataProjeto(p){
   const {pct:vendPct}=lead?_calcComVendaPontos(_descEfetivoComissao(lead)):{pct:0};
   const comVend=liquido>0?Math.round(_aplicarMargemErro(liquido)*vendPct/100*100)/100:0;
   const proj=_calcComProjetista(p), mont=_calcComMontador(p), sup=_calcComSupervisor(p);
-  const custoFab=(p&&p.valorFabrica)||0;
+  const custoFabManual=(p&&p.valorFabrica)||0;
+  const bipFab=_bipartidoLead(lead);
+  // Sem custo de fábrica lançado à mão, o custo é o BIPARTIDO (40% do financiado que vai à fábrica).
+  const custoFab=custoFabManual>0?custoFabManual:bipFab;
+  const custoFabBip=!(custoFabManual>0)&&bipFab>0; // sinaliza a origem p/ rotular na ficha
   const custoForn=((p&&p.fornecedoresAdicionais)||[]).reduce((a,f)=>a+(f.valor||0),0);
   const custoOutros=((p&&p.outrosCustos)||[]).reduce((a,c)=>a+(c.valor||0),0);
-  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoForn,custoOutros};
+  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros};
   const monta=(comProj,comMont,comSup)=>{
     const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+comMont+comSup;
     const lucro=liquido-custoTotal;
