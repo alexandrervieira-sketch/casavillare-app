@@ -8,6 +8,7 @@
 ## ✅ JÁ CONCLUÍDO (jun/2026)
 
 **Fiscal / NFe**
+- **PRODUÇÃO NO AR (30/06/2026)** — 1ª nota real autorizada (Komet, série 1 Nº 2). Numeração do 1 confirmada correta pelo contador. IE de CNPJ obrigatória (SP não aceita "Isento"). XML/DANFE arquivados no Storage.
 - Emissão validada em homologação (Focus NFe via Cloudflare Worker, arquitetura provider-agnóstica).
 - (a) Arquivamento de XML/DANFE no Firebase Storage (guarda de 5 anos).
 - (b) Envio do DANFE/XML por e-mail (cliente + contador, editável).
@@ -41,12 +42,17 @@
 
 ## 🎯 PENDENTE — organizado por frente
 
+### 🔎 A REVER (demandas do gestor a apurar)
+| # | Item | Status |
+|---|------|--------|
+| ~~R1~~ | ~~Revisar comissão e pontuação~~ ✅ **FEITO (02/07/2026, commit a60ec5f)** — a **taxa absorvida pela loja** (financiamento/cartão) agora entra como **desconto no cálculo da pontuação** do vendedor (`_descEfetivoComissao`, alinhado ao Focco). Confirmado pelo gestor. *Se surgirem mais pontos de comissão/pontuação, reabrir.* | ✅ |
+
 ### A) Operacional / Negócio (destrava o resto — não é código)
 | # | Item | Esforço | |
 |---|------|---------|---|
 | A1 | Equipe trocar as **senhas temporárias** pela própria | — | 🟢 |
-| A2 | **1ª venda real → virada de produção da NFe** (com autoteste de e-mail antes) | — | 🟡 |
-| A3 | Confirmar **entrega de e-mail em produção** (ajustar remetente no painel Focus, se preciso) | — | 🟢 |
+| ~~A2~~ | ~~1ª venda real → virada de produção da NFe~~ ✅ **FEITA 30/06/2026** (Komet, Nº 2) | — | ✅ |
+| A3 | Confirmar **entrega de e-mail em produção** (testar enviando p/ o próprio e-mail numa nota real) | — | 🟢 |
 
 ### B) Integridade de dados / Sincronização (alto valor)
 | # | Item | Esforço | Risco |
