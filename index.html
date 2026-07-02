@@ -4130,7 +4130,7 @@ function rHomeQuentes(){
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
           <div class="pq-nome">${_esc(l.nome)}</div>
-          ${l.valor?`<div class="pq-valor">${fmt(l.valor)}</div>`:''}
+          ${l.valor?`<div class="pq-valor">${fmt(_leadValorVenda(l))}</div>`:''}
         </div>
         <div class="pq-info">${resp}<span>${origLbl}${dtCri?' · '+dtCri:''}</span></div>
       </div>
@@ -4285,7 +4285,7 @@ function rHomeComercial(){
   perdidosMes.forEach(l=>{
     const k=l.motivoPerda||'nao_informado';
     if(!motivoMap[k]) motivoMap[k]={count:0,val:0};
-    motivoMap[k].count++; motivoMap[k].val+=l.valor||0;
+    motivoMap[k].count++; motivoMap[k].val+=_leadValorVenda(l);
   });
   const topMotivos=Object.entries(motivoMap).sort((a,b)=>b[1].count-a[1].count).slice(0,5);
 
@@ -4295,7 +4295,7 @@ function rHomeComercial(){
   ativosMes.forEach(l=>{
     const k=l.etapa||'indicacao';
     if(!etapasMap[k]) etapasMap[k]={label:k,n:0,val:0};
-    etapasMap[k].n++; etapasMap[k].val+=l.valor||0;
+    etapasMap[k].n++; etapasMap[k].val+=_leadValorVenda(l);
   });
   const pipeline=Object.values(etapasMap).filter(e=>e.n>0);
   const maxPipN=Math.max(...pipeline.map(e=>e.n),1);
@@ -6008,7 +6008,7 @@ function rRelOrigemChart(mesAno){
         const o=origens.includes(l.origem)?l.origem:'outro';
         oVendas[o]++;
         const cad=(ST.cadastros||[]).find(c=>c.leadId===String(l.id)&&c.tipo==='cliente');
-        const val=cad?(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0)||l.valor||0:l.valor||0;
+        const val=_leadValorVenda(l); // valor ao cliente (venda real), não Promob/ambientes bruto
         oValor[o]+=val;
       }
     }
@@ -6282,7 +6282,7 @@ function rRelAnalisePerda(){
           return `<tr>
             <td class="td-bold">${_esc(l.nome)}</td>
             <td>${_esc(l.responsavel||'—')}</td>
-            <td>${l.valor?fmt(l.valor):'—'}</td>
+            <td>${l.valor?fmt(_leadValorVenda(l)):'—'}</td>
             <td>${mp?`<span style="font-size:11px;background:${mp.cor}18;color:${mp.cor};border:1px solid ${mp.cor}44;padding:2px 8px;border-radius:10px;font-weight:600;">${mp.label}</span>`:'<span style="color:var(--gl);font-size:11px;">Não informado</span>'}</td>
             <td style="color:var(--gl);font-size:12px;">${(l.dataFechamento||l.dataCriacao||'—').split('-').reverse().join('/')}</td>
             <td style="font-size:11px;color:var(--gl);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${_esc(l.motivoPerdaObs||l.obs||'')}">${_esc(l.motivoPerdaObs||l.obs||'—')}</td>
@@ -6468,7 +6468,7 @@ function abrirFichaRentab(pedId){
             <th style="text-align:right;padding:6px 14px;font-size:11px;color:#047857;text-transform:uppercase;letter-spacing:.5px;">Realizado</th>
           </tr></thead>
           <tbody>
-            ${linha('Valor de Venda',P.vendaBruta,R.vendaBruta,{raw:true})}
+            ${linha('Valor Promob (tabela)',P.vendaBruta,R.vendaBruta,{raw:true})}
             ${P.desconto>0?linha('(−) Desconto',P.desconto,R.desconto):''}
             ${P.taxa>0?linha('(−) Taxa cartão / financ.',P.taxa,R.taxa):''}
             ${P.rt>0?linha('(−) RT',P.rt,R.rt):''}
@@ -9458,7 +9458,7 @@ function rCrm(){
         <div class="pipe-card-row">Parou em: ${etapaLabel}</div>
         ${l.motivoPerda?(()=>{const mp=MOTIVOS_PERDA.find(m=>m.id===l.motivoPerda);return mp?`<div class="pipe-card-row" style="margin-top:3px;"><span style="font-size:10px;background:${mp.cor}18;color:${mp.cor};border:1px solid ${mp.cor}44;padding:2px 7px;border-radius:10px;font-weight:600;">${mp.label}</span></div>`:'';})():''}
         ${l.dataFechamento||l.dataCriacao?`<div class="pipe-card-row" style="color:var(--gl);font-size:10px;">📅 ${new Date((l.dataFechamento||l.dataCriacao)+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}
-        ${l.valor?`<div class="pipe-card-row" style="color:var(--p);">💰 ${fmt(l.valor)}</div>`:''}
+        ${l.valor?`<div class="pipe-card-row" style="color:var(--p);">💰 ${fmt(_leadValorVenda(l))}</div>`:''}
         <div class="pipe-card-row" style="margin-top:4px;">
           <button class="btn btn-s btn-sm" style="font-size:10px;" onclick="event.stopPropagation();reativarLead('${_sid(l.id)}')">↩ Reativar</button>
         </div>
@@ -9567,7 +9567,7 @@ function leadCardHtml(l,etapa){
     </div>
     ${l.responsavel?`<div class="pipe-card-row">👤 ${_esc(l.responsavel)}</div>`:''}
     ${_espBadge(l)}
-    ${l.valor?`<div class="pipe-card-row" style="color:var(--p);font-weight:700;">💰 ${fmt(l.valor)}${l.tipoParcelamento&&l.parcelas?` <span style="font-size:10px;font-weight:400;color:var(--gl);">${l.tipoParcelamento==='cartao'?'💳':'🏦'} ${l.parcelas}x</span>`:''}</div>`:''}
+    ${l.valor?`<div class="pipe-card-row" style="color:var(--p);font-weight:700;">💰 ${fmt(_leadValorVenda(l))}${l.tipoParcelamento&&l.parcelas?` <span style="font-size:10px;font-weight:400;color:var(--gl);">${l.tipoParcelamento==='cartao'?'💳':'🏦'} ${l.parcelas}x</span>`:''}</div>`:''}
     ${l.ambiente?`<div class="pipe-card-row">🏠 ${l.ambiente}</div>`:''}
     ${l.cidade?`<div class="pipe-card-row" style="color:var(--gl);font-size:11px;">📍 ${l.cidade}</div>`:''}
     ${l.proxContato?`<div class="pipe-card-row" style="color:${atrasado?'var(--fail)':'var(--gl)'};">${atrasado?'⚠️ Atrasado':'📅'} ${new Date(l.proxContato+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}
@@ -10536,7 +10536,7 @@ function excluirLead(){
 }
 
 function promptFechamento(lead){
-  document.getElementById('fech-nome').textContent=lead.nome+(lead.valor?'  —  '+fmt(lead.valor):'');
+  document.getElementById('fech-nome').textContent=lead.nome+(lead.valor?'  —  '+fmt(_leadValorVenda(lead)):'');
   document.getElementById('fech-btn-cad').onclick=function(){
     fecharModal('modal-fechamento');
     navTo('tab-cad');
