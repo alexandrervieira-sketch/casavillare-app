@@ -1464,20 +1464,20 @@ textarea.inp{resize:vertical;min-height:68px;}
           <input class="inp" id="colab-adiantamento" type="text" inputmode="decimal" placeholder="0,00" oninput="_maskBRL(this)"/></div>
       </div>
       <div class="form-sec">🔐 Permissões de Acesso</div>
-      <div style="font-size:11px;color:var(--gl);margin-bottom:10px;">Define quais módulos esta pessoa pode visualizar ao fazer login. As opções pré-selecionadas seguem o perfil escolhido.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 12px;" id="colab-perms-grid">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-crm"/>  🎯 CRM</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-ped"/>  📦 Pedidos</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-agenda"/> 📅 Agenda</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-metas"/> 🏆 Metas</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-com"/>  🏅 Comissões</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-cad"/>  👥 Cadastros</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-fin"/>  💰 Financeiro</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-rel"/>  📋 Relatórios</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-repo"/> 🗂️ Repositório</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-trei"/> 🎓 Treinamentos</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-fiscal"/> 🧾 Fiscal</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="perm-config"/> ⚙️ Configurações</label>
+      <div style="font-size:11px;color:var(--gl);margin-bottom:10px;">Define o acesso de cada módulo: <b>🚫 Sem acesso</b>, <b>👁 Só leitura</b> (vê mas não altera) ou <b>✏️ Edição</b>. As opções pré-selecionadas seguem o perfil escolhido.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px 12px;" id="colab-perms-grid">
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🎯 CRM<select class="inp" id="perm-crm" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">📦 Pedidos<select class="inp" id="perm-ped" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">📅 Agenda<select class="inp" id="perm-agenda" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🏆 Metas<select class="inp" id="perm-metas" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🏅 Comissões<select class="inp" id="perm-com" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">👥 Cadastros<select class="inp" id="perm-cad" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">💰 Financeiro<select class="inp" id="perm-fin" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">📋 Relatórios<select class="inp" id="perm-rel" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🗂️ Repositório<select class="inp" id="perm-repo" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🎓 Treinamentos<select class="inp" id="perm-trei" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">🧾 Fiscal<select class="inp" id="perm-fiscal" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;">⚙️ Configurações<select class="inp" id="perm-config" style="padding:5px 7px;font-size:12px;font-weight:400;"><option value="0">🚫 Sem acesso</option><option value="1">👁 Só leitura</option><option value="2">✏️ Edição</option></select></label>
       </div>
       <div class="form-sec">🔑 Acesso</div>
       <div style="font-size:12px;color:#166534;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px 12px;">
@@ -8212,6 +8212,8 @@ function rConfig(){
 // Configurações em SOMENTE LEITURA para quem não é gestor (ex.: financeiro): consulta, não altera.
 function _configRO(){
   if(ST.perfil==='gestor') return;
+  const _pe=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoesEd)||null;
+  if(_pe&&_pe.config) return; // edição explícita em Configurações concedida pelo gestor
   const root=document.getElementById('tab-config');
   if(!root) return;
   root.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled=true; });
@@ -8257,13 +8259,14 @@ function colabAtualizarTipoPessoa(){
 }
 // Permissões padrão por perfil (usadas ao criar novo colaborador ou ao trocar perfil sem permissões salvas)
 const _PERMS_PADRAO={
-  gestor:     {crm:1,ped:1,agenda:1,metas:1,com:1,cad:1,fin:1,rel:1,repo:1,trei:1,fiscal:1,config:1},
-  financeiro: {crm:0,ped:1,agenda:1,metas:0,com:1,cad:1,fin:1,rel:1,repo:1,trei:1,fiscal:1,config:0},
-  vendedor:   {crm:1,ped:1,agenda:1,metas:1,com:1,cad:1,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
-  supervisor: {crm:0,ped:1,agenda:1,metas:1,com:1,cad:1,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
-  projetista: {crm:0,ped:1,agenda:1,metas:1,com:1,cad:1,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
-  montador:   {crm:0,ped:1,agenda:1,metas:0,com:1,cad:0,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
-  prestador:  {crm:0,ped:0,agenda:1,metas:0,com:1,cad:0,fin:0,rel:0,repo:1,trei:1,fiscal:0,config:0},
+  // Modos: 0 = sem acesso · 1 = só leitura · 2 = edição
+  gestor:     {crm:2,ped:2,agenda:2,metas:2,com:2,cad:2,fin:2,rel:2,repo:2,trei:2,fiscal:2,config:2},
+  financeiro: {crm:0,ped:2,agenda:2,metas:0,com:2,cad:2,fin:2,rel:2,repo:2,trei:2,fiscal:2,config:1},
+  vendedor:   {crm:2,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
+  supervisor: {crm:0,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
+  projetista: {crm:0,ped:2,agenda:2,metas:2,com:2,cad:2,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
+  montador:   {crm:0,ped:2,agenda:2,metas:0,com:2,cad:0,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
+  prestador:  {crm:0,ped:0,agenda:2,metas:0,com:2,cad:0,fin:0,rel:0,repo:2,trei:2,fiscal:0,config:0},
 };
 const _PERMS_KEYS=['crm','ped','agenda','metas','com','cad','fin','rel','repo','trei','fiscal','config'];
 // Permissão efetiva do usuário logado (espelha a lógica do entrar(): perms explícitas mandam;
@@ -8272,6 +8275,19 @@ function _temPerm(k){
   if(ST.perfil==='gestor') return true;
   const pm=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoes)||null;
   return pm ? !!pm[k] : true;
+}
+// Pode EDITAR o módulo (não só ver). Sem mapa de edição salvo → edita (retrocompat). Gestor sempre.
+function _podeEditar(k){
+  if(ST.perfil==='gestor') return true;
+  if(!_temPerm(k)) return false;
+  const pe=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoesEd)||null;
+  return pe ? !!pe[k] : true;
+}
+// Lê os seletores 0/1/2 da UI e devolve os dois mapas (acesso + edição)
+function _lerPermsUI(){
+  const acesso={}, edicao={};
+  _PERMS_KEYS.forEach(k=>{ const m=parseInt(document.getElementById('perm-'+k)?.value)||0; acesso[k]=m>=1?1:0; edicao[k]=m>=2?1:0; });
+  return {permissoes:acesso, permissoesEd:edicao};
 }
 // Aba (painel) → chave de permissão. Usado para bloquear navegação a áreas sem acesso.
 const _TAB_PERM={'tab-crm':'crm','tab-pedidos':'ped','tab-agenda':'agenda','tab-metas':'metas','tab-comissoes':'com','tab-cad':'cad','tab-fin':'fin','tab-pag':'fin','tab-rel':'rel','tab-repo':'repo','tab-trei':'trei','tab-fiscal':'fiscal','tab-config':'config'};
@@ -8292,7 +8308,7 @@ function colabAtualizarPerfil(manterPerms){
     const defs=_permDefaults(perfil);
     _PERMS_KEYS.forEach(k=>{
       const el=document.getElementById('perm-'+k);
-      if(el) el.checked=!!(defs[k]);
+      if(el) el.value=String(defs[k]||0); // 0/1/2
     });
   }
 }
@@ -8635,7 +8651,11 @@ function cfgEditPessoa(area,i){
   // Carrega permissões salvas ou aplica padrão do perfil
   const perms=cfg.permissoes||null;
   if(perms){
-    _PERMS_KEYS.forEach(k=>{ const el=document.getElementById('perm-'+k); if(el) el.checked=!!(perms[k]); });
+    const permsEd=cfg.permissoesEd||null; // sem mapa → quem tem acesso edita (retrocompat)
+    _PERMS_KEYS.forEach(k=>{ const el=document.getElementById('perm-'+k); if(el){
+      const acesso=!!perms[k]; const edita=permsEd?!!permsEd[k]:true;
+      el.value=acesso?(edita?'2':'1'):'0';
+    }});
     colabAtualizarPerfil(true);
   } else {
     colabAtualizarPerfil(false);
@@ -8707,7 +8727,7 @@ async function cfgSalvarColab(){
     if(obs)         c0.obs=obs;
     if(salario)     c0.salarioBase=salario;
     if(adiantamento)c0.adiantamento=adiantamento;
-    c0.permissoes=Object.fromEntries(_PERMS_KEYS.map(k=>[k,!!(document.getElementById('perm-'+k)?.checked)]));
+    { const _pm=_lerPermsUI(); c0.permissoes=_pm.permissoes; c0.permissoesEd=_pm.permissoesEd; }
     toast('Colaborador adicionado ✅');
   } else {
     const antigo=ST.equipe[_colabArea][_colabIdx].nome;
@@ -8734,7 +8754,7 @@ async function cfgSalvarColab(){
     c1.obs          =obs||c1.obs||'';
     c1.salarioBase  =salario;
     c1.adiantamento =adiantamento;
-    c1.permissoes=Object.fromEntries(_PERMS_KEYS.map(k=>[k,!!(document.getElementById('perm-'+k)?.checked)]));
+    { const _pm=_lerPermsUI(); c1.permissoes=_pm.permissoes; c1.permissoesEd=_pm.permissoesEd; }
     toast('Colaborador atualizado ✅');
   }
   _cfgTouch('equipe'); _cfgTouch('configs'); _cfgTouch('senhas');

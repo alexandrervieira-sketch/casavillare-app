@@ -72,7 +72,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
-  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin
+  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -257,6 +257,25 @@ test('hojeLocal formato YYYY-MM-DD e bate com a data local', () => {
 test('mesLocal é o prefixo YYYY-MM de hojeLocal', () => {
   assertEq(T._mesLocal(), T._hojeLocal().slice(0, 7));
 });
+
+// ── Permissões Leitura × Edição (retrocompatível: acesso sem mapa de edição → edita) ──
+test('podeEditar: acesso sem permissoesEd → edita (retrocompat, ninguém perde acesso)', () => {
+  T.ST.perfil = 'financeiro'; T.ST.nome = 'Bruna'; T.ST.configs = { Bruna: { permissoes: { fin: 1 } } };
+  assert(T._temPerm('fin') === true, 'tem acesso a fin');
+  assert(T._podeEditar('fin') === true, 'sem permissoesEd → edita');
+  assert(T._podeEditar('crm') === false, 'sem acesso → não edita');
+});
+test('podeEditar: Leitura (permissoesEd[k]=0) vê mas não edita', () => {
+  T.ST.perfil = 'financeiro'; T.ST.nome = 'Bruna'; T.ST.configs = { Bruna: { permissoes: { fin: 1, config: 1 }, permissoesEd: { fin: 1, config: 0 } } };
+  assert(T._podeEditar('fin') === true, 'fin edição');
+  assert(T._temPerm('config') === true, 'vê config');
+  assert(T._podeEditar('config') === false, 'config só leitura');
+});
+test('podeEditar: gestor edita tudo', () => {
+  T.ST.perfil = 'gestor'; T.ST.nome = 'Alex'; T.ST.configs = {};
+  assert(T._podeEditar('fin') === true && T._podeEditar('config') === true, 'gestor edita');
+});
+T.ST.perfil = ''; T.ST.nome = ''; // reset p/ não afetar outros testes
 
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
