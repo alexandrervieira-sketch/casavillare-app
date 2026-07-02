@@ -72,7 +72,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
-  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar
+  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -276,6 +276,19 @@ test('podeEditar: gestor edita tudo', () => {
   assert(T._podeEditar('fin') === true && T._podeEditar('config') === true, 'gestor edita');
 });
 T.ST.perfil = ''; T.ST.nome = ''; // reset p/ não afetar outros testes
+
+// ── Parcelas de boleto: mantém o DIA do mês (não "+30 dias") ──
+test('addMesesData mantém o dia 25 mês a mês', () => {
+  assertEq(T._addMesesData('2026-01-25', 1), '2026-02-25');
+  assertEq(T._addMesesData('2026-01-25', 2), '2026-03-25');
+});
+test('addMesesData ajusta dia 31 para o último dia do mês curto (fev)', () => {
+  assertEq(T._addMesesData('2026-01-31', 1), '2026-02-28'); // fev/2026 tem 28
+});
+test('addMesesData cruza o ano e trata offset 0', () => {
+  assertEq(T._addMesesData('2026-01-25', 12), '2027-01-25');
+  assertEq(T._addMesesData('2026-07-10', 0), '2026-07-10');
+});
 
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
