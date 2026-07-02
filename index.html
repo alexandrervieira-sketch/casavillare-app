@@ -3759,7 +3759,8 @@ function entrar(nome,perfil,area){
   // Aplica permissões individuais (sobrepõe regras do perfil)
   const _perms=(ST.configs&&ST.configs[nome]&&ST.configs[nome].permissoes)||null;
   if(_perms){
-    const _tab=(id,val)=>{const el=document.getElementById(id);if(el)el.style.display=val?'':'none';};
+    // val undefined = chave de permissão ainda não salva nesta pessoa (ex.: módulo novo) → NÃO mexe (mantém o padrão do perfil)
+    const _tab=(id,val)=>{ if(val===undefined) return; const el=document.getElementById(id); if(el) el.style.display=val?'':'none'; };
     _tab('tab-crm-btn',   _perms.crm);
     _tab('tab-ped-btn',   _perms.ped);
     _tab('tab-agenda-btn',_perms.agenda);
