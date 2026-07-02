@@ -1663,7 +1663,7 @@ textarea.inp{resize:vertical;min-height:68px;}
             <option value="negociacao">Negociação</option>
             <option value="fechamento">Fechamento</option>
           </select></div>
-        <div id="ld-valor-wrap"><label class="lbl">Valor Venda (R$) <span style="font-size:10px;color:var(--gl);font-weight:400;">— via XML Promob</span></label>
+        <div id="ld-valor-wrap"><label class="lbl">Valor Promob (R$) <span style="font-size:10px;color:var(--gl);font-weight:400;">— orçamento do XML (a venda real é o "valor ao cliente")</span></label>
           <input class="inp" type="text" id="ld-valor" readonly tabindex="-1"
             style="background:#F5F3F0;color:var(--mid);cursor:default;"
             placeholder="Importar XML para calcular"/></div>
@@ -3974,26 +3974,26 @@ function rHomeKpi(){
 
   // KPI 1 — Novos projetos este mês
   const novos=todos.filter(l=>(l.dataCriacao||'').startsWith(mesKey));
-  const novosVal=novos.reduce((s,l)=>s+(l.valor||0),0);
+  const novosVal=novos.reduce((s,l)=>s+_leadValorVenda(l),0);
 
   // KPI 2 — Projetos Quentes (apresentacao + ativo)
   const quentes=todos.filter(l=>l.etapa==='apresentacao'&&l.status==='ativo');
-  const quentesVal=quentes.reduce((s,l)=>s+(l.valor||0),0);
+  const quentesVal=quentes.reduce((s,l)=>s+_leadValorVenda(l),0);
 
   // KPI 3 — Pipeline total (todos ativos)
   const ativos=todos.filter(l=>l.status==='ativo');
-  const ativosVal=ativos.reduce((s,l)=>s+(l.valor||0),0);
+  const ativosVal=ativos.reduce((s,l)=>s+_leadValorVenda(l),0);
 
   // KPI 4 — Fechados este mês (ganho)
   const fechados=todos.filter(l=>l.status==='ganho'&&((l.dataFechamento||l.dataCriacao)||'').startsWith(mesKey));
-  const fechadosVal=fechados.reduce((s,l)=>s+(l.valor||0),0);
+  const fechadosVal=fechados.reduce((s,l)=>s+_leadValorVenda(l),0);
 
-  // Filtro por perfil para contagens
+  // Filtro por perfil para contagens — valores = VALOR AO CLIENTE (venda real), não o Promob
   const filterU=lista=>lista; // dashboard: todos veem os números da empresa inteira
-  const nN=filterU(novos).length,    vN=filterU(novos).reduce((s,l)=>s+(l.valor||0),0);
-  const nQ=filterU(quentes).length,  vQ=filterU(quentes).reduce((s,l)=>s+(l.valor||0),0);
-  const nA=filterU(ativos).length,   vA=filterU(ativos).reduce((s,l)=>s+(l.valor||0),0);
-  const nF=filterU(fechados).length, vF=filterU(fechados).reduce((s,l)=>s+(l.valor||0),0);
+  const nN=filterU(novos).length,    vN=filterU(novos).reduce((s,l)=>s+_leadValorVenda(l),0);
+  const nQ=filterU(quentes).length,  vQ=filterU(quentes).reduce((s,l)=>s+_leadValorVenda(l),0);
+  const nA=filterU(ativos).length,   vA=filterU(ativos).reduce((s,l)=>s+_leadValorVenda(l),0);
+  const nF=filterU(fechados).length, vF=filterU(fechados).reduce((s,l)=>s+_leadValorVenda(l),0);
 
   const meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const mesNome=meses[now.getMonth()];
@@ -4035,8 +4035,7 @@ function rHomeChart(){
     const ref=l.dataFechamento||l.dataCriacao;
     if(ref){
       const d=new Date(ref+'T12:00');
-      const cad=(ST.cadastros||[]).find(c=>c.leadId===String(l.id)&&c.tipo==='cliente');
-      const valor=cad?(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0)||l.valor||0:l.valor||0;
+      const valor=_leadValorVenda(l); // valor ao cliente (venda real), não o Promob/ambientes bruto
       if(d.getFullYear()===year) dataLeads[d.getMonth()]+=valor;
     }
   });
@@ -4277,7 +4276,7 @@ function rHomeComercial(){
     const g=ganhosMes.filter(l=>(l.origem||'outro')===o);
     const p=perdidosMes.filter(l=>(l.origem||'outro')===o);
     const tx=ls.length?Math.round(g.length/ls.length*100):0;
-    const vol=g.reduce((s,l)=>s+(l.valor||0),0);
+    const vol=g.reduce((s,l)=>s+_leadValorVenda(l),0);
     return {o,label:ORIG_LABEL[o]||o,cor:ORIG_COR[o]||'#888',n:ls.length,g:g.length,p:p.length,tx,vol};
   }).filter(r=>r.n>0||r.g>0).sort((a,b)=>b.n-a.n);
 
@@ -4302,7 +4301,7 @@ function rHomeComercial(){
   const maxPipN=Math.max(...pipeline.map(e=>e.n),1);
 
   const txGeral=leadsDoMes.length?Math.round(ganhosMes.length/leadsDoMes.length*100):0;
-  const volTotal=ganhosMes.reduce((s,l)=>s+(l.valor||0),0);
+  const volTotal=ganhosMes.reduce((s,l)=>s+_leadValorVenda(l),0);
 
   card.style.display='';
   body.innerHTML=`
@@ -5944,7 +5943,7 @@ function rRelResumo(){
       const leadsM=(ST.leads||[]).filter(l=>(l.dataCriacao||'').startsWith(mesAno));
       const ganhos=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
       const perdidos=(ST.leads||[]).filter(l=>l.status==='perdido'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
-      const totalVendido=ganhos.reduce((a,l)=>a+(l.valor||0),0);
+      const totalVendido=ganhos.reduce((a,l)=>a+_leadValorVenda(l),0);
       const txConv=leadsM.length>0?Math.round(ganhos.length/leadsM.length*100):0;
       return`<div class="stat-card"><div class="sc-label">Leads entrados</div><div class="sc-val">${leadsM.length}</div></div>
              <div class="stat-card"><div class="sc-label">Vendas fechadas</div><div class="sc-val ok">${ganhos.length}</div></div>
@@ -6191,7 +6190,7 @@ function rRelAnalisePerda(){
   const perdidos=(ST.leads||[]).filter(l=>l.status==='perdido');
   const total=perdidos.length;
   const comMotivo=perdidos.filter(l=>l.motivoPerda).length;
-  const totalValor=perdidos.reduce((a,l)=>a+(l.valor||0),0);
+  const totalValor=perdidos.reduce((a,l)=>a+_leadValorVenda(l),0);
 
   // Agrupamento por motivo
   const porMotivo=MOTIVOS_PERDA.map(m=>{
@@ -6199,7 +6198,7 @@ function rRelAnalisePerda(){
     return {
       ...m,
       count:grupo.length,
-      valor:grupo.reduce((a,l)=>a+(l.valor||0),0),
+      valor:grupo.reduce((a,l)=>a+_leadValorVenda(l),0),
       pct:total?Math.round(grupo.length/total*100):0
     };
   }).filter(m=>m.count>0).sort((a,b)=>b.count-a.count);
@@ -6212,7 +6211,7 @@ function rRelAnalisePerda(){
     const ma=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const label=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][d.getMonth()];
     const grupo=perdidos.filter(l=>(l.dataFechamento||l.dataCriacao||'').startsWith(ma));
-    ultMeses.push({label,count:grupo.length,valor:grupo.reduce((a,l)=>a+(l.valor||0),0)});
+    ultMeses.push({label,count:grupo.length,valor:grupo.reduce((a,l)=>a+_leadValorVenda(l),0)});
   }
   const maxBar=Math.max(...ultMeses.map(m=>m.count),1);
 
@@ -6540,7 +6539,7 @@ function rRelConversao(){
   const txAtend=nLeads>0?Math.round(nAtend/nLeads*100):0;
   const txVenda=nAtend>0?Math.round(nVendas/nAtend*100):0;
   const txGeral=nLeads>0?Math.round(nVendas/nLeads*100):0;
-  const valorTotal=leads.filter(l=>l.status==='ganho').reduce((s,l)=>s+(l.valor||0),0);
+  const valorTotal=leads.filter(l=>l.status==='ganho').reduce((s,l)=>s+_leadValorVenda(l),0);
   const ticketMedio=nVendas>0?valorTotal/nVendas:0;
   const fmtBRL=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const pct=(v,max)=>max>0?Math.min(100,Math.round(v/max*100)):0;
@@ -6551,7 +6550,7 @@ function rRelConversao(){
     const mLeads=leads.filter(l=>l.responsavel===v.nome||l.pessoa===v.nome);
     const mAtend=mLeads.filter(l=>_ETAPAS_ATEND.includes(l.etapa)||l.status==='ganho').length;
     const mVend=mLeads.filter(l=>l.status==='ganho').length;
-    const mVal=mLeads.filter(l=>l.status==='ganho').reduce((s,l)=>s+(l.valor||0),0);
+    const mVal=mLeads.filter(l=>l.status==='ganho').reduce((s,l)=>s+_leadValorVenda(l),0);
     const mTx=mLeads.length>0?Math.round(mVend/mLeads.length*100):0;
     return {nome:v.nome, leads:mLeads.length, atend:mAtend, vendas:mVend, valor:mVal, tx:mTx};
   }).filter(v=>v.leads>0||v.vendas>0);
@@ -6632,7 +6631,7 @@ function rRelConversao(){
         const ganhos=ls.filter(l=>l.status==='ganho');
         const perdidos=ls.filter(l=>l.status==='perdido');
         const tx=ls.length>0?Math.round(ganhos.length/ls.length*100):0;
-        const vol=ganhos.reduce((s,l)=>s+(l.valor||0),0);
+        const vol=ganhos.reduce((s,l)=>s+_leadValorVenda(l),0);
         return {o,label:ORIG_LABEL[o]||o,cor:ORIG_COR[o]||'#888',leads:ls.length,ganhos:ganhos.length,perdidos:perdidos.length,tx,vol};
       }).filter(r=>r.leads>0).sort((a,b)=>b.leads-a.leads);
       if(!porOrig.length) return '';
@@ -9387,7 +9386,7 @@ function rCrm(){
     todosGanhos.splice(0,todosGanhos.length,...todosGanhos.filter(l=>l.responsavel===filtroEfetivo));
   }
 
-  const valorPipe=visiveis.reduce((a,l)=>a+(l.valor||0),0);
+  const valorPipe=visiveis.reduce((a,l)=>a+_leadValorVenda(l),0);
   const valorFechado=ganhos.reduce((a,l)=>a+_leadValorVenda(l),0); // valor ao cliente (com desconto)
   const hoje=_hojeLocal();
   const atrasados=ativos.filter(l=>l.proxContato&&l.proxContato<hoje).length;
@@ -9418,7 +9417,7 @@ function rCrm(){
   // Kanban
   const cols=CRM_ETAPAS.map(e=>{
     const cards=visiveis.filter(l=>l.etapa===e.id);
-    const valorCol=cards.reduce((a,l)=>a+(l.valor||0),0);
+    const valorCol=cards.reduce((a,l)=>a+_leadValorVenda(l),0);
     return `<div class="pipe-col" style="border-top:3px solid ${e.cor};">
       <div class="pipe-col-hdr">
         <span class="pipe-col-name" style="color:${e.cor};">${e.label}</span>
@@ -12264,7 +12263,7 @@ function rCadastros(){
         <tbody>${lista.map(c=>{
           const mLeads=leadsComEsp.filter(l=>l.especificadorId===String(c.id));
           const mGanhos=mLeads.filter(l=>l.status==='ganho');
-          const volTotal=mGanhos.reduce((a,l)=>a+(l.valor||0),0);
+          const volTotal=mGanhos.reduce((a,l)=>a+_leadValorVenda(l),0);
           const rtTotal=mGanhos.reduce((a,l)=>a+(l.valor||0)*(1-(l.desconto||0)/100)*((l.rtPct||0)/100),0);
           return`<tr>
             <td class="td-bold">🏛️ ${c.nome}</td>
@@ -14095,11 +14094,7 @@ function _vendasMes(mes, nome){
       if(nome && nome!=='loja' && l.responsavel!==nome) return false;
       return true;
     })
-    .reduce((sum,l)=>{
-      const cad=(ST.cadastros||[]).find(c=>c.leadId===String(l.id)&&c.tipo==='cliente');
-      const val=cad?(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0)||l.valor||0:l.valor||0;
-      return sum+val;
-    },0);
+    .reduce((sum,l)=>sum+_leadValorVenda(l),0); // valor ao cliente (venda real), não o Promob
 }
 
 function _metBarCor(pct){
@@ -14180,7 +14175,7 @@ function rMetas(){
       <div class="meta-loja-card" style="grid-column:1/-1">
         <div class="meta-loja-title">🏪 Meta da Loja — ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
         <div class="meta-loja-valor">${fmt(vendLoja)}</div>
-        <div style="font-size:10px;opacity:.75;margin:-2px 0 4px;">vendas em valor bruto (antes do desconto)</div>
+        <div style="font-size:10px;opacity:.75;margin:-2px 0 4px;">vendas em valor ao cliente (venda real)</div>
         <div class="meta-loja-sub">Meta: ${metaLoja>0?fmt(metaLoja):'Não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pctLoja}%;background:#fff;opacity:.9;"></div></div>
         <div class="meta-pct">${pctLoja}% ${prazoTxt?'· '+prazoTxt:''}</div>
@@ -14192,7 +14187,7 @@ function rMetas(){
       <div class="meta-loja-card">
         <div class="meta-loja-title">🏪 Meta da Loja — ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
         <div class="meta-loja-valor">${fmt(vendLoja)}</div>
-        <div style="font-size:10px;opacity:.75;margin:-2px 0 4px;">vendas em valor bruto (antes do desconto)</div>
+        <div style="font-size:10px;opacity:.75;margin:-2px 0 4px;">vendas em valor ao cliente (venda real)</div>
         <div class="meta-loja-sub">Meta: ${metaLoja>0?fmt(metaLoja):'Não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pctLoja}%;background:#fff;opacity:.9;"></div></div>
         <div class="meta-pct">${pctLoja}% ${prazoTxt?'· '+prazoTxt:''}</div>
