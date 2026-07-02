@@ -850,7 +850,6 @@ textarea.inp{resize:vertical;min-height:68px;}
         <button class="fin-sub-btn" id="fin-sub-cr" onclick="finSubTab('cr')">💳 A Receber</button>
         <button class="fin-sub-btn" id="fin-sub-cp" onclick="finSubTab('cp')">📋 A Pagar</button>
         <button class="fin-sub-btn" id="fin-sub-pag" onclick="finSubTab('pag')">👥 Folha</button>
-        <button class="fin-sub-btn" id="fin-sub-bipartido" onclick="finSubTab('bipartido')">🏭 Bipartido</button>
       </div>
       <div id="fin-content"></div>
       <!-- Campos de estado do DRE (mantidos para compatibilidade) -->
@@ -873,7 +872,6 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
         <button class="fin-sub-btn active" id="rel-sub-resumo"       onclick="relSubTab('resumo')">📊 Resumo Mensal</button>
         <button class="fin-sub-btn"        id="rel-sub-conversao"  onclick="relSubTab('conversao')">🔄 Funil de Conversão</button>
-        <button class="fin-sub-btn"        id="rel-sub-fabrica"    onclick="relSubTab('fabrica')">🏭 Custos Fábrica</button>
         <button class="fin-sub-btn"        id="rel-sub-perda"      onclick="relSubTab('perda')">🔴 Análise de Perdas</button>
         <button class="fin-sub-btn"        id="rel-sub-rentab"     onclick="relSubTab('rentab')">💹 Rentabilidade</button>
       </div>
@@ -5472,14 +5470,13 @@ let _relSubAtivo='resumo';
 
 function relSubTab(sub){
   _relSubAtivo=sub;
-  ['resumo','conversao','fabrica','perda','rentab'].forEach(k=>{
+  ['resumo','conversao','perda','rentab'].forEach(k=>{
     const btn=document.getElementById('rel-sub-'+k);
     if(btn) btn.classList.toggle('active', k===sub);
   });
   const nav=document.getElementById('rel-mes-nav');
   if(nav) nav.style.display=sub==='resumo'?'':'none';
   if(sub==='resumo')      rRelResumo();
-  else if(sub==='fabrica') rRelCustosFabrica();
   else if(sub==='perda')   rRelAnalisePerda();
   else if(sub==='rentab')  rRelRentabilidade();
   else rRelConversao();
@@ -11208,7 +11205,7 @@ function _rPedPipe(ped,hoje,statsHtml){
           const icon=allConf?'✅':anyEnv?'📤':'⏳';
           return `<div style="margin-top:4px;padding:3px 8px;background:${allConf?'#F0FDF4':anyEnv?'#EFF6FF':'#FFF7ED'};border:1px solid ${allConf?'#86EFAC':anyEnv?'#BFDBFE':'#FED7AA'};border-radius:6px;font-size:10px;color:${cor};">
             🏭 Bipartido: <strong>R$ ${fmt(totBip)}</strong> ${icon}
-            <button onclick="event.stopPropagation();navTo('tab-fin');setTimeout(()=>finSubTab('bipartido'),100);" style="border:none;background:none;font-size:10px;color:${cor};cursor:pointer;text-decoration:underline;padding:0;margin-left:4px;">ver</button>
+            <button onclick="event.stopPropagation();navTo('tab-fabrica');setTimeout(()=>fabSubTab('bipartido'),100);" style="border:none;background:none;font-size:10px;color:${cor};cursor:pointer;text-decoration:underline;padding:0;margin-left:4px;">ver</button>
           </div>`;
         })()}
         ${(isG||ST.configsCom?.comissaoVisivel)?comBadge:''}
@@ -12906,7 +12903,7 @@ function calcDRE(mesAno){
 let _finSubAtivo='dre';
 function finSubTab(sub){
   _finSubAtivo=sub;
-  ['dre','analise','cr','cp','pag','bipartido'].forEach(s=>{
+  ['dre','analise','cr','cp','pag'].forEach(s=>{
     const btn=document.getElementById('fin-sub-'+s);
     if(btn) btn.classList.toggle('active',s===sub);
   });
@@ -12919,8 +12916,6 @@ function finSubTab(sub){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="finNavMes(-1)">‹</button><span class="mes-label" id="analise-mes-label">—</span><button onclick="finNavMes(1)">›</button></div>`;
     } else if(sub==='pag'){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="pagNavMes(-1)">‹</button><span class="mes-label" id="pag-mes-label">—</span><button onclick="pagNavMes(1)">›</button></div><button class="btn btn-p" id="btn-nova-folha" onclick="abrirModalFolha(null)">+ Nova folha</button>`;
-    } else if(sub==='bipartido'){
-      actEl.innerHTML=`<div class="mes-nav"><button onclick="bipNavMes(-1)">‹</button><span class="mes-label" id="bip-mes-label">—</span><button onclick="bipNavMes(1)">›</button></div>`;
     } else if(sub==='cp'){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="cpNavMes(-1)">‹</button><span class="mes-label" id="cp-mes-label">—</span><button onclick="cpNavMes(1)">›</button></div><button class="btn btn-p" onclick="abrirModalCP(null)">+ Conta a Pagar</button>`;
     } else {
@@ -12932,7 +12927,6 @@ function finSubTab(sub){
   else if(sub==='cr')        rFinCR();
   else if(sub==='cp')        rFinCP();
   else if(sub==='pag')       {document.getElementById('pag-mes-label').textContent=mesNomeStr(_pagMes,_pagAno);rPag();}
-  else if(sub==='bipartido') rBipartido();
 }
 
 // ══════════════════════════════════════════════════════
