@@ -4805,7 +4805,7 @@ function pfRenderComsComercial(){
     (l.dataFechamento||(l.dataCriacao||'')).startsWith(mes)
   ).map(l=>{
     const desc=l.desconto||0;
-    const {pontos,pct}=_calcComVendaPontos(desc);
+    const {pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l)); // taxa absorvida pela loja entra como desconto
     const {taxa:taxaVal,rt:rtVal,liquido:valorLiq}=_vendaLiquido(l);
     const valorLiqCom=_aplicarMargemErro(valorLiq);
     return {cliente:l.nome,valorBruto:l.valor,desconto:desc,pontos,comissaoPct:pct,valorLiq,valorCom:valorLiqCom*(pct/100),fromLead:true,rtPct:l.rtPct||0,rtVal};
@@ -5962,7 +5962,7 @@ function rRelResumo(){
         const leadsG=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
         const vendasM=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno);
         const todas=[
-          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(d);const vl=_aplicarMargemErro(_valorLiquidoVenda(l));return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:vl*(pct/100)};}),
+          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l));const vl=_aplicarMargemErro(_valorLiquidoVenda(l));return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:vl*(pct/100)};}),
           ...vendasM.map(v=>({pessoa:v.pessoa,cliente:v.cliente,valorBruto:v.valorBruto,desconto:v.desconto,pontos:v.pontos,comissaoPct:v.comissaoPct,valorCom:v.valorCom}))
         ];
         if(!todas.length) return`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda comercial neste mês.</td></tr>`;
@@ -6917,6 +6917,18 @@ function _calcComVendaPontos(desc){
   const pct=_getComVend(pontos);
   return {pontos,pct};
 }
+// Desconto EFETIVO para a pontuação de comissão = desconto real + a TAXA que a LOJA absorveu (financeira/cartão),
+// tratada como se fosse desconto (alíquota). Ex.: desc 14,238% + retenção 29,77% (loja assume) = 44,01%.
+// A taxa entra como alíquota = taxa_absorvida(R$) ÷ valor de venda ao cliente. Só conta condição com absorcao='loja'.
+function _descEfetivoComissao(lead){
+  if(!lead) return 0;
+  const desc=lead.desconto||0;
+  const conds=lead.condicoesPgto;
+  if(!conds||!conds.length) return desc;
+  const venda=_leadValorVenda(lead);
+  if(venda<=0) return desc;
+  return desc + (_calcTaxaCartaoConds(conds)/venda)*100;
+}
 
 // ── Comissão montador: 10% valor líquido, liberada em concluído, adiantamento parcial permitido ──
 const _MONT_ETAPAS_VISIVEIS=['montagem','vistoria','assistencia','concluido'];
@@ -6948,7 +6960,7 @@ function _cascataProjeto(p){
     liquido=_pedValorVendaCRM(p); vendaBruta=(p&&p.valor)||liquido;
     desconto=Math.max(0,vendaBruta-liquido); taxa=0; rt=0;
   }
-  const {pct:vendPct}=lead?_calcComVendaPontos(lead.desconto||0):{pct:0};
+  const {pct:vendPct}=lead?_calcComVendaPontos(_descEfetivoComissao(lead)):{pct:0};
   const comVend=liquido>0?Math.round(_aplicarMargemErro(liquido)*vendPct/100*100)/100:0;
   const proj=_calcComProjetista(p), mont=_calcComMontador(p), sup=_calcComSupervisor(p);
   const custoFab=(p&&p.valorFabrica)||0;
@@ -7015,8 +7027,8 @@ function calcVendaCom(){
   }
   const taxaPct=parseFloat(document.getElementById('vc-taxa').value)||0;
 
-  // Pontos e comissão%
-  const {pontos,pct}=_calcComVendaPontos(desc);
+  // Pontos e comissão% — taxa absorvida pela loja entra como desconto na pontuação
+  const {pontos,pct}=_calcComVendaPontos(desc + (assume==='loja'&&pgto!=='avista'?taxaPct:0));
 
   // Resultado pontos
   const resEl=document.getElementById('vc-resultado');
@@ -7123,7 +7135,7 @@ function salvarVendaCom(){
   if(!dataIso) return toast('Informe a data');
   if(desc<0||desc>40) return toast('Desconto deve ser entre 0% e 40%');
 
-  const {pontos,pct}=_calcComVendaPontos(desc);
+  const {pontos,pct}=_calcComVendaPontos(desc + (assume==='loja'&&pgto!=='avista'?taxaPct:0)); // taxa absorvida entra como desconto
   const valorApdesc =bruto*(1-desc/100);
   const taxaValor   =pgto!=='avista'&&assume==='loja'?valorApdesc*(taxaPct/100):0;
   const valorLiq    =valorApdesc-taxaValor;
@@ -7290,7 +7302,7 @@ function rComissoes(){
       const minhasVendas=[
         ...leadsP.map(l=>{
           const desc=l.desconto||0;
-          const {pontos,pct}=_calcComVendaPontos(desc);
+          const {pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l)); // taxa absorvida entra como desconto
           const {taxa:taxaVal,rt:rtVal,liquido:valorLiq}=_vendaLiquido(l);
           return {
             id:l.id, cliente:l.nome,
@@ -10073,7 +10085,6 @@ function ldAtualizarTaxaPreview(){
   if(comEl){
     if(!valor || desconto < 0){ comEl.style.display='none'; }
     else {
-      const {pontos, pct} = _calcComVendaPontos(desconto);
       const valorApdesc   = valor * (1 - desconto/100);
       // Deduz taxas — condições já adicionadas + formulário pendente (tempo real)
       const _pendForma  = document.getElementById('ld-nadd-forma')?.value||'';
@@ -10086,6 +10097,8 @@ function ldAtualizarTaxaPreview(){
         _condsFull.push({forma:_pendForma,valor:_pendValor,parcelas:_pendParc,absorcao:_pendAbs,prazoFin:_pendPrazo});
       }
       const taxaCartao    = _calcTaxaCartaoConds(_condsFull);
+      // Desconto EFETIVO p/ pontuação = desconto + taxa que a loja absorveu (alíquota sobre o valor de venda)
+      const {pontos, pct} = _calcComVendaPontos(desconto + (valorApdesc>0?(taxaCartao/valorApdesc)*100:0));
       // RT do especificador (% sobre valor após desconto E taxa — igual a _vendaLiquido)
       const rtPct         = parseFloat(document.getElementById('ld-rt-pct')?.value)||0;
       const rtValor       = rtPct>0?(valorApdesc-taxaCartao)*(rtPct/100):0;
@@ -11463,7 +11476,7 @@ function pdCalcMargem(){
 
   // Comissão vendedor (estimada — base no desconto do lead)
   const valorLiqCom=_aplicarMargemErro(valorApdesc-taxaCartao-rt);
-  const {pct:comPct}=lead?_calcComVendaPontos(desc):{pct:0};
+  const {pct:comPct}=lead?_calcComVendaPontos(_descEfetivoComissao(lead)):{pct:0};
   const comissao=lead&&comPct>0?Math.round(valorLiqCom*(comPct/100)*100)/100:0;
 
   // Outros custos cadastrados

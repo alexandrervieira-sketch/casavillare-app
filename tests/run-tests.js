@@ -72,7 +72,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
-  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData
+  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -288,6 +288,25 @@ test('addMesesData ajusta dia 31 para o último dia do mês curto (fev)', () => 
 test('addMesesData cruza o ano e trata offset 0', () => {
   assertEq(T._addMesesData('2026-01-25', 12), '2027-01-25');
   assertEq(T._addMesesData('2026-07-10', 0), '2026-07-10');
+});
+
+// ── Comissão: taxa absorvida pela LOJA entra como desconto na pontuação (regra do gestor / Focco) ──
+test('descEfetivoComissao: sem condições = só o desconto real', () => {
+  assertEq(T._descEfetivoComissao({ valor: 100000, desconto: 10 }), 10);
+});
+test('descEfetivoComissao: CLIENTE assume → taxa NÃO entra', () => {
+  const lead = { valor: 100000, desconto: 10, condicoesPgto: [{ forma: 'financiamento', valor: 90000, parcelas: 24, prazoFin: 'd60', absorcao: 'cliente' }] };
+  assert(_close(T._descEfetivoComissao(lead), 10), 'cliente assume → efetivo = desconto');
+});
+test('descEfetivoComissao: LOJA assume soma a alíquota da taxa (24x d60 = 29,77%)', () => {
+  const lead = { valor: 100000, desconto: 0, condicoesPgto: [{ forma: 'financiamento', valor: 100000, parcelas: 24, prazoFin: 'd60', absorcao: 'loja' }] };
+  assert(_close(T._descEfetivoComissao(lead), 29.77), 'desc 0 + 29,77% = 29,77');
+});
+test('taxa absorvida REDUZ a pontuação (menos comissão)', () => {
+  const lead = { valor: 100000, desconto: 0, condicoesPgto: [{ forma: 'financiamento', valor: 100000, parcelas: 24, prazoFin: 'd60', absorcao: 'loja' }] };
+  const ptsSem = T._calcComVendaPontos(0).pontos;
+  const ptsCom = T._calcComVendaPontos(T._descEfetivoComissao(lead)).pontos;
+  assert(ptsCom < ptsSem, 'com taxa absorvida os pontos caem');
 });
 
 // ── relatório ──
