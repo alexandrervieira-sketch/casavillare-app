@@ -5495,13 +5495,13 @@ function rRelCustosFabrica(tgt){
   if(!el) return;
 
   const todosped=ST.pedidos||[];
-  const peds=todosped.filter(p=>p.valorFabrica>0);
+  const peds=todosped.filter(p=>_custoFabPed(p)>0);
   const pedsAt=todosped.filter(p=>p.atErroTipo==='nosso'&&(p.atCusto||0)>0);
 
   // KPIs fábrica
   // Denominador de % = venda LÍQUIDA (pós desconto+taxa+RT), coerente com Rentabilidade/ficha. % é PONDERADO (Σcusto/Σvenda).
   const _liqPed=p=>_cascataProjeto(p).previsto.liquido;
-  const totalFab=peds.reduce((s,p)=>s+(p.valorFabrica||0),0);
+  const totalFab=peds.reduce((s,p)=>s+_custoFabPed(p),0);
   const mediaFab=peds.length?totalFab/peds.length:0;
   const _vendaLiqFab=peds.reduce((s,p)=>s+_liqPed(p),0);
   const pctMedio=_vendaLiqFab>0?(totalFab/_vendaLiqFab)*100:0;
@@ -5511,7 +5511,7 @@ function rRelCustosFabrica(tgt){
   // Custo REAL do projeto = fábrica + fornecedores adicionais + outros custos
   const _custoFornPed=p=>(p.fornecedoresAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0);
   const _custoOutrosPed=p=>(p.outrosCustos||[]).reduce((a,c)=>a+(c.valor||0),0);
-  const _custoProjPed=p=>(p.valorFabrica||0)+_custoFornPed(p)+_custoOutrosPed(p);
+  const _custoProjPed=p=>_custoFabPed(p)+_custoFornPed(p)+_custoOutrosPed(p);
   const totalForn=todosped.reduce((s,p)=>s+_custoFornPed(p),0);
   const totalOutros=todosped.reduce((s,p)=>s+_custoOutrosPed(p),0);
   const totalReal=totalFab+totalForn+totalOutros;
@@ -5530,7 +5530,7 @@ function rRelCustosFabrica(tgt){
   const porMes=meses.map(m=>{
     const mPeds=peds.filter(p=>{const d=new Date(p.dataCriacao||p.data||0);return d.getFullYear()===m.ano&&d.getMonth()===m.mes;});
     const mAt=pedsAt.filter(p=>{const d=new Date(p.dataCriacao||p.data||0);return d.getFullYear()===m.ano&&d.getMonth()===m.mes;});
-    const totMes=mPeds.reduce((s,p)=>s+(p.valorFabrica||0),0);
+    const totMes=mPeds.reduce((s,p)=>s+_custoFabPed(p),0);
     const totAt=mAt.reduce((s,p)=>s+(p.atCusto||0),0);
     const _liqMes=mPeds.reduce((s,p)=>s+_liqPed(p),0);
     const pctMes=_liqMes>0?(totMes/_liqMes)*100:null;
@@ -5545,7 +5545,7 @@ function rRelCustosFabrica(tgt){
   // Tabela unificada — custo fábrica + AT (nosso), top 20 por custo
   const subLabels={projetos:'Projetos',medicao:'Medição',supervisao:'Supervisão',montagem:'Montagem'};
   const itensTabela=[
-    ...peds.map(p=>({ped:p, custo:_custoProjPed(p), custoFab:p.valorFabrica||0, custoForn:_custoFornPed(p), custoOutros:_custoOutrosPed(p), tipo:'fab'})),
+    ...peds.map(p=>({ped:p, custo:_custoProjPed(p), custoFab:_custoFabPed(p), custoForn:_custoFornPed(p), custoOutros:_custoOutrosPed(p), tipo:'fab'})),
     ...pedsAt.map(p=>({ped:p, custo:p.atCusto, tipo:'at', sub:subLabels[p.atErroSubTipo]||''}))
   ].sort((a,b)=>b.custo-a.custo).slice(0,25);
 
@@ -6859,6 +6859,12 @@ function _bipartidoLead(lead){
 function _bipartidoPed(p){
   const lead=p&&p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
   return _bipartidoLead(lead);
+}
+// Custo de fábrica EFETIVO de um pedido = custo lançado à mão OU, na ausência, o
+// bipartido (40% do financiado). FONTE ÚNICA usada por Rentabilidade, DRE e Custos Fábrica.
+function _custoFabPed(p){
+  const manual=(p&&p.valorFabrica)||0;
+  return manual>0?manual:_bipartidoPed(p);
 }
 // ── FONTE ÚNICA do valor líquido da venda = base de comissão de TODOS os papéis ──
 // Cálculo EM CASCATA (cada etapa sobre o resultado da anterior):
@@ -12898,7 +12904,8 @@ function calcDRE(mesAno){
     const _l=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
     const ref=_l?.dataFechamento||_l?.dataCriacao||p.data||'';
     if(!String(ref).startsWith(mesAno)) return a;
-    return a+(p.valorFabrica||0)
+    const _fab=(p.valorFabrica||0)>0?(p.valorFabrica||0):_bipartidoLead(_l); // sem custo manual, usa o bipartido (40% financiado)
+    return a+_fab
             +(p.fornecedoresAdicionais||[]).reduce((s,f)=>s+(f.valor||0),0)
             +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0);
   },0);

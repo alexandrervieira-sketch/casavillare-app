@@ -73,7 +73,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
-  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed
+  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -347,6 +347,13 @@ test('cascataProjeto: valorFabrica manual tem precedência sobre o bipartido', (
   const c = T._cascataProjeto({ id: 'Pbip2', leadId: 'Lbip2', valorFabrica: 15000, status: 'aberto' });
   assertEq(c.previsto.custoFab, 15000);
   assert(c.previsto.custoFabBip === false, 'manual → não marca bipartido');
+});
+
+test('custoFabPed: usa o bipartido do pedido quando não há valorFabrica (DRE + Custos Fábrica)', () => {
+  const lead = { id: 'LcfP', valor: 59800, desconto: 0, condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 59800, absorcao: 'cliente' }] };
+  T.ST.leads.push(lead);
+  assert(_close(T._custoFabPed({ id: 'PcfP', leadId: 'LcfP' }), 23920), 'bipartido 40% de 59800');
+  assertEq(T._custoFabPed({ id: 'PcfM', leadId: 'LcfP', valorFabrica: 8000 }), 8000);
 });
 
 // ── relatório ──
