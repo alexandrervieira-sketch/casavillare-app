@@ -14737,7 +14737,7 @@ function rMetas(){
       ${isG?`
       <!-- Resumo individual por vendedora (gestor) -->
       <div style="display:flex;flex-direction:column;gap:10px;">
-        ${(ST.equipe.comercial||[]).map(v=>{
+        ${_equipeAtivaMes('comercial', _metMes).map(v=>{
           const vMeta=(metMes.vendedores||{})[v.nome]||0;
           const vVend=_vendasMes(_metMes,v.nome);
           const vPct =vMeta>0?Math.min(Math.round(vVend/vMeta*100),100):0;
@@ -14796,7 +14796,7 @@ function rMetas(){
   // Tabela por vendedor (gestor)
   let convTable='';
   if(isG){
-    const rows=(ST.equipe.comercial||[]).map(v=>{
+    const rows=_equipeAtivaMes('comercial', _metMes).map(v=>{
       const a=_apresCount(_metMes,v.nome);
       const vc=_vendasCount(_metMes,v.nome);
       const t=a>0?(vc/a*100).toFixed(1)+'%':'—';
@@ -14852,7 +14852,8 @@ function rMetas(){
     const atendMeta=metMes.atendVendedores||{};
     const apresMeta=metMes.apresVendedores||{};
     const fechMeta=metMes.fechVendedores||{};
-    const vendsFiltro=isG?(ST.equipe?.comercial||[]):(ST.equipe?.comercial||[]).filter(v=>v.nome===ST.nome);
+    const _comAtivos=_equipeAtivaMes('comercial', _metMes);
+    const vendsFiltro=isG?_comAtivos:_comAtivos.filter(v=>v.nome===ST.nome);
     if(!vendsFiltro.length) return '';
     const _metBarCor2=p=>p>=100?'#16A34A':p>=60?'#BFA87D':'#F59E0B';
 
@@ -14926,7 +14927,7 @@ function rMetas(){
     const ESP_TIPOS=['Arquiteto','Designer de Interiores','Corretor','Construtor','Construtora','Outros'];
     const ESP_ICONS={'Arquiteto':'🏛️','Designer de Interiores':'🎨','Corretor':'🏠','Construtor':'🔨','Construtora':'🏗️','Outros':'📋'};
     const espMeta=metMes.espVendedores||{};
-    const vends=ST.equipe?.comercial||[];
+    const vends=_equipeAtivaMes('comercial', _metMes);
     // range semanal (reutiliza _metSemana já calculado acima)
     const ewr=_metSemana>0?_semRange(_metMes,_metSemana):null;
     const eSemLbl=ewr?` — S${_metSemana} (${ewr.de.slice(8)}/${ewr.de.slice(5,7)} a ${ewr.ate.slice(8)}/${ewr.ate.slice(5,7)})`:'';
