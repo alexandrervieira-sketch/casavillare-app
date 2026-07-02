@@ -4819,7 +4819,7 @@ function pfRenderComsComercial(){
         ${todas.map(v=>`<div class="com-row" style="border-top:1px solid var(--border);padding:8px 12px;">
           <div style="flex:1;">
             <div style="font-size:12.5px;font-weight:500;">${_esc(v.cliente||'—')}${v.fromLead?' <span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:1px 5px;border-radius:3px;">CRM</span>':''}</div>
-            <div style="font-size:11px;color:var(--gl);">${fmt(v.valorBruto)} ${v.desconto>0?'· −'+v.desconto+'%':''} · ${(v.pontos||0).toFixed(2).replace('.',',')} pts · ${(v.comissaoPct||0).toFixed(1).replace('.',',')}% comissão</div>
+            <div style="font-size:11px;color:var(--gl);">${fmt(_vendaComExib(v))} ${v.desconto>0?'· −'+_pctVenda(v.desconto)+'%':''} · ${(v.pontos||0).toFixed(2).replace('.',',')} pts · ${(v.comissaoPct||0).toFixed(1).replace('.',',')}% comissão</div>
           </div>
           <strong style="color:var(--ok);">${fmt(v.valorCom)}</strong>
         </div>`).join('')}
@@ -5957,7 +5957,7 @@ function rRelResumo(){
     </div>
     <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Comissões — Equipe Comercial</div>
     <div class="tbl-wrap">
-      <table><thead><tr><th>Vendedora</th><th>Cliente</th><th>Bruto</th><th>Desconto</th><th>Pts</th><th>Com%</th><th>Comissão</th></tr></thead>
+      <table><thead><tr><th>Vendedora</th><th>Cliente</th><th>Venda</th><th>Desconto</th><th>Pts</th><th>Com%</th><th>Comissão</th></tr></thead>
       <tbody>${(()=>{
         const leadsG=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
         const vendasM=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno);
@@ -5966,7 +5966,7 @@ function rRelResumo(){
           ...vendasM.map(v=>({pessoa:v.pessoa,cliente:v.cliente,valorBruto:v.valorBruto,desconto:v.desconto,pontos:v.pontos,comissaoPct:v.comissaoPct,valorCom:v.valorCom}))
         ];
         if(!todas.length) return`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda comercial neste mês.</td></tr>`;
-        return todas.map(v=>`<tr><td class="td-bold">${_esc(v.pessoa||'—')}</td><td>${_esc(v.cliente||'—')}</td><td>${fmt(v.valorBruto)}</td><td>${v.desconto||0}%</td><td>${(v.pontos||0).toFixed(2).replace('.',',')}</td><td style="color:var(--ok);font-weight:600;">${(v.comissaoPct||0).toFixed(1).replace('.',',')}%</td><td class="td-gold">${fmt(v.valorCom)}</td></tr>`).join('');
+        return todas.map(v=>`<tr><td class="td-bold">${_esc(v.pessoa||'—')}</td><td>${_esc(v.cliente||'—')}</td><td>${fmt(_vendaComExib(v))}</td><td>${_pctVenda(v.desconto)}%</td><td>${(v.pontos||0).toFixed(2).replace('.',',')}</td><td style="color:var(--ok);font-weight:600;">${(v.comissaoPct||0).toFixed(1).replace('.',',')}%</td><td class="td-gold">${fmt(v.valorCom)}</td></tr>`).join('');
       })()}</tbody></table>
     </div>
     <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Comissões — Equipe de Obras</div>
@@ -6837,6 +6837,17 @@ function _leadValorVenda(lead){
   if(!lead) return 0;
   return (lead.valor||0)*(1-(lead.desconto||0)/100);
 }
+// Valor de VENDA para EXIBIÇÃO nas telas de comissão = o que o cliente paga
+// (Promob/bruto − desconto). NÃO é o Promob (valor de tabela do XML) nem o
+// líquido (que ainda desconta taxa+RT). Aceita item de lead (valorBruto+desconto)
+// ou lançamento manual (valorApdesc já gravado no salvarVendaCom).
+function _vendaComExib(v){
+  if(!v) return 0;
+  if(v.valorApdesc!=null) return v.valorApdesc;
+  return (v.valorBruto||0)*(1-(v.desconto||0)/100);
+}
+// % de desconto para exibição: 2 casas, sem zeros à toa (14,23823→"14,24"; 10→"10").
+function _pctVenda(x){ return (+x||0).toFixed(2).replace(/\.?0+$/,'').replace('.',','); }
 // ── FONTE ÚNICA do valor líquido da venda = base de comissão de TODOS os papéis ──
 // Cálculo EM CASCATA (cada etapa sobre o resultado da anterior):
 //   1) desconto ao cliente   → após desconto
@@ -7314,7 +7325,7 @@ function rComissoes(){
         ...vendasP
       ];
 
-      const totalBruto =minhasVendas.reduce((a,v)=>a+(v.valorBruto||0),0);
+      const totalVenda =minhasVendas.reduce((a,v)=>a+_vendaComExib(v),0);
       const totalLiq   =minhasVendas.reduce((a,v)=>a+(v.valorLiq||0),0);
       const totalCom   =minhasVendas.reduce((a,v)=>a+(v.valorCom||0),0);
       const mediaPontos=minhasVendas.length?
@@ -7327,8 +7338,8 @@ function rComissoes(){
             <span class="com-venda-data">${v.data||''}</span>
           </div>
           <div class="com-venda-vals">
-            <span class="com-venda-bruto">${fmt(v.valorBruto)}</span>
-            ${v.desconto>0?`<span class="com-venda-desc">−${v.desconto}%</span>`:''}
+            <span class="com-venda-bruto">${fmt(_vendaComExib(v))}</span>
+            ${v.desconto>0?`<span class="com-venda-desc">−${_pctVenda(v.desconto)}%</span>`:''}
             <span class="com-venda-pts" title="Pontuação">${(v.pontos||0).toFixed(2).replace('.',',')} pts</span>
             <span class="com-venda-pct">${(v.comissaoPct||0).toFixed(1).replace('.',',')}%</span>
             <span class="com-venda-com">${fmt(v.valorCom)}</span>
@@ -7350,8 +7361,8 @@ function rComissoes(){
             <div class="com-resumo-val">${minhasVendas.length||'0'}</div>
           </div>
           <div class="com-resumo-item">
-            <div class="com-resumo-lbl">Total bruto</div>
-            <div class="com-resumo-val" style="color:var(--p);">${fmt(totalBruto)}</div>
+            <div class="com-resumo-lbl">Valor de venda</div>
+            <div class="com-resumo-val" style="color:var(--p);">${fmt(totalVenda)}</div>
           </div>
           <div class="com-resumo-item">
             <div class="com-resumo-lbl">Valor líquido</div>
@@ -7370,7 +7381,7 @@ function rComissoes(){
         <div class="com-vendas-list">
           <div class="com-vendas-hdr">
             <span>Cliente</span><span></span>
-            <span style="text-align:right;">Bruto</span>
+            <span style="text-align:right;">Venda</span>
             <span style="text-align:right;">Pts</span>
             <span style="text-align:right;">Com%</span>
             <span style="text-align:right;">Comissão</span>

@@ -72,7 +72,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _leadValorVenda, _pedValorVendaCRM, _pedidoValorBase, _calcComVendaPontos, _aplicarMargemErro,
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
-  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao
+  _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
+  _vendaComExib, _pctVenda
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -307,6 +308,21 @@ test('taxa absorvida REDUZ a pontuação (menos comissão)', () => {
   const ptsSem = T._calcComVendaPontos(0).pontos;
   const ptsCom = T._calcComVendaPontos(T._descEfetivoComissao(lead)).pontos;
   assert(ptsCom < ptsSem, 'com taxa absorvida os pontos caem');
+});
+
+// ── Exibição de comissão: mostrar VALOR DE VENDA (Promob − desconto), não o Promob ──
+test('vendaComExib: lead usa bruto − desconto (69.728,04 −14,23823% ≈ 59.800)', () => {
+  assert(Math.abs(T._vendaComExib({ valorBruto: 69728.04, desconto: 14.23823 }) - 59800) < 1, 'lead → valor de venda');
+});
+test('vendaComExib: lançamento manual usa valorApdesc já gravado', () => {
+  assertEq(T._vendaComExib({ valorBruto: 80000, desconto: 10, valorApdesc: 71100 }), 71100);
+});
+test('vendaComExib: nulo = 0', () => assertEq(T._vendaComExib(null), 0));
+test('pctVenda: arredonda e tira zeros à toa', () => {
+  assertEq(T._pctVenda(14.23823), '14,24');
+  assertEq(T._pctVenda(10), '10');
+  assertEq(T._pctVenda(14.5), '14,5');
+  assertEq(T._pctVenda(0), '0');
 });
 
 // ── relatório ──
