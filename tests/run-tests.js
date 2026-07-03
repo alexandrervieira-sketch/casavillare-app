@@ -73,7 +73,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
-  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed
+  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -354,6 +354,22 @@ test('custoFabPed: usa o bipartido do pedido quando não há valorFabrica (DRE +
   T.ST.leads.push(lead);
   assert(_close(T._custoFabPed({ id: 'PcfP', leadId: 'LcfP' }), 23920), 'bipartido 40% de 59800');
   assertEq(T._custoFabPed({ id: 'PcfM', leadId: 'LcfP', valorFabrica: 8000 }), 8000);
+});
+
+// ── Faixas de comissão contíguas: pontuação em "buraco" não pode zerar a comissão ──
+test('getComVend: valores nas faixas continuam corretos', () => {
+  assertEq(T._getComVend(1.80), 2);    // faixa 1,70–1,89
+  assertEq(T._getComVend(2.70), 4.5);  // fronteira exata
+  assertEq(T._getComVend(3.00), 5);    // topo
+  assertEq(T._getComVend(2.69), 4);    // fronteira exata inferior
+});
+test('getComVend: pontuação fracionária no buraco cai na faixa de baixo (NÃO 0%)', () => {
+  assertEq(T._getComVend(2.695), 4);   // entre 2,69 e 2,70 → antes dava 0%, agora 4%
+  assertEq(T._getComVend(2.697), 4);   // ex. real: desc efetivo ~10,1%
+  assertEq(T._getComVend(1.695), 1.5); // entre 1,69 e 1,70 → 1,5%
+});
+test('getComVend: abaixo da menor faixa = 0% (comportamento mantido)', () => {
+  assertEq(T._getComVend(1.20), 0);
 });
 
 // ── relatório ──

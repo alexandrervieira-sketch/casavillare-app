@@ -3910,6 +3910,7 @@ function _calcAlertas(){
       if(c.vencimento<=lim7) out.pagar.push({id:c.id,desc:c.descricao||c.fornecedor||'Conta',valor:c.valor,venc:c.vencimento,vencida:c.vencimento<hoje});
     });
     (ST.leads||[]).forEach(l=>{
+      if(l.status!=='ganho') return; // só venda fechada gera recebível (lead perdido/em aberto não conta)
       (l.condicoesPgto||[]).forEach(c=>{
         if(c.pago||!c.vencimento) return;
         if(c.vencimento<=lim7) out.receber.push({leadId:l.id,cliente:l.nome,desc:c.desc||'Parcela',valor:c.valor,venc:c.vencimento,vencida:c.vencimento<hoje});
@@ -6822,10 +6823,13 @@ function _aplicarMargemErro(valorLiq){ return valorLiq*_getMargemErroFator(); }
 function _getComVend(pontos){
   const faixas=_getFaixas();
   const p=parseFloat(pontos)||0;
-  for(let i=faixas.length-1;i>=0;i--){
-    if(p>=faixas[i].ptMin && (faixas[i].ptMax==null||p<=faixas[i].ptMax)) return parseFloat((faixas[i].pct||0).toString());
-  }
-  return 0;
+  // Faixas CONTÍGUAS: pega a MAIOR faixa cujo ptMin ≤ pontos. Fecha os buracos entre o
+  // ptMax de uma faixa e o ptMin da seguinte (ex.: 2,69→2,70) que antes davam 0% quando a
+  // pontuação era fracionária (comum desde que a taxa absorvida entra como alíquota quebrada).
+  const ord=faixas.slice().sort((a,b)=>(a.ptMin||0)-(b.ptMin||0));
+  let pct=0, achou=false;
+  for(const f of ord){ if(p>=(f.ptMin||0)){ pct=parseFloat((f.pct||0).toString()); achou=true; } }
+  return achou?pct:0;
 }
 
 // ── Comissão projetista: parcelas configuráveis ──
@@ -9010,6 +9014,7 @@ function cfgSalvarTabelaModal(){
     });
     if(!nova.length){toast('Adicione ao menos uma parcela');return;}
     ST.tabelaCartao=nova;
+    _cfgTouch('tabelaCartao'); // blob de _config: sem o carimbo a edição de taxa reverte entre máquinas
   } else {
     // Salva aba atual visível em _finTab antes de consolidar
     document.getElementById('taxa-table-grid').querySelectorAll('input[data-p]').forEach(inp=>{
@@ -9021,6 +9026,7 @@ function cfgSalvarTabelaModal(){
     (window._finTab||[]).forEach(r=>{if(r.p) nova.push(r);});
     if(!nova.length){toast('Tabela vazia');return;}
     ST.tabelaFinanciamento=nova;
+    _cfgTouch('tabelaFinanciamento'); // carimbo p/ anti-clobber (efetivo quando virar blob — ver S3)
   }
   save(); fecharModal('modal-taxa'); rConfig();
   toast('Tabela salva ✅ — '+nova.length+' parcelas');
@@ -11497,18 +11503,19 @@ function pdCalcMargem(){
   const leadId=document.getElementById('pd-lead')?.value;
   const lead=leadId?(ST.leads||[]).find(l=>String(l.id)===String(leadId)):null;
   const desc=lead?.desconto||0;
-  const valorApdesc=venda*(1-desc/100);
+  // `venda` (pd-valor) JÁ é o valor ao cliente (pós-desconto, via _pedValorVendaCRM). NÃO reaplicar o desconto.
+  const descBruto=lead?.valor?Math.max(0,lead.valor-venda):0; // desconto real (Promob − valor ao cliente), só p/ exibição
 
-  // Taxa cartão/financiamento (assumida pela loja)
-  const taxaCartao=lead?.condicoesPgto
+  // Taxa cartão/financiamento (assumida pela loja) — base = valor ao cliente
+  const taxaCartao=lead?.condicoesPgto?.length
     ?_calcTaxaCartaoConds(lead.condicoesPgto)
-    :(lead?.absorcao==='loja'&&lead?.taxaLoja>0?valorApdesc*(lead.taxaLoja/100):0);
+    :(lead?.absorcao==='loja'&&lead?.taxaLoja>0?venda*(lead.taxaLoja/100):0);
 
-  // RT — sobre o valor após desconto E taxa (igual a _vendaLiquido)
-  const rt=(lead?.rtPct||0)>0?Math.round((valorApdesc-taxaCartao)*(lead.rtPct/100)*100)/100:0;
+  // RT — sobre o valor após taxa (igual a _vendaLiquido; o desconto já está embutido em `venda`)
+  const rt=(lead?.rtPct||0)>0?Math.round((venda-taxaCartao)*(lead.rtPct/100)*100)/100:0;
 
-  // Comissão vendedor (estimada — base no desconto do lead)
-  const valorLiqCom=_aplicarMargemErro(valorApdesc-taxaCartao-rt);
+  // Comissão vendedor (estimada)
+  const valorLiqCom=_aplicarMargemErro(venda-taxaCartao-rt);
   const {pct:comPct}=lead?_calcComVendaPontos(_descEfetivoComissao(lead)):{pct:0};
   const comissao=lead&&comPct>0?Math.round(valorLiqCom*(comPct/100)*100)/100:0;
 
@@ -11535,7 +11542,7 @@ function pdCalcMargem(){
   const corMargem=margem>=30?'#166534':margem>=15?'#D97706':'#DC2626';
   elRows.innerHTML=
     _r('Valor de Venda',venda,true)+
-    (desc?_r('Desconto aplicado',venda-valorApdesc,false,'#DC2626'):'') +
+    (descBruto?_r('Desconto aplicado',descBruto,false,'#DC2626'):'') +
     _r('Custo Fábrica',fab)+
     (custoForn?_r('Custo Fornecedores',custoForn):'') +
     (custoOutros?_r('Outros Custos',custoOutros):'') +
@@ -13409,6 +13416,7 @@ function bipAtualizarStatus(leadId,condId,status){
     if(status==='confirmado') obj.dataConfirmacao=hoje;
     ST.bipartido.push(obj);
   }
+  _cfgTouch('bipartido'); // blob de _config: sem o carimbo, sobe com _uAt:0 e o status oscila entre máquinas
   save(); rBipartido();
 }
 
