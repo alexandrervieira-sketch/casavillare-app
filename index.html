@@ -3685,7 +3685,7 @@ function _espBadge(l){
   const esp=(ST.cadastros||[]).find(c=>String(c.id)===String(l.especificadorId));
   if(!esp) return '';
   const rt=l.rtPct?' · RT '+l.rtPct+'%':'';
-  return '<div class="pipe-card-row" style="color:#8B5CF6;">🏛️ '+esp.nome+rt+'</div>';
+  return '<div class="pipe-card-row" style="color:#8B5CF6;">🏛️ '+_esc(esp.nome)+rt+'</div>';
 }
 async function fazerLogin(e){
   e.preventDefault();
@@ -10659,7 +10659,7 @@ function gerarContrato(cadId){
   } else {
     itemRows=ambs.map((a,i)=>`
       <tr><td style="text-align:center;">${i+1}</td><td style="text-align:center;">1</td>
-      <td>${a.nome||''}</td><td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(a.valor)}</td></tr>`).join('');
+      <td>${_esc(a.nome||'')}</td><td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(a.valor)}</td></tr>`).join('');
   }
   const totalAmbientes=xmlList.length?totalAmbientesXml:ambs.reduce((a,b)=>a+(b.valor||0),0);
   // Desconto: busca do lead vinculado ou do próprio cadastro
@@ -10673,7 +10673,7 @@ function gerarContrato(cadId){
   const tipoVendaLabel=tipoVendaCt==='programada'?'Venda Programada':tipoVendaCt==='normal'?'Venda Normal':'—';
 
   const obsRows=ambs.map(a=>a.obs?`
-    <tr><td style="font-weight:bold;white-space:nowrap;vertical-align:top;">${a.nome}</td>
+    <tr><td style="font-weight:bold;white-space:nowrap;vertical-align:top;">${_esc(a.nome)}</td>
     <td style="font-size:11px;">${_esc(a.obs)}</td></tr>`:'').join('');
 
   // Condições de pagamento: usa condicoesPgto do lead vinculado (novo formato) ou parcs do cadastro (legado)
@@ -10700,7 +10700,7 @@ function gerarContrato(cadId){
 
   const html=`<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"/>
-<title>Contrato ${numC} — ${c.nome}</title>
+<title>Contrato ${numC} — ${_esc(c.nome)}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff;}
@@ -10746,7 +10746,7 @@ body.has-toolbar{padding-top:52px;}
 </style></head><body class="has-toolbar">
 
 <div class="toolbar">
-  <span class="ct-title">📄 Contrato N.º ${numC} — ${c.nome}</span>
+  <span class="ct-title">📄 Contrato N.º ${numC} — ${_esc(c.nome)}</span>
   <div class="tb-actions">
     <button class="tb-btn tb-print" onclick="window.print()">🖨 Imprimir</button>
     <button class="tb-btn tb-pdf" onclick="var _t=document.title;document.title='${ctFilename}';window.print();setTimeout(function(){document.title=_t;},300);">📥 Salvar PDF</button>
@@ -10766,7 +10766,7 @@ body.has-toolbar{padding-top:52px;}
 <!-- RESPONSÁVEL / LOJA / DATA -->
 <table class="dados" style="margin-top:-1px;">
   <tr>
-    <td style="width:40%;"><strong>RESPONSÁVEL PELA VENDA</strong><br>${c.respVenda||'&nbsp;'}</td>
+    <td style="width:40%;"><strong>RESPONSÁVEL PELA VENDA</strong><br>${c.respVenda?_esc(c.respVenda):'&nbsp;'}</td>
     <td style="width:30%;"><strong>LOJA</strong><br>Valinhos</td>
     <td><strong>DATA DO CONTRATO</strong><br>${dataC}</td>
   </tr>
@@ -10774,33 +10774,33 @@ body.has-toolbar{padding-top:52px;}
 
 <!-- DADOS DO CLIENTE -->
 <table class="dados" style="margin-top:-1px;">
-  <tr><td colspan="3"><strong>CLIENTE</strong><br>${c.nome}</td></tr>
+  <tr><td colspan="3"><strong>CLIENTE</strong><br>${_esc(c.nome)}</td></tr>
   <tr>
-    <td><strong>CPF/CNPJ</strong><br>${c.cpfCli||'&nbsp;'}</td>
-    <td><strong>RG/INSCRIÇÃO ESTADUAL</strong><br>${c.rgCli||'&nbsp;'}</td>
+    <td><strong>CPF/CNPJ</strong><br>${c.cpfCli?_esc(c.cpfCli):'&nbsp;'}</td>
+    <td><strong>RG/INSCRIÇÃO ESTADUAL</strong><br>${c.rgCli?_esc(c.rgCli):'&nbsp;'}</td>
     <td><strong>DATA DE NASCIMENTO</strong><br>${fmtDate(c.dataNasc)||'&nbsp;'}</td>
   </tr>
-  <tr><td colspan="3"><strong>ENDEREÇO ATUAL</strong><br>${c.enderecoCli||'&nbsp;'}</td></tr>
+  <tr><td colspan="3"><strong>ENDEREÇO ATUAL</strong><br>${c.enderecoCli?_esc(c.enderecoCli):'&nbsp;'}</td></tr>
   <tr>
-    <td><strong>BAIRRO</strong><br>${c.bairroCli||'&nbsp;'}</td>
-    <td><strong>CIDADE</strong><br>${c.cidade||'&nbsp;'}</td>
+    <td><strong>BAIRRO</strong><br>${c.bairroCli?_esc(c.bairroCli):'&nbsp;'}</td>
+    <td><strong>CIDADE</strong><br>${c.cidade?_esc(c.cidade):'&nbsp;'}</td>
     <td style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
       <div style="border-right:1px solid #000;padding-right:6px;"><strong>UF</strong><br>${c.estado||'&nbsp;'}</div>
       <div style="padding-left:6px;"><strong>CEP</strong><br>${c.cep||'&nbsp;'}</div>
     </td>
   </tr>
   <tr>
-    <td><strong>PROFISSÃO</strong><br>${c.profissao||'&nbsp;'}</td>
-    <td><strong>TELEFONE</strong><br>${c.telefone||'&nbsp;'}</td>
-    <td><strong>E-MAIL</strong><br>${c.email||'&nbsp;'}</td>
+    <td><strong>PROFISSÃO</strong><br>${c.profissao?_esc(c.profissao):'&nbsp;'}</td>
+    <td><strong>TELEFONE</strong><br>${c.telefone?_esc(c.telefone):'&nbsp;'}</td>
+    <td><strong>E-MAIL</strong><br>${c.email?_esc(c.email):'&nbsp;'}</td>
   </tr>
   <tr>
-    <td colspan="2"><strong>ENDEREÇO DE ENTREGA</strong><br>${endEnt||'&nbsp;'}</td>
-    <td><strong>PRAZO ENTREGA</strong><br>${c.prazoEntrega||'&nbsp;'}</td>
+    <td colspan="2"><strong>ENDEREÇO DE ENTREGA</strong><br>${endEnt?_esc(endEnt):'&nbsp;'}</td>
+    <td><strong>PRAZO ENTREGA</strong><br>${c.prazoEntrega?_esc(c.prazoEntrega):'&nbsp;'}</td>
   </tr>
   <tr>
-    <td><strong>BAIRRO</strong><br>${bairroEnt||'&nbsp;'}</td>
-    <td><strong>CIDADE</strong><br>${cidadeEnt||'&nbsp;'}</td>
+    <td><strong>BAIRRO</strong><br>${bairroEnt?_esc(bairroEnt):'&nbsp;'}</td>
+    <td><strong>CIDADE</strong><br>${cidadeEnt?_esc(cidadeEnt):'&nbsp;'}</td>
     <td style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
       <div style="border-right:1px solid #000;padding-right:6px;"><strong>UF</strong><br>${ufEnt||'&nbsp;'}</div>
       <div style="padding-left:6px;"><strong>CEP</strong><br>${cepEnt||'&nbsp;'}</div>
@@ -12334,11 +12334,11 @@ function rCadastros(){
         <tbody>${lista.map(c=>{
           const lk=c.leadId?(ST.leads||[]).find(l=>String(l.id)===c.leadId):null;
           return`<tr>
-            <td class="td-bold">${c.nome}</td>
-            <td>${c.telefone||'—'}</td>
-            <td style="font-size:12px;">${c.cpfCli||'—'}</td>
-            <td style="font-size:12px;color:var(--gl);">${c.cidade||'—'}</td>
-            <td>${lk?`<span class="badge b-ok">🎯 ${lk.nome}</span>`:'—'}</td>
+            <td class="td-bold">${_esc(c.nome)}</td>
+            <td>${_esc(c.telefone||'—')}</td>
+            <td style="font-size:12px;">${_esc(c.cpfCli||'—')}</td>
+            <td style="font-size:12px;color:var(--gl);">${_esc(c.cidade||'—')}</td>
+            <td>${lk?`<span class="badge b-ok">🎯 ${_esc(lk.nome)}</span>`:'—'}</td>
             <td><div class="td-actions">
               <button class="btn btn-p btn-sm" onclick="abrirModalContrato('${c.id}')">📄 Contrato</button>
               <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','cliente')">✏️</button>
@@ -12347,7 +12347,7 @@ function rCadastros(){
           </tr>`;
         }).join('')}</tbody>
       </table></div>`
-      :`<div class="empty"><p>${busca?'Nenhum cliente encontrado para "'+busca+'"':'Nenhum cliente cadastrado. Clientes são criados ao fechar um lead no CRM.'}</p></div>`;
+      :`<div class="empty"><p>${busca?'Nenhum cliente encontrado para "'+_esc(busca)+'"':'Nenhum cliente cadastrado. Clientes são criados ao fechar um lead no CRM.'}</p></div>`;
   } else if(tipo==='parceiro'){
     // Métricas de indicação por parceiro
     const leadsComEsp=(ST.leads||[]).filter(l=>l.especificadorId);
@@ -12366,10 +12366,10 @@ function rCadastros(){
           const volTotal=mGanhos.reduce((a,l)=>a+_leadValorVenda(l),0);
           const rtTotal=mGanhos.reduce((a,l)=>a+(l.valor||0)*(1-(l.desconto||0)/100)*((l.rtPct||0)/100),0);
           return`<tr>
-            <td class="td-bold">🏛️ ${c.nome}</td>
-            <td style="color:var(--mid);">${c.especialidade||'—'}</td>
-            <td>${c.empresa||'—'}</td>
-            <td>${c.telefone||'—'}</td>
+            <td class="td-bold">🏛️ ${_esc(c.nome)}</td>
+            <td style="color:var(--mid);">${_esc(c.especialidade||'—')}</td>
+            <td>${_esc(c.empresa||'—')}</td>
+            <td>${_esc(c.telefone||'—')}</td>
             <td style="text-align:center;">
               <span style="font-weight:600;">${mLeads.length}</span>
               ${mGanhos.length?`<span style="font-size:10px;color:var(--ok);margin-left:4px;">(${mGanhos.length} fechados)</span>`:''}
@@ -12383,33 +12383,33 @@ function rCadastros(){
           </tr>`;}).join('')}
         </tbody>
       </table></div>`
-      :`<div class="empty"><p>${busca?'Nenhum especificador encontrado para "'+busca+'"':'Nenhum especificador/parceiro cadastrado ainda. Cadastre arquitetos e designers que indicam clientes.'}</p></div>`;
+      :`<div class="empty"><p>${busca?'Nenhum especificador encontrado para "'+_esc(busca)+'"':'Nenhum especificador/parceiro cadastrado ainda. Cadastre arquitetos e designers que indicam clientes.'}</p></div>`;
   } else if(tipo==='fornecedor'){
     tabelaHtml=lista.length
       ?`<div class="tbl-wrap"><table>
         <thead><tr><th>Nome / Razão Social</th><th>Categoria</th><th>CNPJ</th><th>Telefone</th><th>Contato</th><th></th></tr></thead>
         <tbody>${lista.map(c=>`<tr>
-          <td class="td-bold">🏭 ${c.nome}</td>
-          <td><span class="badge b-wait">${c.categoria||'—'}</span></td>
-          <td style="font-size:12px;">${c.cnpj||'—'}</td>
-          <td>${c.telefone||'—'}</td>
-          <td style="font-size:12px;color:var(--gl);">${c.contato||'—'}</td>
+          <td class="td-bold">🏭 ${_esc(c.nome)}</td>
+          <td><span class="badge b-wait">${_esc(c.categoria||'—')}</span></td>
+          <td style="font-size:12px;">${_esc(c.cnpj||'—')}</td>
+          <td>${_esc(c.telefone||'—')}</td>
+          <td style="font-size:12px;color:var(--gl);">${_esc(c.contato||'—')}</td>
           <td><div class="td-actions">
             <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','fornecedor')">✏️</button>
             <button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>
           </div></td>
         </tr>`).join('')}</tbody>
       </table></div>`
-      :`<div class="empty"><p>${busca?'Nenhum fornecedor encontrado para "'+busca+'"':'Nenhum fornecedor cadastrado ainda. Cadastre fábricas, serralherias, vidraçarias e outros fornecedores.'}</p></div>`;
+      :`<div class="empty"><p>${busca?'Nenhum fornecedor encontrado para "'+_esc(busca)+'"':'Nenhum fornecedor cadastrado ainda. Cadastre fábricas, serralherias, vidraçarias e outros fornecedores.'}</p></div>`;
   } else {
     tabelaHtml=lista.length
       ?`<div class="tbl-wrap"><table>
         <thead><tr><th>Nome</th><th>Cargo</th><th>Departamento</th><th>Telefone</th><th>Admissão</th><th></th></tr></thead>
         <tbody>${lista.map(c=>`<tr>
-          <td class="td-bold">${c.nome}</td>
-          <td>${c.cargo||'—'}</td>
-          <td><span class="badge b-wait">${c.departamento||'—'}</span></td>
-          <td>${c.telefone||'—'}</td>
+          <td class="td-bold">${_esc(c.nome)}</td>
+          <td>${_esc(c.cargo||'—')}</td>
+          <td><span class="badge b-wait">${_esc(c.departamento||'—')}</span></td>
+          <td>${_esc(c.telefone||'—')}</td>
           <td style="color:var(--gl);font-size:12px;">${c.admissao?new Date(c.admissao+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
           <td><div class="td-actions">
             <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','funcionario')">✏️</button>
@@ -12417,7 +12417,7 @@ function rCadastros(){
           </div></td>
         </tr>`).join('')}</tbody>
       </table></div>`
-      :`<div class="empty"><p>${busca?'Nenhum funcionário encontrado para "'+busca+'"':'Nenhum funcionário cadastrado ainda.'}</p></div>`;
+      :`<div class="empty"><p>${busca?'Nenhum funcionário encontrado para "'+_esc(busca)+'"':'Nenhum funcionário cadastrado ainda.'}</p></div>`;
   }
 
   const countLabel={
@@ -16010,7 +16010,7 @@ function rFiscalEmitidas(){
 
     ${!lista.length?`<div style="text-align:center;padding:60px 24px;color:var(--gl);">
       <div style="font-size:36px;margin-bottom:10px;">🔍</div>
-      <div style="font-size:13px;">${busca?'Nenhuma NFe encontrada para "'+busca+'"':'Nenhuma NFe emitida ainda.'}</div>
+      <div style="font-size:13px;">${busca?'Nenhuma NFe encontrada para "'+_esc(busca)+'"':'Nenhuma NFe emitida ainda.'}</div>
     </div>`:`
     <div style="display:flex;flex-direction:column;gap:8px;">
       ${lista.map(p=>{
