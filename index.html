@@ -3020,7 +3020,11 @@ function _tombPrune(){
   let mudou=false;
   for(const k of Object.keys(ST._tomb)){
     const ts=ST._tomb[k];
-    if(typeof ts==='number'&&Math.abs(ts)<corte){ delete ST._tomb[k]; mudou=true; }
+    if(typeof ts!=='number') continue;
+    // Só poda se: (a) antiga E (b) o doc REALMENTE já sumiu da nuvem (não está em _fsSeen).
+    // Sem o (b), um PC com relógio adiantado calcularia idade inflada e removeria cedo demais uma
+    // marca que ainda protege um doc vivo → o excluído ressuscitaria (S5).
+    if(Math.abs(ts)<corte && !_fsSeen[k]){ delete ST._tomb[k]; mudou=true; }
   }
   if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} }
 }
