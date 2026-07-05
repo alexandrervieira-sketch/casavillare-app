@@ -74,7 +74,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
-  _cfgConflCapture, _cfgConflOk, _dataPlausivel
+  _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -416,6 +416,22 @@ test('dataPlausivel: barra ano absurdo, aceita normal/vazio', () => {
   assert(T._dataPlausivel('1999-01-01') === false);
   assert(T._dataPlausivel('') === true);
   assert(T._dataPlausivel('lixo') === false);
+});
+
+// ── Bipartido = 40% do LÍQUIDO (financiado − retenção que a loja absorve) ──
+test('bipartidoCond: cliente assume → 40% do financiado cheio', () => {
+  const c = { forma: 'financiamento', valor: 100000, parcelas: 24, prazoFin: 'd60', absorcao: 'cliente' };
+  assert(_close(T._bipartidoCond(c), 40000), 'cliente: 40% de 100000');
+});
+test('bipartidoCond: loja assume → 40% do (financiado − retenção)', () => {
+  const c = { forma: 'financiamento', valor: 100000, parcelas: 24, prazoFin: 'd60', absorcao: 'loja' };
+  const taxa = T._calcTaxaCartaoConds([c]);
+  assert(_close(T._bipartidoCond(c), (100000 - taxa) * 0.40), 'loja: 40% do líquido');
+  assert(T._bipartidoCond(c) <= 40000, 'loja assume → bipartido ≤ 40% do bruto');
+});
+test('bipartidoCond: não-financiamento = 0', () => {
+  assertEq(T._bipartidoCond({ forma: 'cartao', valor: 100000, absorcao: 'loja' }), 0);
+  assertEq(T._bipartidoCond(null), 0);
 });
 
 // ── relatório ──

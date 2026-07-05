@@ -6888,13 +6888,22 @@ function _dataPlausivel(iso){
   const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso)); if(!m) return false;
   const ano=+m[1]; return ano>=2015 && ano<=2035;
 }
-// Total BIPARTIDO de um lead = 40% (BIP_PCT) do valor financiado — o que vai à
-// fábrica para liberar o pedido. Em venda financiada é o CUSTO DE FÁBRICA efetivo.
-// Mesma fórmula do rBipartido() e do card do pedido.
+// BIPARTIDO de UMA condição de financiamento = 40% (BIP_PCT) do LÍQUIDO dela,
+// ou seja: (valor financiado − retenção que a LOJA absorve) × 40%. Quando o
+// cliente assume a taxa, a retenção da loja é 0 → 40% do próprio financiado.
+// (Regra do gestor 05/07/2026: o bipartido incide sobre o líquido, não o bruto.)
+function _bipartidoCond(c){
+  if(!c||c.forma!=='financiamento') return 0;
+  const taxaLoja=_calcTaxaCartaoConds([c]); // 0 se o cliente assume; retenção se a loja assume
+  return Math.max(0,(c.valor||0)-taxaLoja)*BIP_PCT;
+}
+// Total BIPARTIDO de um lead = soma das condições de financiamento. É o que vai à
+// fábrica para liberar o pedido e, em venda financiada, o CUSTO DE FÁBRICA efetivo.
+// FONTE ÚNICA — usada pelo card do pedido, aba Fábrica (rBipartido), custo de fábrica e DRE.
 function _bipartidoLead(lead){
   if(!lead) return 0;
   return (lead.condicoesPgto||[]).filter(c=>c.forma==='financiamento')
-    .reduce((a,c)=>a+(c.valor||0),0)*BIP_PCT;
+    .reduce((a,c)=>a+_bipartidoCond(c),0);
 }
 function _bipartidoPed(p){
   const lead=p&&p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
@@ -11300,7 +11309,7 @@ function _rPedPipe(ped,hoje,statsHtml){
           const fins=(lead?.condicoesPgto||[]).filter(c=>c.forma==='financiamento');
           if(!fins.length) return '';
           const totFin=fins.reduce((a,c)=>a+(c.valor||0),0);
-          const totBip=totFin*BIP_PCT;
+          const totBip=fins.reduce((a,c)=>a+_bipartidoCond(c),0); // 40% do líquido (financiado − retenção da loja)
           const chaves=fins.map(c=>lead.id+'_'+c.id);
           const bipRecs=(ST.bipartido||[]).filter(b=>chaves.includes(b.chave));
           const allConf=bipRecs.length===fins.length&&bipRecs.every(b=>b.status==='confirmado');
@@ -13532,7 +13541,7 @@ function rBipartido(tgt){
       const chave=l.id+'_'+c.id;
       const bip=((ST.bipartido||[]).find(x=>x.chave===chave))||{status:'pendente'};
       const valorFin=c.valor||0;
-      const valorBip=valorFin*BIP_PCT;
+      const valorBip=_bipartidoCond(c); // 40% do líquido (financiado − retenção que a loja absorve)
       registros.push({l,c,chave,valorFin,valorBip,status:bip.status||'pendente',dataEnvio:bip.dataEnvio||'',dataConf:bip.dataConfirmacao||''});
     });
   });
@@ -13612,7 +13621,7 @@ function rBipartido(tgt){
     </table></div>
 
     <div style="margin-top:12px;font-size:11px;color:var(--gl);text-align:right;">
-      * Bipartido = 40% do valor financiado enviado à fábrica para liberação do pedido
+      * Bipartido = 40% do valor financiado LÍQUIDO (financiado − retenção que a loja absorve) enviado à fábrica para liberação do pedido
     </div>`;
 }
 
