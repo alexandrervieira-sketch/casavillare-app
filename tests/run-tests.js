@@ -74,7 +74,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
-  _cfgConflCapture, _cfgConflOk
+  _cfgConflCapture, _cfgConflOk, _dataPlausivel
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -400,6 +400,22 @@ test('cfgConflOk: sem mudança concorrente = ok (não dispara confirm)', () => {
   assert(T._cfgConflOk('equipe', 'equipe') === true, 'base == atual → ok');
   // sem baseline capturado para outra chave → base 0 e atual 0 → ok
   assert(T._cfgConflOk('configs', 'configs') === true, 'sem base → ok');
+});
+
+// ── F3: condicoesPgto vazio cai no legado taxaLoja ──
+test('vendaLiquido: condicoesPgto:[] usa a taxa legada da loja (F3)', () => {
+  const r = T._vendaLiquido({ valor: 100000, desconto: 0, condicoesPgto: [], absorcao: 'loja', taxaLoja: 16 });
+  assert(_close(r.taxa, 16000), 'array vazio → taxa legada 16% = 16000');
+  const r2 = T._vendaLiquido({ valor: 100000, desconto: 0, absorcao: 'loja', taxaLoja: 16 });
+  assert(_close(r2.taxa, 16000), 'sem condicoesPgto → legado também');
+});
+// ── C5: validação de data plausível ──
+test('dataPlausivel: barra ano absurdo, aceita normal/vazio', () => {
+  assert(T._dataPlausivel('2026-07-02') === true);
+  assert(T._dataPlausivel('20226-01-01') === false);
+  assert(T._dataPlausivel('1999-01-01') === false);
+  assert(T._dataPlausivel('') === true);
+  assert(T._dataPlausivel('lixo') === false);
 });
 
 // ── relatório ──

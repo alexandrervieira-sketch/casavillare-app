@@ -4487,7 +4487,7 @@ function rPag(){
         const bdg=f.status==='pago'?'b-ok':f.status==='parcial'?'b-warn':'b-wait';
         const stxt=f.status==='pago'?'Pago':f.status==='parcial'?'Parcial':'Pendente';
         return `<tr>
-          <td class="td-bold">${iconeFunc(p.perfil)} ${p.nome}</td>
+          <td class="td-bold">${iconeFunc(p.perfil)} ${_esc(p.nome)}</td>
           <td style="color:var(--gl);font-size:12px;">${p.perfil}</td>
           <td>${fmt(f.salarioBase||0)}</td>
           <td class="td-gold">${fmt(liq)}</td>
@@ -6710,7 +6710,7 @@ function rRelConversao(){
         </tr></thead>
         <tbody>
           ${porVend.map(v=>`<tr>
-            <td class="td-bold">${v.nome}</td>
+            <td class="td-bold">${_esc(v.nome)}</td>
             <td style="text-align:center;">${v.leads}</td>
             <td style="text-align:center;">${v.atend}</td>
             <td style="text-align:center;">${v.vendas}</td>
@@ -6881,6 +6881,13 @@ function _vendaComExib(v){
 }
 // % de desconto para exibição: 2 casas, sem zeros à toa (14,23823→"14,24"; 10→"10").
 function _pctVenda(x){ return (+x||0).toFixed(2).replace(/\.?0+$/,'').replace('.',','); }
+// Data ISO (YYYY-MM-DD) dentro de faixa plausível de negócio? Evita ano digitado errado
+// (ex.: 20226) contaminando competência de DRE/Metas. Vazio = sem restrição.
+function _dataPlausivel(iso){
+  if(!iso) return true;
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso)); if(!m) return false;
+  const ano=+m[1]; return ano>=2015 && ano<=2035;
+}
 // Total BIPARTIDO de um lead = 40% (BIP_PCT) do valor financiado — o que vai à
 // fábrica para liberar o pedido. Em venda financiada é o CUSTO DE FÁBRICA efetivo.
 // Mesma fórmula do rBipartido() e do card do pedido.
@@ -6910,7 +6917,7 @@ function _vendaLiquido(lead){
   if(!lead) return {aposDesc:0,taxa:0,rt:0,liquido:0};
   const desc=lead.desconto||0;
   const aposDesc=(lead.valor||0)*(1-desc/100);                                  // 1º desconto
-  const taxa=lead.condicoesPgto?_calcTaxaCartaoConds(lead.condicoesPgto):(lead.absorcao==='loja'?aposDesc*((lead.taxaLoja||0)/100):0); // 2º taxa sobre o já descontado
+  const taxa=lead.condicoesPgto?.length?_calcTaxaCartaoConds(lead.condicoesPgto):(lead.absorcao==='loja'?aposDesc*((lead.taxaLoja||0)/100):0); // 2º taxa sobre o já descontado (?.length: array vazio cai no legado taxaLoja — F3)
   const aposTaxa=aposDesc-taxa;
   const rt=(lead.rtPct||0)>0?aposTaxa*(lead.rtPct/100):0;                       // 3º RT sobre o já descontado e com taxa
   return {aposDesc,taxa,rt,liquido:aposTaxa-rt};
@@ -7406,7 +7413,7 @@ function rComissoes(){
         <div class="com-card-top">
           <div class="com-avatar" style="background:${avatarCor(i)};">${iniciais(p.nome)}</div>
           <div style="flex:1;">
-            <div class="com-name">${p.nome}</div>
+            <div class="com-name">${_esc(p.nome)}</div>
             <div class="com-role">${iconeFunc(p.perfil)} ${p.perfil}</div>
           </div>
           ${isG?`<button class="btn btn-p btn-sm" onclick="abrirModalVendaCom(null,'${p.nome}')">+ Lançar venda</button>`:''}
@@ -7576,7 +7583,7 @@ function rComissoes(){
         <div class="com-card-top">
           <div class="com-avatar" style="background:${avatarCor(i)};">${iniciais(p.nome)}</div>
           <div style="flex:1;">
-            <div class="com-name">${p.nome}</div>
+            <div class="com-name">${_esc(p.nome)}</div>
             <div class="com-role">${iconeFunc(p.perfil)} ${p.perfil}</div>
           </div>
           ${isG&&!isSup&&!isProj?`<button class="btn btn-p btn-sm" onclick="abrirModalComissao(null)">+ Lançar comissão</button>`:''}
@@ -9449,6 +9456,7 @@ function crmNavMesFech(d){
 }
 function rCrm(){
   if(!ST.leads) ST.leads=[];
+  { const _b=document.getElementById('btn-novo-lead'); if(_b) _b.style.display=_podeEditar('crm')?'':'none'; } // perfil leitura não cria
   const filtroEl=document.getElementById('crm-filtro-resp');
   const filtro=filtroEl?filtroEl.value:'';
   const ativos=ST.leads.filter(l=>l.status!=='perdido'&&l.status!=='ganho');
@@ -9509,7 +9517,7 @@ function rCrm(){
       </div>
       ${valorCol?`<div class="pipe-col-valor">${fmt(valorCol)}</div>`:'<div style="height:4px;"></div>'}
       ${cards.map(l=>leadCardHtml(l,e)).join('')}
-      <button class="pipe-add" onclick="abrirModalLead(null,'${e.id}')">+ Lead</button>
+      ${_podeEditar('crm')?`<button class="pipe-add" onclick="abrirModalLead(null,'${e.id}')">+ Lead</button>`:''}
     </div>`;
   }).join('');
 
@@ -9825,6 +9833,9 @@ function salvarLead(){
   if(_dtFechCustom&&_stGanho) _dataFech=_dtFechCustom;                                  // gestor informou a data real da venda
   else if(_stGanho) _dataFech=(isEdit&&prevStatus==='ganho')?(prevLead?.dataFechamento||_hoje):_hoje; // comportamento atual
   else _dataFech=isEdit?(prevLead?.dataFechamento||null):null;                          // não-ganho: preserva o atual
+  // Validação de datas editáveis pelo gestor (C5): só as informadas à mão (ISO), p/ não pegar dado legado
+  if((_dtCriacaoCustom&&!_dataPlausivel(_dtCriacaoCustom))||(_dtFechCustom&&!_dataPlausivel(_dtFechCustom))){ toast('⚠️ Data com ano fora da faixa (2015–2035). Verifique.'); return; }
+  if(_dtCriacaoCustom&&_dtFechCustom&&_stGanho&&_dtFechCustom<_dtCriacaoCustom){ toast('⚠️ A data da venda é anterior à criação do lead. Verifique.'); return; }
   const lead={
     id:_ldId||_newId(), nome, _uAt:Date.now(),
     telefone:   document.getElementById('ld-tel').value.trim(),
@@ -11181,6 +11192,7 @@ let _pdBaseUAt=0;  // _uAt do pedido no momento em que o modal abriu (detecção
 
 function rPedidos(){
   const ped=ST.pedidos||[];
+  { const _b=document.getElementById('btn-novo-pedido'); if(_b) _b.style.display=_podeEditar('ped')?'':'none'; } // perfil leitura não cria
   const hoje=_hojeLocal();
   const vendaProg=ped.filter(p=>p.status==='venda_prog').length;
   const emProd=ped.filter(p=>p.status!=='concluido'&&p.status!=='venda_prog').length;
@@ -12299,7 +12311,7 @@ function cadSubTab(tipo){
   });
   const labels={cliente:'+ Cliente',parceiro:'+ Parceiro',fornecedor:'+ Fornecedor'};
   const actEl=document.getElementById('cad-actions');
-  if(actEl) actEl.innerHTML=`<button class="btn btn-p" onclick="abrirModalCadastro(null,'${tipo}')">${labels[tipo]||''}</button>`;
+  if(actEl) actEl.innerHTML=_podeEditar('cad')?`<button class="btn btn-p" onclick="abrirModalCadastro(null,'${tipo}')">${labels[tipo]||''}</button>`:'';
   rCadastros();
 }
 function rCadastros(){
@@ -12323,7 +12335,7 @@ function rCadastros(){
   // Botão header
   const labels={cliente:'+ Cliente',parceiro:'+ Parceiro',funcionario:'+ Funcionário',fornecedor:'+ Fornecedor'};
   const actEl=document.getElementById('cad-actions');
-  if(actEl) actEl.innerHTML=`<button class="btn btn-p" onclick="abrirModalCadastro(null,'${tipo}')">${labels[tipo]||''}</button>`;
+  if(actEl) actEl.innerHTML=_podeEditar('cad')?`<button class="btn btn-p" onclick="abrirModalCadastro(null,'${tipo}')">${labels[tipo]||''}</button>`:'';
 
   let lista=cads.filter(c=>c.tipo===tipo);
   if(busca) lista=lista.filter(c=>
@@ -12778,6 +12790,15 @@ function salvarCadastro(){
   if(idx<0 && tipo==='cliente' && cad.leadId){
     const dup=(ST.cadastros||[]).find(c=>c.tipo==='cliente'&&String(c.leadId)===String(cad.leadId));
     if(dup){ toast('⚠️ Já existe um cadastro de cliente para este lead — abra o existente para editar.'); return; }
+  }
+  // Aviso de CPF/CNPJ duplicado (C7) — não bloqueia, pode ser intencional
+  if(idx<0){
+    const _soDig=s=>String(s||'').replace(/\D/g,'');
+    const docAtual=_soDig(tipo==='cliente'?cad.cpfCli:(cad.cpf||cad.cnpj));
+    if(docAtual.length>=11){
+      const dupDoc=(ST.cadastros||[]).find(c=>c.tipo===tipo&&_soDig(c.tipo==='cliente'?c.cpfCli:(c.cpf||c.cnpj))===docAtual);
+      if(dupDoc && !confirm('⚠️ Já existe um cadastro deste tipo com o mesmo CPF/CNPJ ("'+(dupDoc.nome||'')+'").\n\nCadastrar mesmo assim?')) return;
+    }
   }
   if(idx>=0){
     // preserva dataCriacao e cadastradoPor originais na edição
@@ -14905,7 +14926,7 @@ function rMetas(){
       const tk=_ticketMedio(_metMes,v.nome);
       const cor=a>0?(vc/a*100>=30?'#16A34A':vc/a*100>=15?'#BFA87D':vc/a*100>=5?'#F59E0B':'#EF4444'):'var(--muted)';
       return `<tr>
-        <td>${iconeFunc(v.perfil)} ${v.nome}</td>
+        <td>${iconeFunc(v.perfil)} ${_esc(v.nome)}</td>
         <td style="text-align:center">${a}</td>
         <td style="text-align:center">${vc}</td>
         <td style="text-align:center;font-weight:700;color:${cor}">${t}</td>
