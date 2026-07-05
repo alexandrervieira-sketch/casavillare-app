@@ -73,7 +73,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
-  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos
+  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
+  _cfgConflCapture, _cfgConflOk
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -389,6 +390,16 @@ test('pedBackfillMarcos: status inicial (medicao) não carimba nada', () => {
   const p = { status: 'medicao' };
   T._pedBackfillMarcos(p);
   assert(!p.dateExecAssn && !p.datePgFab && !p.datePedidoFab && !p.dateConcluido, 'nenhum marco');
+});
+
+// ── Anti-conflito de blob de config (S4): equipe editada em duas máquinas ──
+test('cfgConflOk: sem mudança concorrente = ok (não dispara confirm)', () => {
+  T.ST._cfgUAt = T.ST._cfgUAt || {};
+  T.ST._cfgUAt.equipe = 1000;
+  T._cfgConflCapture('equipe');
+  assert(T._cfgConflOk('equipe', 'equipe') === true, 'base == atual → ok');
+  // sem baseline capturado para outra chave → base 0 e atual 0 → ok
+  assert(T._cfgConflOk('configs', 'configs') === true, 'sem base → ok');
 });
 
 // ── relatório ──

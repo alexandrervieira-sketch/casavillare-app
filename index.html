@@ -3105,6 +3105,21 @@ function _conflOk(col,arr,id,label){
   return true;
 }
 
+// Versão do anti-conflito para BLOBS de _config (equipe/configs): o carimbo é
+// _cfgUAt[key], que o listener bumba (linha ~3357) ao aplicar uma versão da nuvem.
+// Protege edições por ÍNDICE (ex.: equipe[idx]) de operar sobre um array que outra
+// máquina trocou por baixo do modal aberto (S4).
+const _cfgConflBase={};
+function _cfgConflCapture(key){ _cfgConflBase[key]=(ST._cfgUAt&&ST._cfgUAt[key])||0; }
+function _cfgConflOk(key,label){
+  const base=_cfgConflBase[key];
+  const atual=(ST._cfgUAt&&ST._cfgUAt[key])||0;
+  if(base!=null && atual>base){
+    return confirm('⚠️ '+(label||'Este cadastro')+' foi alterado em outra máquina enquanto você editava.\n\nSalvar agora pode sobrescrever as mudanças de lá (ou usar uma posição desatualizada).\n\n• OK = salvar mesmo assim\n• Cancelar = não salvar (feche e reabra para ver o que mudou)');
+  }
+  return true;
+}
+
 // ── Exclusão = privilégio do gestor ──────────────────────────────────
 // Só o gestor apaga registros (lead, pedido, contrato/cadastro, folha, etc.).
 // Os botões de excluir já ficam escondidos via CSS; este guard é a trava de
@@ -8749,12 +8764,14 @@ function cfgEditPessoa(area,i){
     colabAtualizarPerfil(false);
   }
   document.getElementById('colab-btn-del').style.display='';
+  _cfgConflCapture('equipe'); // baseline p/ detectar edição concorrente da equipe (S4)
   abrirModal('modal-colab');
 }
 
 async function cfgSalvarColab(){
   if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor edita a equipe.'); return; }
   if(!_cfgSyncPronto()) return;
+  if(!_cfgConflOk('equipe','O cadastro de equipe')) return; // outra máquina mexeu na equipe enquanto o modal estava aberto (S4)
   const nome=document.getElementById('colab-nome').value.trim();
   if(!nome){toast('Informe o nome');return;}
   const perfil=document.getElementById('colab-perfil').value;
@@ -8852,6 +8869,7 @@ async function cfgSalvarColab(){
 function cfgRemColabModal(){
   if(!_gestorPodeExcluir()) return;
   if(!_cfgSyncPronto()) return;
+  if(!_cfgConflOk('equipe','O cadastro de equipe')) return; // índice pode estar desatualizado se outra máquina mexeu (S4)
   const p=ST.equipe[_colabArea][_colabIdx];
   if(!confirm(`Remover ${p.nome}?`)) return;
   ST.equipe[_colabArea].splice(_colabIdx,1);
