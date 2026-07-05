@@ -60,10 +60,19 @@ service cloud.firestore {
       allow write: if autenticado() && ( (doc != 'configs' && doc != 'equipe') || isGestor() );
     }
 
+    // ── Dados sensíveis do colaborador (salário, adiantamento, CPF/RG): leitura
+    //    só gestor+financeiro; escrita só gestor. Coleção PRÓPRIA (não em _config)
+    //    porque uma consulta de coleção é negada por inteiro se um doc dela for
+    //    ilegível — o que travaria o _config de todos. (E1) ──
+    match /_cfgpriv/{doc} {
+      allow read:  if podeFinanceiro();
+      allow write: if isGestor();
+    }
+
     // ── Demais coleções: financeiras só gestor/financeiro; resto, autenticado ──
     match /{collection}/{doc} {
-      allow read:  if collection != '_audit' && collection != '_config' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
-      allow write: if collection != '_audit' && collection != '_config' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow read:  if collection != '_audit' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow write: if collection != '_audit' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
     }
   }
 }

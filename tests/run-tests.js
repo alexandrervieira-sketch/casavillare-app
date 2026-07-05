@@ -74,7 +74,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
-  _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds
+  _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds,
+  _configsPublica, _cfgprivDocs, _cfgprivMerge
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -432,6 +433,27 @@ test('bipartidoCond: loja assume → 40% do (financiado − retenção)', () => 
 test('bipartidoCond: não-financiamento = 0', () => {
   assertEq(T._bipartidoCond({ forma: 'cartao', valor: 100000, absorcao: 'loja' }), 0);
   assertEq(T._bipartidoCond(null), 0);
+});
+
+// ── E1: separação de dados sensíveis (salário/documentos) em _cfgpriv ──
+test('E1: _configsPublica remove sensíveis; _cfgprivDocs só os sensíveis; merge reconstrói', () => {
+  T.ST.configs = T.ST.configs || {};
+  T.ST.configs['FulanoE1'] = { situacao: 'ativo', cargo: 'Vendedor', permissoes: { crm: 1 }, salarioBase: 5000, adiantamento: 300, cpf: '123', rg: '9', cnpj: '', razaoSocial: '' };
+  const pub = T._configsPublica()['FulanoE1'];
+  assert(pub.situacao === 'ativo' && pub.cargo === 'Vendedor' && pub.permissoes, 'público mantém não-sensível');
+  assert(pub.salarioBase === undefined && pub.cpf === undefined && pub.adiantamento === undefined && pub.rg === undefined, 'público NÃO leva salário/cpf/rg/adiantamento');
+  const priv = T._cfgprivDocs().find(d => d.id === 'FulanoE1');
+  assert(priv && priv.salarioBase === 5000 && priv.cpf === '123' && priv.rg === '9', 'priv tem os sensíveis preenchidos');
+  assert(priv.situacao === undefined && priv.cnpj === undefined, 'priv não leva público nem campo sensível vazio');
+  // Simula load: cliente recebe só o público; merge do _cfgpriv reconstrói o completo
+  T.ST.configs['FulanoE1'] = pub;
+  T._cfgprivMerge([priv]);
+  assert(T.ST.configs['FulanoE1'].salarioBase === 5000 && T.ST.configs['FulanoE1'].situacao === 'ativo', 'merge reconstrói salário + público');
+});
+test('E1: pessoa sem campos sensíveis não gera doc priv', () => {
+  T.ST.configs = T.ST.configs || {};
+  T.ST.configs['SoPublicoE1'] = { situacao: 'ativo', cargo: 'X' };
+  assert(!T._cfgprivDocs().find(d => d.id === 'SoPublicoE1'), 'sem sensível → sem doc priv');
 });
 
 // ── relatório ──

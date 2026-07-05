@@ -3193,6 +3193,39 @@ async function auditCarregar(){
 // bloqueia a escrita destes por não-gestores; se o não-gestor os incluísse no lote,
 // TODO o batch de _config dele (inclui _tomb, tabelas) seria negado. Então filtramos aqui.
 const _CFG_GESTOR_ONLY=['configs','equipe'];
+// ── E1: dados sensíveis do colaborador (salário, adiantamento, documentos) NÃO
+//    ficam em _config/configs (que todo autenticado lê). Vão para a coleção
+//    _cfgpriv, com leitura só gestor+financeiro (firestore.rules). Em memória
+//    seguem em ST.configs (merge no load), então os cálculos de folha/DRE não mudam. ──
+const _CFG_PRIV_FIELDS=['salarioBase','adiantamento','cpf','rg','cnpj','razaoSocial'];
+const _podeVerPriv=()=>ST.perfil==='gestor'||ST.perfil==='financeiro';
+// ST.configs SEM os campos sensíveis — é o que vai para _config/configs (leitura de todos)
+function _configsPublica(){
+  const out={};
+  for(const nome in (ST.configs||{})){
+    const c=ST.configs[nome]||{}, pub={};
+    for(const k in c){ if(!_CFG_PRIV_FIELDS.includes(k)) pub[k]=c[k]; }
+    out[nome]=pub;
+  }
+  return out;
+}
+// Docs sensíveis por pessoa — vão para a coleção _cfgpriv (gestor+financeiro)
+function _cfgprivDocs(){
+  const arr=[];
+  for(const nome in (ST.configs||{})){
+    const c=ST.configs[nome]||{}, pv={id:nome}; let tem=false;
+    for(const k of _CFG_PRIV_FIELDS){ if(c[k]!==undefined&&c[k]!==''&&c[k]!==null){ pv[k]=c[k]; tem=true; } }
+    if(tem) arr.push(pv);
+  }
+  return arr;
+}
+// Une os docs sensíveis de volta em ST.configs (no load/subscribe) — reads não mudam
+function _cfgprivMerge(arr){
+  if(!Array.isArray(arr)) return;
+  ST.configs=ST.configs||{};
+  arr.forEach(pv=>{ if(!pv||!pv.id) return; const nome=pv.id; ST.configs[nome]=ST.configs[nome]||{};
+    for(const k of _CFG_PRIV_FIELDS){ if(pv[k]!==undefined) ST.configs[nome][k]=pv[k]; } });
+}
 function _fsConfigDocs(){
   const cfg=[];
   const soGestor=ST.perfil==='gestor';
@@ -3201,7 +3234,7 @@ function _fsConfigDocs(){
     if(key==='_cfgUAt')continue;               // relógio local de config — NÃO sincroniza
     if(_fsIsCol(key))continue;                 // coleções de verdade não entram no _config
     if(!soGestor&&_CFG_GESTOR_ONLY.includes(key))continue; // não-gestor não empurra configs/equipe (SEC1)
-    const val=ST[key];
+    const val=(key==='configs')?_configsPublica():ST[key]; // configs vai SEM os campos sensíveis (E1)
     if(val!==undefined&&val!==null) cfg.push({id:key,_val:val,_uAt:(ST._cfgUAt&&ST._cfgUAt[key])||0}); // + carimbo de tempo
   }
   return cfg;
@@ -3214,6 +3247,7 @@ function _fsSyncAll(){
   const warn=e=>console.warn('[CVP] sync falhou:',e&&e.message);
   for(const key of Object.keys(ST)){ if(_fsIsCol(key)) _fsSyncCollection(key,ST[key]).catch(warn); }
   _fsSyncCollection('_config',_fsConfigDocs()).catch(warn);
+  if(ST.perfil==='gestor') _fsSyncCollection('_cfgpriv',_cfgprivDocs()).catch(warn); // E1: dados sensíveis (só gestor escreve)
 }
 
 // Marca o estado atual como "já sincronizado" (evita reescrever tudo após um load)
@@ -3284,6 +3318,18 @@ async function _fsLoadAll(){
     // Empurra os registros locais preservados (que não estavam na nuvem) para a nuvem
     if(_fbAuthed&&toPush.length){ for(const col of toPush){ try{ await _fsSyncCollection(col,ST[col]); }catch(e){ console.warn('[CVP] push de preservados falhou:',col,e&&e.message); } } }
     if(_fbAuthed&&_cfgKeepLocal.length){ try{ await _fsSyncCollection('_config',_fsConfigDocs()); }catch(e){ console.warn('[CVP] push de config preservada falhou:',e&&e.message); } }
+    // ── E1: dados sensíveis (salário/documentos) ──
+    if(_fbAuthed&&_podeVerPriv()){                       // só gestor+financeiro leem _cfgpriv
+      const _pv=await loadFromFirestore('_cfgpriv');
+      if(_pv){ _cfgprivMerge(_pv); try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} }
+    }
+    if(_fbAuthed&&ST.perfil==='gestor'){                 // gestor: separa salários do configs público na nuvem (migra na 1ª vez, reconcilia depois)
+      try{
+        await _fsSyncCollection('_cfgpriv',_cfgprivDocs());
+        _cfgTouch('configs'); delete _fsSeen['_config/configs']; // força reenvio do configs SEM os campos sensíveis
+        await _fsSyncCollection('_config',_fsConfigDocs());
+      }catch(e){ console.warn('[CVP] E1 migração _cfgpriv falhou:',e&&e.message); }
+    }
     _fsPrimed=true; // nuvem carregada e _fsSeen preparado → agora é seguro empurrar diffs
     console.info('[CVP] Dados mesclados da nuvem (merge seguro). Preservados locais:',toPush.join(',')||'nenhum');
     return true;
@@ -3301,6 +3347,7 @@ async function _fsMigrateToCloud(){
     _fsSeen=Object.create(null); // força reescrita completa
     for(const key of Object.keys(ST)){ if(_fsIsCol(key)) await _fsSyncCollection(key,ST[key]); }
     await _fsSyncCollection('_config',_fsConfigDocs());
+    if(ST.perfil==='gestor') await _fsSyncCollection('_cfgpriv',_cfgprivDocs()); // E1: dados sensíveis
     await _fbDb.collection('_meta').doc('migration').set({id:'migration',seeded:true,by:(ST.nome||''),at:new Date().toISOString()});
     _fsMigrating=false; _fsPrimed=true;
     alert('✅ Migração concluída!\n\nTodos os dados foram enviados para a nuvem. A partir de agora, qualquer computador que fizer login verá os mesmos dados.');
@@ -3360,6 +3407,21 @@ function _fsSubscribe(){
       }, err=>console.warn('[CVP] listener',col,'erro:',err&&err.message));
     }catch(e){console.warn('[CVP] não assinou',col,e&&e.message);}
   });
+  // ── E1: tempo real dos dados sensíveis (salário/documentos) — só gestor+financeiro ──
+  if(_podeVerPriv()){
+    try{
+      _fbDb.collection('_cfgpriv').onSnapshot(snap=>{
+        if(_fsMigrating) return;
+        let mudou=false;
+        snap.docChanges().forEach(ch=>{
+          if(ch.doc.metadata.hasPendingWrites) return;
+          const rec=_fsParseDoc(ch.doc);
+          if(rec&&rec.id&&ch.type!=='removed'){ _cfgprivMerge([rec]); mudou=true; }
+        });
+        if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} _reRenderAtual(); }
+      }, err=>console.warn('[CVP] listener _cfgpriv erro:',err&&err.message));
+    }catch(e){}
+  }
   try{
     _fbDb.collection('_config').onSnapshot(snap=>{
       if(_fsMigrating) return;
