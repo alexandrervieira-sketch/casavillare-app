@@ -2971,7 +2971,7 @@ async function loadFromFirestore(col){
 // ══ FASE 3 — Firestore como fonte de verdade (multi-computador) ═════════════
 const _FS_SESSION_KEYS=['nome','perfil','area']; // por sessão — nunca sincroniza
 const _FS_SKIP_KEYS=['agenda','senhas'];         // 'agenda'=legado (real é 'eventos'); 'senhas'=NUNCA vai à nuvem (segredo). Auth real é o Firebase Auth; ST.senhas é só cache offline local.
-const _FS_BLOB_ARRAYS=['tabelaCartao','bipartido']; // arrays sem id estável → guardados inteiros em _config (1 doc)
+const _FS_BLOB_ARRAYS=['tabelaCartao','bipartido','tabelaFinanciamento']; // arrays sem id estável → guardados inteiros em _config (1 doc). tabelaFinanciamento migrada da sync-por-posição (S3): antes ia como coleção doc_0,1… e corrompia ao remover faixa. Docs antigos da coleção ficam órfãos e nunca são lidos.
 function _fsIsCol(key){ return Array.isArray(ST[key])&&!_FS_SKIP_KEYS.includes(key)&&!_FS_BLOB_ARRAYS.includes(key); }
 let _fsSeen=Object.create(null);                 // 'col/id' -> JSON já sincronizado (diff p/ economizar escritas)
 let _fsMigrating=false;
@@ -8908,6 +8908,7 @@ function cfgSalvarFinInline(){
     if(row&&col) row[col]=parseFloat(inp.value)||0;
   });
   ST.tabelaFinanciamento=tab;
+  _cfgTouch('tabelaFinanciamento'); // blob de _config (S3): anti-clobber por _uAt
   save(); toast('✅ Tabela de financiamento salva!');
 }
 
@@ -9026,7 +9027,7 @@ function cfgSalvarTabelaModal(){
     (window._finTab||[]).forEach(r=>{if(r.p) nova.push(r);});
     if(!nova.length){toast('Tabela vazia');return;}
     ST.tabelaFinanciamento=nova;
-    _cfgTouch('tabelaFinanciamento'); // carimbo p/ anti-clobber (efetivo quando virar blob — ver S3)
+    _cfgTouch('tabelaFinanciamento'); // blob de _config (S3): anti-clobber por _uAt
   }
   save(); fecharModal('modal-taxa'); rConfig();
   toast('Tabela salva ✅ — '+nova.length+' parcelas');
