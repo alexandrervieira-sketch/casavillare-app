@@ -3189,12 +3189,18 @@ async function auditCarregar(){
 }
 
 // Docs de _config = todas as chaves que NÃO são array (equipe, senhas, configs, fabrica, metas, etc.)
+// Blobs de _config sensíveis: só o GESTOR sincroniza. O servidor (firestore.rules)
+// bloqueia a escrita destes por não-gestores; se o não-gestor os incluísse no lote,
+// TODO o batch de _config dele (inclui _tomb, tabelas) seria negado. Então filtramos aqui.
+const _CFG_GESTOR_ONLY=['configs','equipe'];
 function _fsConfigDocs(){
   const cfg=[];
+  const soGestor=ST.perfil==='gestor';
   for(const key of Object.keys(ST)){
     if(_FS_SESSION_KEYS.includes(key)||_FS_SKIP_KEYS.includes(key))continue;
     if(key==='_cfgUAt')continue;               // relógio local de config — NÃO sincroniza
     if(_fsIsCol(key))continue;                 // coleções de verdade não entram no _config
+    if(!soGestor&&_CFG_GESTOR_ONLY.includes(key))continue; // não-gestor não empurra configs/equipe (SEC1)
     const val=ST[key];
     if(val!==undefined&&val!==null) cfg.push({id:key,_val:val,_uAt:(ST._cfgUAt&&ST._cfgUAt[key])||0}); // + carimbo de tempo
   }
@@ -7179,6 +7185,7 @@ function abrirModalVendaCom(id, pessoaNome){
 }
 
 function salvarVendaCom(){
+  if(!_podeEditar('com')){ toast('🔒 Você tem acesso somente de leitura em Comissões.'); return; }
   const pessoa  =document.getElementById('vc-pessoa').value;
   const dataIso =document.getElementById('vc-data').value;
   const cliente =document.getElementById('vc-cliente').value.trim();
@@ -9767,6 +9774,7 @@ function abrirModalLead(id, etapaInicial){
 }
 
 function salvarLead(){
+  if(!_podeEditar('crm')){ toast('🔒 Você tem acesso somente de leitura no CRM.'); return; }
   const nome=document.getElementById('ld-nome').value.trim();
   if(!nome){toast('Informe o nome do cliente');return;}
   // ── Trava: ao salvar em Fechamento, condições devem estar completas e fechadas ──
@@ -11107,6 +11115,7 @@ function _validarCondPgto(conds, valorBruto, descPct){
 }
 
 function avancarEtapa(id){
+  if(!_podeEditar('crm')){ toast('🔒 Você tem acesso somente de leitura no CRM.'); return; }
   const l=(ST.leads||[]).find(x=>String(x.id)===String(id));
   if(!l) return;
   const idx=CRM_ETAPAS.findIndex(e=>e.id===l.etapa);
@@ -11411,6 +11420,7 @@ function _pedBackfillMarcos(p){
   }
 }
 function pedAvancar(id){
+  if(!_podeEditar('ped')){ toast('🔒 Você tem acesso somente de leitura em Pedidos.'); return; }
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
   if(!p) return;
   const idx=PED_ETAPAS.findIndex(e=>e.id===p.status);
@@ -12129,6 +12139,7 @@ function abrirModalPedido(id){
 }
 
 function salvarPedido(){
+  if(!_podeEditar('ped')){ toast('🔒 Você tem acesso somente de leitura em Pedidos.'); return; }
   const cid=document.getElementById('pd-cliente-sel').value;
   const txt=document.getElementById('pd-cliente-txt').value.trim();
   const cadCliente=(ST.cadastros||[]).find(c=>String(c.id)===String(cid));
@@ -12686,6 +12697,7 @@ function toggleMesmoEnd(){
 }
 
 function salvarCadastro(){
+  if(!_podeEditar('cad')){ toast('🔒 Você tem acesso somente de leitura em Cadastros.'); return; }
   const nome=document.getElementById('cad-nome').value.trim();
   if(!nome){toast('Informe o nome');return;}
   const tipo=document.getElementById('cad-tipo').value;

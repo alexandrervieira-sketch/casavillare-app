@@ -48,10 +48,22 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ── Demais coleções: financeiras só gestor (read+write); resto, autenticado ──
+    // ── Config: leitura p/ qualquer autenticado (o app precisa de equipe/permissões).
+    //    Escrita: qualquer autenticado, EXCETO os docs 'configs' (perfil, permissões,
+    //    salários) e 'equipe' (papéis), que são SÓ GESTOR. Fecha a escalada de
+    //    privilégio (não-gestor reescrevendo o próprio perfil pelo DevTools).
+    //    Os demais docs de _config (_tomb, tabelaCartao, tabelaFinanciamento,
+    //    bipartido…) continuam abertos p/ o sync de todos funcionar.
+    //    (O cliente não empurra configs/equipe quando não é gestor — ver _fsConfigDocs.)
+    match /_config/{doc} {
+      allow read:  if autenticado();
+      allow write: if autenticado() && ( (doc != 'configs' && doc != 'equipe') || isGestor() );
+    }
+
+    // ── Demais coleções: financeiras só gestor/financeiro; resto, autenticado ──
     match /{collection}/{doc} {
-      allow read:  if collection != '_audit' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
-      allow write: if collection != '_audit' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow read:  if collection != '_audit' && collection != '_config' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow write: if collection != '_audit' && collection != '_config' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
     }
   }
 }
