@@ -5090,6 +5090,7 @@ function _syncAgendaLead(lead, prevLead){
   // ── Apresentação ──
   const evA=ST.eventos.find(e=>e.leadId===lid&&e.agTipo==='apres');
   const entrouApres=lead.etapa==='apresentacao'&&prevLead?.etapa!=='apresentacao';
+  const saiuApres=lead.etapa!=='apresentacao'&&prevLead?.etapa==='apresentacao';
   if(entrouApres&&!evA){
     _tombClear('eventos','aga_'+lid); // recriou apresentação → limpa marca anterior
     const dataEv=lead.proxContato||_hojeLocal();
@@ -5099,6 +5100,9 @@ function _syncAgendaLead(lead, prevLead){
       cliente:lead.nome,resp:lead.responsavel||'',
       obs:'Gerado pelo CRM — Lead avançou para Apresentação'});
     setTimeout(()=>toast('📅 Apresentação criada na Agenda!'),400);
+  } else if(saiuApres&&evA){
+    _tombAdd('eventos','aga_'+lid); // saiu da etapa Apresentação → remove o evento (antes ficava fantasma na agenda)
+    ST.eventos=ST.eventos.filter(e=>!(e.leadId===lid&&e.agTipo==='apres'));
   } else if(evA){
     evA.titulo=`📊 Apresentação: ${lead.nome}`;
     evA.cliente=lead.nome;
@@ -11094,8 +11098,10 @@ function avancarEtapa(id){
     if(erro){ alert(erro); return; }
   }
 
+  const _prevEtapa=l.etapa;
   l.etapa=proximaEtapa.id;
   l._uAt=Date.now();
+  _syncAgendaLead(l, {etapa:_prevEtapa}); // cria/remove o evento de Apresentação ao mover pelo kanban
   save(); toast('→ '+proximaEtapa.label); rCrm();
 }
 
@@ -11108,8 +11114,10 @@ function voltarEtapa(id){
   if(idx<=0) return;
   const anterior=CRM_ETAPAS[idx-1];
   if(!confirm(`Voltar "${l.nome}" de ${CRM_ETAPAS[idx].label} para ${anterior.label}?`)) return;
+  const _prevEtapa=l.etapa;
   l.etapa=anterior.id;
   l._uAt=Date.now();
+  _syncAgendaLead(l, {etapa:_prevEtapa}); // remove/cria o evento de Apresentação ao recuar pelo kanban
   save(); toast('← '+anterior.label); rCrm();
 }
 
@@ -11366,6 +11374,20 @@ function _rPedList(ped,hoje,statsHtml){
     </table></div>`;
 }
 
+// Datas de marco por status do pedido (competência de DRE/relatórios/SLA).
+const _MARCO_STATUS={exec_assn:'dateExecAssn', pg_fab:'datePgFab', pedido:'datePedidoFab', concluido:'dateConcluido'};
+// Preenche com HOJE toda data de marco vazia cujo status já foi ATINGIDO (na ordem de PED_ETAPAS).
+// Assim avançar/pular etapas — pelo kanban OU pelo modal — nunca deixa um marco em branco.
+function _pedBackfillMarcos(p){
+  if(!p) return;
+  const idx=PED_ETAPAS.findIndex(e=>e.id===p.status);
+  if(idx<0) return;
+  const hoje=_hojeLocal();
+  for(const st in _MARCO_STATUS){
+    const stIdx=PED_ETAPAS.findIndex(e=>e.id===st);
+    if(stIdx>=0 && stIdx<=idx && !p[_MARCO_STATUS[st]]) p[_MARCO_STATUS[st]]=hoje;
+  }
+}
 function pedAvancar(id){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
   if(!p) return;
@@ -11373,6 +11395,7 @@ function pedAvancar(id){
   if(idx<0||idx>=PED_ETAPAS.length-1){toast('Já na última etapa');return;}
   p.status=PED_ETAPAS[idx+1].id;
   p.statusChangedAt=_hojeLocal();
+  _pedBackfillMarcos(p); // grava as datas de marco atingidas (antes só o modal fazia, e sem cobrir pulos)
   save(); toast(`→ ${PED_ETAPAS[idx+1].icon} ${PED_ETAPAS[idx+1].label}`); rPedidos();
 }
 
@@ -12144,13 +12167,15 @@ function salvarPedido(){
     const hoje=_hojeLocal();
     pedido.statusChangedAt = (prev.status!==pedido.status) ? hoje : (prev.statusChangedAt||pedido.data);
     // Preservar datas de marcos — se já existe mantém; se nulo e pedido já está nessa etapa, backfill com hoje
-    pedido.dateExecAssn  = prev.dateExecAssn  || (pedido.status==='exec_assn'  ? hoje : null);
-    pedido.datePgFab     = prev.datePgFab     || (pedido.status==='pg_fab'     ? hoje : null);
-    pedido.datePedidoFab = prev.datePedidoFab || (pedido.status==='pedido'     ? hoje : null);
-    pedido.dateConcluido = prev.dateConcluido || (pedido.status==='concluido'  ? hoje : null);
+    pedido.dateExecAssn  = prev.dateExecAssn  || null;
+    pedido.datePgFab     = prev.datePgFab     || null;
+    pedido.datePedidoFab = prev.datePedidoFab || null;
+    pedido.dateConcluido = prev.dateConcluido || null;
+    _pedBackfillMarcos(pedido); // carimba todos os marcos já atingidos (inclusive se a etapa foi pulada)
     ST.pedidos[idx]=pedido;
   } else {
     pedido.statusChangedAt=pedido.data;
+    _pedBackfillMarcos(pedido); // pedido novo já criado num status avançado também carimba os marcos
     ST.pedidos.push(pedido);
   }
   _pdId=null; save();

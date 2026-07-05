@@ -73,7 +73,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaLiquido, _valorLiquidoVenda,
   _tombKey, _tombAdd, _tombHas, _tombClear, _tombMergeIncoming, _conflCapture, _conflOk, _fsConfigDocs, _diasNaEtapa, _newId,
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
-  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend
+  _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -370,6 +370,25 @@ test('getComVend: pontuação fracionária no buraco cai na faixa de baixo (NÃO
 });
 test('getComVend: abaixo da menor faixa = 0% (comportamento mantido)', () => {
   assertEq(T._getComVend(1.20), 0);
+});
+
+// ── Marcos do pedido: pular etapas não pode deixar marco em branco (C3) ──
+test('pedBackfillMarcos: pular até "pedido" carimba exec_assn/pg_fab/pedido', () => {
+  const p = { status: 'pedido' };
+  T._pedBackfillMarcos(p);
+  assert(!!p.dateExecAssn && !!p.datePgFab && !!p.datePedidoFab, 'marcos atingidos carimbados');
+  assert(!p.dateConcluido, 'concluido (etapa futura) fica nulo');
+});
+test('pedBackfillMarcos: não sobrescreve marco já preenchido', () => {
+  const p = { status: 'concluido', dateExecAssn: '2020-01-01' };
+  T._pedBackfillMarcos(p);
+  assertEq(p.dateExecAssn, '2020-01-01');
+  assert(!!p.dateConcluido, 'concluido carimbado');
+});
+test('pedBackfillMarcos: status inicial (medicao) não carimba nada', () => {
+  const p = { status: 'medicao' };
+  T._pedBackfillMarcos(p);
+  assert(!p.dateExecAssn && !p.datePgFab && !p.datePedidoFab && !p.dateConcluido, 'nenhum marco');
 });
 
 // ── relatório ──
