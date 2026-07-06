@@ -468,6 +468,17 @@ test('bipartidoTotalMes: mês sem financiamento fechado = 0', () => {
   assertEq(T._bipartidoTotalMes('2031-01'), 0);
 });
 
+// ── P0-A: aplicar o configs PÚBLICO (sem sensível) não pode zerar salário/CPF (re-merge do listener) ──
+test('E1 P0-A: overwrite pelo configs público + re-merge preserva sensível E público', () => {
+  T.ST.configs = { 'FulanoLis': { situacao: 'ativo', cargo: 'X', salarioBase: 5000, cpf: '1', permissoes: { crm: 1 } } };
+  const pub = JSON.parse(JSON.stringify(T._configsPublica()));  // doc que chega do listener
+  const sens = T._cfgprivDocs();                                 // snapshot dos sensíveis em memória
+  T.ST.configs = pub;                                            // listener: ST.configs = versão pública
+  T._cfgprivMerge(sens);                                         // ...seguido do re-merge (fix)
+  assert(T.ST.configs['FulanoLis'].salarioBase === 5000 && T.ST.configs['FulanoLis'].cpf === '1', 'sensível preservado (não zerou)');
+  assert(T.ST.configs['FulanoLis'].cargo === 'X' && !!T.ST.configs['FulanoLis'].permissoes, 'público preservado');
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);

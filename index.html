@@ -3440,7 +3440,20 @@ function _fsSubscribe(){
           const _inUAt=parsed._uAt||0, _locUAt=(ST._cfgUAt&&ST._cfgUAt[_k])||0;
           if(_inUAt<_locUAt) return;            // edição local é mais nova → ignora versão antiga de outra máquina
           if(_cfgVazio(parsed._val)&&_cfgLocalTemDados(_k)) return; // nuvem vazia NÃO apaga dados locais
-          ST[_k]=parsed._val;
+          if(_k==='configs'&&_podeVerPriv()&&ST.configs){
+            // E1: o doc público de configs vem SEM os campos sensíveis. Preserva os que já estão
+            // em memória (vindos do _cfgpriv) para não zerar salário/CPF na tela ao aplicar o público.
+            const _sens=[];
+            for(const nome in ST.configs){
+              if(!parsed._val||parsed._val[nome]===undefined) continue; // pessoa removida no público → não ressuscita
+              const c=ST.configs[nome]; let o=null;
+              for(const f of _CFG_PRIV_FIELDS){ if(c&&c[f]!==undefined){ (o=o||{id:nome})[f]=c[f]; } }
+              if(o) _sens.push(o);
+            }
+            ST[_k]=parsed._val; _cfgprivMerge(_sens);
+          } else {
+            ST[_k]=parsed._val;
+          }
           if(ST._cfgUAt&&_k!=='_cfgUAt') ST._cfgUAt[_k]=_inUAt;
           _fsSeen['_config/'+_k]=JSON.stringify(parsed); mudou=true;
         }
@@ -4187,7 +4200,7 @@ function rHomeAgenda(){
     return `<div class="home-agenda-row" onclick="navTo('tab-agenda')" style="cursor:pointer;">
       <span style="font-size:15px;">${tp.icon}</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:12.5px;font-weight:500;color:var(--dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ev.titulo}</div>
+        <div style="font-size:12.5px;font-weight:500;color:var(--dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(ev.titulo)}</div>
         <div style="font-size:10.5px;color:var(--gl);">${dtFmt}${hora}${ev.resp?' · '+ev.resp:''}</div>
       </div>
     </div>`;
@@ -5021,7 +5034,9 @@ function salvarFolha(){
     obs:      document.getElementById('pf-obs').value.trim()
   };
   if(!ST.configs) ST.configs={};
-  ST.configs[pessoa]={salarioBase:folha.salarioBase,adiantamento:folha.adiantamento};
+  if(!ST.configs[pessoa]) ST.configs[pessoa]={};
+  ST.configs[pessoa].salarioBase=folha.salarioBase;   // MERGE — não reatribuir (preserva cargo/CPF/situação/permissões)
+  ST.configs[pessoa].adiantamento=folha.adiantamento;
   // Aviso se salário base zerado para perfis que normalmente recebem fixo
   const infoP=infoFunc(pessoa);
   const perfisSalario=['gestor','projetista','adm','financeiro','rh','ti','estagiario','marketing','midia','designer'];
@@ -5375,7 +5390,7 @@ function _agRenderCal(){
     const max=2;
     evsDia.slice(0,max).forEach(ev=>{
       const tp=_tipoEv[ev.tipo]||_tipoEv.outro;
-      chips+=`<div class="ag-chip ${tp.chip}" onclick="event.stopPropagation();abrirModalEvento('${_sid(ev.id)}')" title="${ev.titulo}">${tp.icon} ${ev.titulo}</div>`;
+      chips+=`<div class="ag-chip ${tp.chip}" onclick="event.stopPropagation();abrirModalEvento('${_sid(ev.id)}')" title="${_esc(ev.titulo)}">${tp.icon} ${_esc(ev.titulo)}</div>`;
     });
     if(evsDia.length>max) chips+=`<div class="ag-chip" style="background:var(--border);color:var(--mid);">+${evsDia.length-max} mais</div>`;
     html+=`<div class="ag-cal-day${isHoje?' ag-today':''}${isSel?' ag-sel':''}" onclick="agDiaSel('${dStr}')">
@@ -5503,6 +5518,7 @@ function abrirModalEvento(id, dataPre){
 }
 
 function salvarEvento(){
+  if(!_podeEditar('agenda')){ toast('🔒 Você tem acesso somente de leitura na Agenda.'); return; }
   const titulo=document.getElementById('ev-titulo-inp').value.trim();
   const data=document.getElementById('ev-data').value;
   if(!titulo){toast('Informe o título do evento');return;}
@@ -13851,7 +13867,7 @@ function rFinCR(){
   const linhaParc=(p,isPago)=>`<tr>
     <td>${!isPago?`<input type="checkbox" class="cr-check" data-lead="${p.leadId}" data-cond="${p.id}" data-valor="${p.valor||0}" onchange="crAtualizarBarra()" style="width:15px;height:15px;cursor:pointer;"/>`:''}</td>
     <td style="font-weight:600;">${_esc(p.cliente||'—')}</td>
-    <td>${p.desc||'—'}</td>
+    <td>${_esc(p.desc||'—')}</td>
     <td>${badge(p.forma)}</td>
     <td style="font-weight:700;color:var(--p);">${fmtL(p.valor)}</td>
     <td style="${!isPago&&p.vencimento&&p.vencimento<hoje?'color:#DC2626;font-weight:600;':''}">${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}${!isPago&&p.vencimento&&p.vencimento<hoje?' ⚠️':''}</td>
