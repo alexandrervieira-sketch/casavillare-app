@@ -8564,18 +8564,27 @@ function cfgSalvarMetasFabrica(){
 }
 
 // Soma valorFabrica de pedidos que pagaram a fábrica no mês (mes = 'YYYY-MM')
+const _FAB_ETAPAS_PAGAS=['pg_fab','pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
+// Pagamentos DIRETOS à fábrica no mês (valorFabrica lançado em pedidos já na etapa de pagamento)
 function _totalFabricaMes(mes){
-  const ETAPAS_PAGAS=['pg_fab','pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
   return (ST.pedidos||[])
     .filter(p=>{
       if(!p.valorFabrica) return false;
-      if(!ETAPAS_PAGAS.includes(p.status)) return false;
-      // Usa datePgFab (registrado a partir de agora) ou data do pedido como fallback
-      const d=(p.datePgFab||p.data||'').slice(0,7);
+      if(!_FAB_ETAPAS_PAGAS.includes(p.status)) return false;
+      const d=(p.datePgFab||p.data||'').slice(0,7); // competência = quando pagou (ou data do pedido)
       return d===mes;
     })
     .reduce((s,p)=>s+(p.valorFabrica||0),0);
 }
+// Bipartido do mês = 40% líquido dos financiamentos das vendas FECHADAS no mês (a financeira envia à fábrica)
+function _bipartidoTotalMes(mes){
+  return (ST.leads||[])
+    .filter(l=>l.status==='ganho' && (l.dataFechamento||l.dataCriacao||'').slice(0,7)===mes)
+    .reduce((s,l)=>s+(l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').reduce((a,c)=>a+_bipartidoCond(c),0),0);
+}
+// Volume TOTAL de compras da fábrica no mês (Meta Fábrica) = pagamentos diretos + bipartido.
+// São mutuamente exclusivos na prática (venda à vista → pagamento; financiada → bipartido, valorFabrica=0).
+function _volumeFabricaMes(mes){ return _totalFabricaMes(mes)+_bipartidoTotalMes(mes); }
 
 // Retorna tiers configurados da fábrica (com defaults)
 function _getFabTiers(){
@@ -13477,11 +13486,11 @@ function fabNavMes(d){
   _bipMes+=d;
   if(_bipMes<0){_bipMes=11;_bipAno--;}
   if(_bipMes>11){_bipMes=0;_bipAno++;}
-  rBipartido('fab-content');
+  if(_fabSubAtivo==='pagamentos') rFabPagamentos(); else rBipartido('fab-content');
 }
 function rFabrica(){
   ['custos','pagamentos','bipartido'].forEach(s=>{ const b=document.getElementById('fab-sub-'+s); if(b) b.classList.toggle('active',s===_fabSubAtivo); });
-  const nav=document.getElementById('fab-mes-nav'); if(nav) nav.style.display=(_fabSubAtivo==='bipartido')?'':'none';
+  const nav=document.getElementById('fab-mes-nav'); if(nav) nav.style.display=(_fabSubAtivo==='bipartido'||_fabSubAtivo==='pagamentos')?'':'none'; // mês em Bipartido e Pagamentos
   if(_fabSubAtivo==='bipartido')        rBipartido('fab-content');
   else if(_fabSubAtivo==='pagamentos')  rFabPagamentos();
   else                                  rRelCustosFabrica('fab-content');
@@ -13490,7 +13499,10 @@ function rFabrica(){
 // Pagamentos à fábrica — lista os pedidos com custo de fábrica, status do comprovante e ações
 function rFabPagamentos(){
   const el=document.getElementById('fab-content'); if(!el) return;
-  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0)
+  const mesStr=mesAnoStr(_bipMes,_bipAno);
+  ['bip-mes-label','fab-mes-label'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=mesNomeStr(_bipMes,_bipAno);});
+  // Só os pagamentos DO MÊS (mesma competência da Meta Fábrica: etapa paga + mês do datePgFab/data)
+  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr)
     .sort((a,b)=>(b.valorFabrica||0)-(a.valorFabrica||0));
   const total=peds.reduce((s,p)=>s+(p.valorFabrica||0),0);
   const comComp=peds.filter(p=>p.comprovante).length;
@@ -13540,7 +13552,7 @@ function rFabPagamentos(){
           <th style="text-align:left;padding:8px 10px;">Comprovante</th>
           <th style="text-align:left;padding:8px 10px;">Ações</th>
         </tr></thead>
-        <tbody>${linhas||'<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gl);">Nenhum pedido com custo de fábrica.</td></tr>'}</tbody>
+        <tbody>${linhas||'<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gl);">Nenhum pagamento à fábrica neste mês.</td></tr>'}</tbody>
       </table></div>
     </div>
   </div>`;
@@ -14443,7 +14455,8 @@ function rMetas(){
   // ── Meta Fábrica (gestor + projetista) ──
   if(isG || ST.perfil==='projetista'){
     const tiers=_getFabTiers();
-    const totalFab=_totalFabricaMes(_metMes);
+    const _pagFab=_totalFabricaMes(_metMes), _bipFab=_bipartidoTotalMes(_metMes);
+    const totalFab=_pagFab+_bipFab; // pagamentos diretos + bipartido
     // Tier atingido = último cujo vol <= totalFab
     const tierAtingido=tiers.reduce((acc,t)=>totalFab>=t.vol?t:acc, null);
     // Próximo tier = primeiro cujo vol > totalFab
@@ -14500,7 +14513,7 @@ function rMetas(){
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
         <div>
           <div style="font-size:13px;font-weight:800;color:#7E22CE;">🏭 Meta Fábrica — ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
-          <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Volume de compras da fábrica no mês</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Volume de compras da fábrica no mês · pagamentos ${fmt(_pagFab)} + bipartido ${fmt(_bipFab)}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:22px;font-weight:800;color:#7E22CE;">${fmt(totalFab)}</div>

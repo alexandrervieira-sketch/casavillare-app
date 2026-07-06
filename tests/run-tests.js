@@ -75,7 +75,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _hojeLocal, _mesLocal, _cascataProjeto, _calcTaxaCartaoConds, _coefFin, _temPerm, _podeEditar, _addMesesData, _descEfetivoComissao,
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
   _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds,
-  _configsPublica, _cfgprivDocs, _cfgprivMerge
+  _configsPublica, _cfgprivDocs, _cfgprivMerge,
+  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -454,6 +455,17 @@ test('E1: pessoa sem campos sensíveis não gera doc priv', () => {
   T.ST.configs = T.ST.configs || {};
   T.ST.configs['SoPublicoE1'] = { situacao: 'ativo', cargo: 'X' };
   assert(!T._cfgprivDocs().find(d => d.id === 'SoPublicoE1'), 'sem sensível → sem doc priv');
+});
+
+// ── Meta Fábrica = pagamentos diretos + bipartido do mês ──
+test('bipartidoTotalMes/volumeFabricaMes: inclui o bipartido dos financiamentos fechados no mês', () => {
+  T.ST.leads = T.ST.leads || [];
+  T.ST.leads.push({ id: 'LvolX', status: 'ganho', dataFechamento: '2030-05-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
+  assert(_close(T._bipartidoTotalMes('2030-05'), 40000), 'cliente assume → 40% de 100000');
+  assert(_close(T._volumeFabricaMes('2030-05'), T._totalFabricaMes('2030-05') + 40000), 'volume = pagamentos + bipartido');
+});
+test('bipartidoTotalMes: mês sem financiamento fechado = 0', () => {
+  assertEq(T._bipartidoTotalMes('2031-01'), 0);
 });
 
 // ── relatório ──
