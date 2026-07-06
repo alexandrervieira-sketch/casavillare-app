@@ -11370,17 +11370,10 @@ function _rPedPipe(ped,hoje,statsHtml){
           const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
           const fins=(lead?.condicoesPgto||[]).filter(c=>c.forma==='financiamento');
           if(!fins.length) return '';
-          const totFin=fins.reduce((a,c)=>a+(c.valor||0),0);
           const totBip=fins.reduce((a,c)=>a+_bipartidoCond(c),0); // 40% do líquido (financiado − retenção da loja)
-          const chaves=fins.map(c=>lead.id+'_'+c.id);
-          const bipRecs=(ST.bipartido||[]).filter(b=>chaves.includes(b.chave));
-          const allConf=bipRecs.length===fins.length&&bipRecs.every(b=>b.status==='confirmado');
-          const anyEnv=bipRecs.some(b=>b.status==='enviado'||b.status==='confirmado');
-          const cor=allConf?'#166534':anyEnv?'#1D4ED8':'#92400E';
-          const icon=allConf?'✅':anyEnv?'📤':'⏳';
-          return `<div style="margin-top:4px;padding:3px 8px;background:${allConf?'#F0FDF4':anyEnv?'#EFF6FF':'#FFF7ED'};border:1px solid ${allConf?'#86EFAC':anyEnv?'#BFDBFE':'#FED7AA'};border-radius:6px;font-size:10px;color:${cor};">
-            🏭 Bipartido: <strong>R$ ${fmt(totBip)}</strong> ${icon}
-            <button onclick="event.stopPropagation();navTo('tab-fabrica');setTimeout(()=>fabSubTab('bipartido'),100);" style="border:none;background:none;font-size:10px;color:${cor};cursor:pointer;text-decoration:underline;padding:0;margin-left:4px;">ver</button>
+          return `<div style="margin-top:4px;padding:3px 8px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;font-size:10px;color:#92400E;">
+            🏭 Bipartido: <strong>R$ ${fmt(totBip)}</strong>
+            <button onclick="event.stopPropagation();navTo('tab-fabrica');setTimeout(()=>fabSubTab('bipartido'),100);" style="border:none;background:none;font-size:10px;color:#92400E;cursor:pointer;text-decoration:underline;padding:0;margin-left:4px;">ver</button>
           </div>`;
         })()}
         ${(isG||ST.configsCom?.comissaoVisivel)?comBadge:''}
@@ -13600,32 +13593,13 @@ function rBipartido(tgt){
   const registros=[];
   leadsGanhos.forEach(l=>{
     (l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').forEach(c=>{
-      const chave=l.id+'_'+c.id;
-      const bip=((ST.bipartido||[]).find(x=>x.chave===chave))||{status:'pendente'};
-      const valorFin=c.valor||0;
-      const valorBip=_bipartidoCond(c); // 40% do líquido (financiado − retenção que a loja absorve)
-      registros.push({l,c,chave,valorFin,valorBip,status:bip.status||'pendente',dataEnvio:bip.dataEnvio||'',dataConf:bip.dataConfirmacao||''});
+      registros.push({l,c,valorFin:c.valor||0,valorBip:_bipartidoCond(c)}); // 40% do financiado líquido
     });
   });
 
   // Totalizadores
   const totFin=registros.reduce((a,r)=>a+r.valorFin,0);
   const totBip=registros.reduce((a,r)=>a+r.valorBip,0);
-  const totPend=registros.filter(r=>r.status==='pendente').reduce((a,r)=>a+r.valorBip,0);
-  const totEnv=registros.filter(r=>r.status==='enviado').reduce((a,r)=>a+r.valorBip,0);
-  const totConf=registros.filter(r=>r.status==='confirmado').reduce((a,r)=>a+r.valorBip,0);
-
-  const bdgStatus=s=>({
-    pendente: `<span class="badge b-wait">⏳ Pendente</span>`,
-    enviado:  `<span class="badge b-warn">📤 Enviado</span>`,
-    confirmado:`<span class="badge b-ok">✅ Confirmado</span>`
-  }[s]||'—');
-
-  const acoes=r=>{
-    if(r.status==='pendente')   return `<button class="btn btn-p btn-sm" onclick="bipAtualizarStatus('${r.l.id}','${r.c.id}','enviado')">📤 Marcar enviado</button>`;
-    if(r.status==='enviado')    return `<button class="btn btn-s btn-sm" onclick="bipAtualizarStatus('${r.l.id}','${r.c.id}','confirmado')">✅ Confirmar fábrica</button>`;
-    return `<span style="font-size:11px;color:var(--gl);">Confirmado em ${r.dataConf}</span>`;
-  };
 
   document.getElementById(_tgt).innerHTML=`
     <!-- KPIs -->
@@ -13638,19 +13612,7 @@ function rBipartido(tgt){
       <div class="stat-card" style="border-left:4px solid #C8A97A;">
         <div class="sc-label">Total Bipartido (40%)</div>
         <div class="sc-val" style="color:var(--p);">R$ ${fmt2(totBip)}</div>
-        <div style="font-size:11px;color:var(--gl);margin-top:4px;">A enviar à fábrica</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #F59E0B;">
-        <div class="sc-label">⏳ Pendente</div>
-        <div class="sc-val" style="color:#92400E;">R$ ${fmt2(totPend)}</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #3B82F6;">
-        <div class="sc-label">📤 Enviado</div>
-        <div class="sc-val" style="color:#1D4ED8;">R$ ${fmt2(totEnv)}</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #16A34A;">
-        <div class="sc-label">✅ Confirmado</div>
-        <div class="sc-val" style="color:#166534;">R$ ${fmt2(totConf)}</div>
+        <div style="font-size:11px;color:var(--gl);margin-top:4px;">40% do financiado líquido → fábrica</div>
       </div>
     </div>
 
@@ -13663,27 +13625,21 @@ function rBipartido(tgt){
         <th>Vencimento</th>
         <th style="text-align:right;">Valor Financiado</th>
         <th style="text-align:right;color:#C8A97A;">Bipartido 40%</th>
-        <th>Status</th>
-        <th>Envio</th>
-        <th style="width:180px;"></th>
       </tr></thead>
       <tbody>
         ${registros.map(r=>`<tr>
-          <td class="td-bold">${r.l.nome}</td>
+          <td class="td-bold">${_esc(r.l.nome)}</td>
           <td style="color:var(--gl);">${_esc(r.l.responsavel||'—')}</td>
-          <td style="font-size:12px;">${r.c.desc||'Financiamento'}${r.c.parcelas>1?' · '+r.c.parcelas+'x':''}</td>
+          <td style="font-size:12px;">${_esc(r.c.desc||'Financiamento')}${r.c.parcelas>1?' · '+r.c.parcelas+'x':''}</td>
           <td style="font-size:12px;">${r.c.vencimento?fmtD(r.c.vencimento):'—'}</td>
           <td style="text-align:right;">R$ ${fmt2(r.valorFin)}</td>
           <td style="text-align:right;font-weight:700;color:var(--p);">R$ ${fmt2(r.valorBip)}</td>
-          <td>${bdgStatus(r.status)}</td>
-          <td style="font-size:11px;color:var(--gl);">${r.dataEnvio||'—'}</td>
-          <td><div class="td-actions">${acoes(r)}</div></td>
         </tr>`).join('')}
       </tbody>
     </table></div>
 
     <div style="margin-top:12px;font-size:11px;color:var(--gl);text-align:right;">
-      * Bipartido = 40% do valor financiado LÍQUIDO (financiado − retenção que a loja absorve) enviado à fábrica para liberação do pedido
+      * Bipartido = 40% do valor financiado líquido (financiado − retenção que a loja absorve). A financeira envia direto à fábrica para liberar o pedido.
     </div>`;
 }
 
