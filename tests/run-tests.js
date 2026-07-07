@@ -479,6 +479,15 @@ test('E1 P0-A: overwrite pelo configs público + re-merge preserva sensível E p
   assert(T.ST.configs['FulanoLis'].cargo === 'X' && !!T.ST.configs['FulanoLis'].permissoes, 'público preservado');
 });
 
+// ── C: pedido financiado não conta 2× na Meta Fábrica (bipartido + valorFabrica) ──
+test('C: pedido financiado com valorFabrica não duplica na Meta Fábrica', () => {
+  T.ST.leads = T.ST.leads || []; T.ST.pedidos = T.ST.pedidos || [];
+  T.ST.leads.push({ id: 'LdcC', status: 'ganho', dataFechamento: '2032-04-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
+  T.ST.pedidos.push({ id: 'PdcC', leadId: 'LdcC', valorFabrica: 120000, status: 'concluido', datePgFab: '2032-04-15' });
+  assertEq(T._totalFabricaMes('2032-04'), 0);                      // financiado é excluído dos pagamentos diretos
+  assert(_close(T._volumeFabricaMes('2032-04'), 40000), 'volume = só o bipartido (40k), sem somar os 120k');
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);

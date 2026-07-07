@@ -2775,6 +2775,8 @@ function _esc(s){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+// URL segura para href: só http(s)/mailto; bloqueia javascript:, data:, etc.
+function _safeHref(u){ u=String(u==null?'':u).trim(); return /^(https?:|mailto:)/i.test(u)?u:'#'; }
 
 // ── Segurança: hash SHA-256 via Web Crypto API (nativa, sem biblioteca) ──
 async function _hashSenha(senha, salt='cvp2024'){
@@ -5118,6 +5120,7 @@ function cnToggleTipo(){
   document.getElementById('cn-avulso-area').style.display=tp==='avulso'?'':'none';
 }
 function salvarComissao(){
+  if(!_podeEditar('com')){ toast('🔒 Você tem acesso somente de leitura em Comissões.'); return; }
   const pessoa=document.getElementById('cn-pessoa').value;
   const tipo  =document.getElementById('cn-tipo').value;
   const valor =_parseBRL(document.getElementById('cn-valor').value);
@@ -7770,20 +7773,20 @@ function rRepositorio(){
   el.innerHTML=`<div class="repo-grid">${lista.map(r=>{
     const cat=REPO_CAT[r.cat]||REPO_CAT.outro;
     const icon=REPO_TIPO_ICON[r.tipo]||'📁';
-    const tags=r.tags?(r.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span style="background:var(--bg);border-radius:10px;padding:1px 6px;font-size:10px;color:var(--gl);">${t}</span>`).join(' ')):'';
+    const tags=r.tags?(r.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span style="background:var(--bg);border-radius:10px;padding:1px 6px;font-size:10px;color:var(--gl);">${_esc(t)}</span>`).join(' ')):'';
     const editBtn=isG?`<button onclick="abrirModalRepo('${r.id}')" style="background:none;border:none;color:var(--gl);cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0;" title="Editar">✏️</button>`:'';
     return `<div class="repo-card">
       <div class="repo-icon">${icon}</div>
       <div class="repo-body">
         <div style="display:flex;align-items:flex-start;gap:4px;justify-content:space-between;">
-          <div class="repo-nome" title="${r.nome}">${r.nome}</div>
+          <div class="repo-nome" title="${_esc(r.nome)}">${_esc(r.nome)}</div>
           ${editBtn}
         </div>
-        ${r.desc?`<div class="repo-desc">${r.desc}</div>`:''}
+        ${r.desc?`<div class="repo-desc">${_esc(r.desc)}</div>`:''}
         ${tags?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${tags}</div>`:''}
         <div class="repo-meta">
           <span class="repo-cat-badge" style="background:${cat.cor};color:var(--mid);">${cat.icon} ${cat.label}</span>
-          ${r.link?`<a href="${r.link}" target="_blank" class="btn btn-p btn-sm" style="text-decoration:none;font-size:10px;padding:3px 10px;">Abrir →</a>`:''}
+          ${r.link?`<a href="${_esc(_safeHref(r.link))}" target="_blank" rel="noopener noreferrer" class="btn btn-p btn-sm" style="text-decoration:none;font-size:10px;padding:3px 10px;">Abrir →</a>`:''}
         </div>
       </div>
     </div>`;
@@ -7890,7 +7893,7 @@ function rTreinamentos(){
     const dtFmt=t.data?new Date(t.data+'T12:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'—';
     const dest=TREI_DEST[t.dest]||t.dest||'Todos';
     const linkBtn=t.link
-      ?`<a href="${t.link}" target="_blank" class="btn btn-s btn-sm" style="text-decoration:none;">🔗 Material</a>`
+      ?`<a href="${_esc(_safeHref(t.link))}" target="_blank" rel="noopener noreferrer" class="btn btn-s btn-sm" style="text-decoration:none;">🔗 Material</a>`
       :'';
     const editBtn=isG
       ?`<button class="btn btn-s btn-sm" onclick="abrirModalTrei('${t.id}')">✏️</button>`
@@ -7905,7 +7908,7 @@ function rTreinamentos(){
       <div class="trei-footer">
         <div>
           <div class="trei-dest">${dest}</div>
-          ${t.instrutor?`<div class="trei-instrutor">👤 ${t.instrutor}</div>`:''}
+          ${t.instrutor?`<div class="trei-instrutor">👤 ${_esc(t.instrutor)}</div>`:''}
         </div>
         <div class="trei-actions">${linkBtn}${editBtn}</div>
       </div>
@@ -8586,6 +8589,7 @@ function _totalFabricaMes(mes){
   return (ST.pedidos||[])
     .filter(p=>{
       if(!p.valorFabrica) return false;
+      if(_bipartidoPed(p)>0) return false; // financiado → conta no bipartido (evita dupla contagem na Meta) — item C
       if(!_FAB_ETAPAS_PAGAS.includes(p.status)) return false;
       const d=(p.datePgFab||p.data||'').slice(0,7); // competência = quando pagou (ou data do pedido)
       return d===mes;
@@ -10128,7 +10132,7 @@ function ldAtualizarXmlInfo(){
   const chips=_ldXmlInfoList.map((x,i)=>`
     <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:.5px solid #bbf7d0;">
       <div style="flex:1;font-size:11px;color:#166534;">
-        📄 <strong>${x.arquivo}</strong>${x.data?' <span style="color:#64748b;font-weight:400;">· '+x.data+'</span>':''}
+        📄 <strong>${_esc(x.arquivo)}</strong>${x.data?' <span style="color:#64748b;font-weight:400;">· '+_esc(x.data)+'</span>':''}
         ${x.ambientes?' <span style="color:#64748b;font-weight:400;">· '+x.ambientes+'</span>':''}
       </div>
       <div style="font-size:11px;font-weight:700;color:#166534;white-space:nowrap;">${fmt(x.valorVenda)}</div>
@@ -10616,7 +10620,7 @@ function ctAtualizarXmlInfo(){
     return `
     <div style="padding:8px 0;border-bottom:1px solid var(--border);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-        <div style="flex:1;font-size:12px;font-weight:600;">📄 ${x.arquivo}${x.data?' <span style="color:var(--gl);font-weight:400;">· '+x.data+'</span>':''} · <span style="color:var(--p);">${fmt(x.valorVenda)}</span></div>
+        <div style="flex:1;font-size:12px;font-weight:600;">📄 ${_esc(x.arquivo)}${x.data?' <span style="color:var(--gl);font-weight:400;">· '+_esc(x.data)+'</span>':''} · <span style="color:var(--p);">${fmt(x.valorVenda)}</span></div>
         <button onclick="ctRemoverXml(${i})" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:14px;padding:0 2px;" title="Remover">✕</button>
       </div>
       ${ambHtml}
@@ -11542,6 +11546,10 @@ function pedVoltar(id){
   const anterior=PED_ETAPAS[idx-1];
   if(!confirm(`Voltar este pedido de "${PED_ETAPAS[idx].label}" para "${anterior.label}"?`)) return;
   p.status=anterior.id;
+  // Limpa os marcos das etapas que ficaram À FRENTE do novo status — senão o re-avanço
+  // reusa a data antiga (competência errada de comissão/Meta). Item D.
+  const _idxNovo=idx-1;
+  for(const st in _MARCO_STATUS){ const si=PED_ETAPAS.findIndex(e=>e.id===st); if(si>_idxNovo && p[_MARCO_STATUS[st]]) p[_MARCO_STATUS[st]]=null; }
   p.statusChangedAt=_hojeLocal();
   p._uAt=Date.now();
   save(); toast(`← ${anterior.icon} ${anterior.label}`); rPedidos();
@@ -12833,7 +12841,6 @@ function salvarCadastro(){
     empresa:      document.getElementById('cad-empresa').value.trim(),
     documento:    document.getElementById('cad-doc').value.trim(),
     endereco:     document.getElementById('cad-endereco').value.trim(),
-    dataNasc:     document.getElementById('cad-parc-nasc')?.value||undefined,
     cargo:        document.getElementById('cad-cargo').value.trim(),
     departamento: document.getElementById('cad-dept').value,
     admissao:     document.getElementById('cad-admissao').value,
@@ -12845,7 +12852,7 @@ function salvarCadastro(){
     respVenda:    document.getElementById('cad-cli-resp').value,
     cpfCli:       document.getElementById('cad-cli-cpf').value.trim(),
     rgCli:        document.getElementById('cad-cli-rg').value.trim(),
-    dataNasc:     document.getElementById('cad-cli-nasc').value,
+    dataNasc:     document.getElementById('cad-cli-nasc')?.value||document.getElementById('cad-parc-nasc')?.value||undefined, // cliente OU colaborador (chave única — item F)
     profissao:    document.getElementById('cad-cli-prof').value.trim(),
     enderecoCli:  document.getElementById('cad-cli-end').value.trim(),
     bairroCli:    document.getElementById('cad-cli-bairro').value.trim(),
@@ -12880,13 +12887,13 @@ function salvarCadastro(){
     const dup=(ST.cadastros||[]).find(c=>c.tipo==='cliente'&&String(c.leadId)===String(cad.leadId));
     if(dup){ toast('⚠️ Já existe um cadastro de cliente para este lead — abra o existente para editar.'); return; }
   }
-  // Aviso de CPF/CNPJ duplicado (C7) — não bloqueia, pode ser intencional
-  if(idx<0){
+  // Aviso de CPF/CNPJ duplicado (C7) — vale em novo E na edição (exclui o próprio); não bloqueia
+  {
     const _soDig=s=>String(s||'').replace(/\D/g,'');
     const docAtual=_soDig(tipo==='cliente'?cad.cpfCli:(cad.cpf||cad.cnpj));
     if(docAtual.length>=11){
-      const dupDoc=(ST.cadastros||[]).find(c=>c.tipo===tipo&&_soDig(c.tipo==='cliente'?c.cpfCli:(c.cpf||c.cnpj))===docAtual);
-      if(dupDoc && !confirm('⚠️ Já existe um cadastro deste tipo com o mesmo CPF/CNPJ ("'+(dupDoc.nome||'')+'").\n\nCadastrar mesmo assim?')) return;
+      const dupDoc=(ST.cadastros||[]).find(c=>c.tipo===tipo&&String(c.id)!==String(_cadId)&&_soDig(c.tipo==='cliente'?c.cpfCli:(c.cpf||c.cnpj))===docAtual);
+      if(dupDoc && !confirm('⚠️ Já existe um cadastro deste tipo com o mesmo CPF/CNPJ ("'+(dupDoc.nome||'')+'").\n\nSalvar mesmo assim?')) return;
     }
   }
   if(idx>=0){
@@ -13343,12 +13350,14 @@ function cpTogglePago(){
   if(wrap) wrap.style.display=pago?'':'none';
 }
 function cpPagarConta(id){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
   if(!c||!confirm(`Confirmar pagamento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.descricao}?`)) return;
   c.pago=true; c.dataPagamento=_hojeLocal();
   save(); toast('✅ Pagamento registrado!'); rFinCP();
 }
 function cpEstornarConta(id){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
   if(!c||!confirm('Estornar este pagamento?')) return;
   c.pago=false; c.dataPagamento=null;
@@ -13390,6 +13399,7 @@ function abrirModalCP(id){
   abrirModal('modal-cp');
 }
 function salvarCP(){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const descricao=document.getElementById('cp-desc').value.trim();
   if(!descricao){toast('Informe a descrição');return;}
   const valor=_parseBRL(document.getElementById('cp-valor').value);
@@ -13517,8 +13527,9 @@ function rFabPagamentos(){
   const el=document.getElementById('fab-content'); if(!el) return;
   const mesStr=mesAnoStr(_bipMes,_bipAno);
   ['bip-mes-label','fab-mes-label'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=mesNomeStr(_bipMes,_bipAno);});
-  // Só os pagamentos DO MÊS (mesma competência da Meta Fábrica: etapa paga + mês do datePgFab/data)
-  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr)
+  // Só os pagamentos DO MÊS (mesma competência da Meta Fábrica: etapa paga + mês do datePgFab/data).
+  // Pedido financiado NÃO entra aqui (aparece na aba Bipartido) — evita dupla contagem (item C).
+  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && _bipartidoPed(p)<=0 && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr)
     .sort((a,b)=>(b.valorFabrica||0)-(a.valorFabrica||0));
   const total=peds.reduce((s,p)=>s+(p.valorFabrica||0),0);
   const comComp=peds.filter(p=>p.comprovante).length;
@@ -13683,6 +13694,7 @@ function crFiltroClienteChange(){
   rFinCR();
 }
 function crReceberMassa(){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const checks=[...document.querySelectorAll('.cr-check:checked')];
   if(!checks.length){toast('Selecione ao menos uma parcela');return;}
   const total=checks.reduce((a,el)=>a+parseFloat(el.dataset.valor||0),0);
@@ -13765,6 +13777,7 @@ function crExportarCSV(){
   toast(`📥 ${parcelas.length} parcelas exportadas`);
 }
 function crReceberParcela(leadId, condId){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
   if(!l||!l.condicoesPgto) return;
   const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
@@ -14189,6 +14202,7 @@ function abrirModalDRE(id){
   abrirModal('modal-dre');
 }
 function salvarLancamento(){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const desc=document.getElementById('dre-desc').value.trim();
   const valor=_parseBRL(document.getElementById('dre-valor').value);
   if(!desc){toast('Informe a descrição');return;}
