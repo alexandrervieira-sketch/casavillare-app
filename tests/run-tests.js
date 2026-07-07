@@ -76,7 +76,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
   _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds,
   _configsPublica, _cfgprivDocs, _cfgprivMerge,
-  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes
+  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -486,6 +486,22 @@ test('C: pedido financiado com valorFabrica não duplica na Meta Fábrica', () =
   T.ST.pedidos.push({ id: 'PdcC', leadId: 'LdcC', valorFabrica: 120000, status: 'concluido', datePgFab: '2032-04-15' });
   assertEq(T._totalFabricaMes('2032-04'), 0);                      // financiado é excluído dos pagamentos diretos
   assert(_close(T._volumeFabricaMes('2032-04'), 40000), 'volume = só o bipartido (40k), sem somar os 120k');
+});
+
+// ── E: receita de venda financiada/cartão entra no mês do FECHAMENTO (casa com o custo) ──
+test('E: receita financiada reconhecida no fechamento, não no vencimento', () => {
+  T.ST.leads = T.ST.leads || [];
+  T.ST.leads.push({ id: 'LdreE', status: 'ganho', dataFechamento: '2033-06-10', valor: 60000, desconto: 0,
+    condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 60000, vencimento: '2033-08-30', absorcao: 'cliente' }] });
+  assert(T.calcDRE('2033-06').recCRM >= 60000, 'reconhecida em junho (fechamento)');
+  assert(T.calcDRE('2033-08').recCRM < 60000, 'NÃO reconhecida de novo em agosto (vencimento)');
+});
+test('E: boleto parcelado continua reconhecido no vencimento', () => {
+  T.ST.leads = T.ST.leads || [];
+  T.ST.leads.push({ id: 'LdreB', status: 'ganho', dataFechamento: '2034-01-10', valor: 30000, desconto: 0,
+    condicoesPgto: [{ id: 'c1', forma: 'boleto', valor: 30000, vencimento: '2034-03-05' }] });
+  assert(T.calcDRE('2034-01').recCRM < 30000, 'boleto NÃO entra no fechamento');
+  assert(T.calcDRE('2034-03').recCRM >= 30000, 'boleto entra no vencimento (março)');
 });
 
 // ── relatório ──
