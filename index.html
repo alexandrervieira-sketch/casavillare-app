@@ -4014,7 +4014,6 @@ function _calcAlertas(){
     (ST.leads||[]).forEach(l=>{
       if(l.status!=='ganho') return; // só venda fechada gera recebível (lead perdido/em aberto não conta)
       (l.condicoesPgto||[]).forEach(c=>{
-        if(c.forma==='financiamento'||c.forma==='cartao') return; // loja já recebeu na venda (repasse da operadora) — não é "a receber"
         if(c.pago||!c.vencimento) return;
         if(c.vencimento<=lim7) out.receber.push({leadId:l.id,cliente:l.nome,desc:c.desc||'Parcela',valor:c.valor,venc:c.vencimento,vencida:c.vencimento<hoje});
       });
@@ -13843,19 +13842,13 @@ function rFinCR(){
       const key=String(l.id)+'|'+String(c.id||c.vencimento||c.desc||'');
       if(_crSeenKeys.has(key)) return;
       _crSeenKeys.add(key);
-      todasParcelas.push({...c, leadId:l.id, cliente:l.nome, responsavel:l.responsavel, _fechData:(l.dataFechamento||l.dataCriacao||'')});
+      todasParcelas.push({...c, leadId:l.id, cliente:l.nome, responsavel:l.responsavel});
     });
   });
 
-  // financiamento/cartão: a loja recebe NA VENDA (repasse da operadora/financeira, valor cheio) →
-  // conta como RECEBIDO na data do fechamento; boleto/PIX seguem por vencimento.
-  const _autoRec=p=>p.forma==='financiamento'||p.forma==='cartao';
-  const _crRec  =p=>_autoRec(p)?true:!!p.pago;
-  const _crDt   =p=>_autoRec(p)?(p._fechData||p.vencimento||''):(p.vencimento||'');
-
   // KPIs globais (sempre, independente de filtro)
-  const globalPend   =todasParcelas.filter(p=>!_crRec(p));
-  const globalRec    =todasParcelas.filter(p=>_crRec(p));
+  const globalPend   =todasParcelas.filter(p=>!p.pago);
+  const globalRec    =todasParcelas.filter(p=>p.pago);
   const globalVencidas=globalPend.filter(p=>p.vencimento&&p.vencimento<hoje);
   const totalGlobalPend=globalPend.reduce((a,c)=>a+(c.valor||0),0);
   const totalGlobalRec =globalRec.reduce((a,c)=>a+(c.valor||0),0);
@@ -13866,20 +13859,20 @@ function rFinCR(){
   let parcelas=todasParcelas;
   if(usandoFiltro){
     parcelas=todasParcelas.filter(p=>{
-      const v=_crDt(p);
+      const v=p.vencimento||'';
       if(_crFiltroInicio&&v<_crFiltroInicio) return false;
       if(_crFiltroFim&&v>_crFiltroFim) return false;
       return true;
     });
   } else {
     const mesStr=`${_crAno}-${String(_crMes+1).padStart(2,'0')}`;
-    parcelas=todasParcelas.filter(p=>_crDt(p).slice(0,7)===mesStr);
+    parcelas=todasParcelas.filter(p=>(p.vencimento||'').slice(0,7)===mesStr);
   }
   // Filtro por cliente
   if(_crFiltroCliente) parcelas=parcelas.filter(p=>p.cliente===_crFiltroCliente);
 
-  const pendentes=parcelas.filter(p=>!_crRec(p));
-  const recebidos=parcelas.filter(p=>_crRec(p));
+  const pendentes=parcelas.filter(p=>!p.pago);
+  const recebidos=parcelas.filter(p=>p.pago);
   const totalPend=pendentes.reduce((a,c)=>a+(c.valor||0),0);
   const totalRec =recebidos.reduce((a,c)=>a+(c.valor||0),0);
 
@@ -13892,23 +13885,18 @@ function rFinCR(){
     <th style="${thStyle};width:32px;"><input type="checkbox" title="Selecionar todos" onchange="crSelecionarTodos(this.checked)"/></th>
     ${['Cliente','Descrição','Forma','Valor','Vencimento','Status','Ação'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>`;
   const theadRec=`<thead><tr>${['','Cliente','Descrição','Forma','Valor','Vencimento','Status','Ação'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>`;
-  const linhaParc=(p,isPago)=>{
-    const _auto=_autoRec(p), _dt=_crDt(p);
-    return `<tr>
+  const linhaParc=(p,isPago)=>`<tr>
     <td>${!isPago?`<input type="checkbox" class="cr-check" data-lead="${p.leadId}" data-cond="${p.id}" data-valor="${p.valor||0}" onchange="crAtualizarBarra()" style="width:15px;height:15px;cursor:pointer;"/>`:''}</td>
     <td style="font-weight:600;">${_esc(p.cliente||'—')}</td>
     <td>${_esc(p.desc||'—')}</td>
     <td>${badge(p.forma)}</td>
     <td style="font-weight:700;color:var(--p);">${fmtL(p.valor)}</td>
-    <td style="${!isPago&&_dt&&_dt<hoje?'color:#DC2626;font-weight:600;':''}">${_dt?new Date(_dt+'T12:00').toLocaleDateString('pt-BR'):'—'}${!isPago&&_dt&&_dt<hoje?' ⚠️':''}</td>
-    <td>${_auto?`<span style="color:#166534;font-size:11px;">✅ Recebido na venda</span>`:(isPago?`<span style="color:#166534;font-size:11px;">✅ ${p.dataPagamento?new Date(p.dataPagamento+'T12:00').toLocaleDateString('pt-BR'):'Recebido'}</span>`:'<span style="color:#92400E;font-size:11px;">⏳ Pendente</span>')}</td>
-    <td>${_auto
-      ?`<span style="font-size:11px;color:var(--gl);">via ${p.forma==='cartao'?'operadora':'financeira'}</span>`
-      :(isPago
-        ?`<button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
-        :`<button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`)}
+    <td style="${!isPago&&p.vencimento&&p.vencimento<hoje?'color:#DC2626;font-weight:600;':''}">${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}${!isPago&&p.vencimento&&p.vencimento<hoje?' ⚠️':''}</td>
+    <td>${isPago?`<span style="color:#166534;font-size:11px;">✅ ${p.dataPagamento?new Date(p.dataPagamento+'T12:00').toLocaleDateString('pt-BR'):'Recebido'}</span>`:'<span style="color:#92400E;font-size:11px;">⏳ Pendente</span>'}</td>
+    <td>${isPago
+      ?`<button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
+      :`<button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
     </td></tr>`;
-  };
 
   // Label do período atual
   const periodoLabel=usandoFiltro
