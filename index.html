@@ -5732,7 +5732,16 @@ function salvarEvento(){
   };
   if(!ST.eventos) ST.eventos=[];
   const idx=ST.eventos.findIndex(e=>String(e.id)===String(_agEvId));
-  if(idx>=0) ST.eventos[idx]=entrada; else ST.eventos.push(entrada);
+  if(idx>=0){
+    const prev=ST.eventos[idx];
+    // Preserva o vínculo dos eventos auto-gerados do CRM — sem isto, _syncAgendaLead não os reconhece e DUPLICA na agenda
+    if(prev.leadId!==undefined)     entrada.leadId=prev.leadId;
+    if(prev.agTipo!==undefined)     entrada.agTipo=prev.agTipo;
+    if(prev.autoGerado!==undefined) entrada.autoGerado=prev.autoGerado;
+    entrada.criadoPor=prev.criadoPor||entrada.criadoPor; // não reescrever a autoria original ao editar
+    entrada.criadoEm =prev.criadoEm ||entrada.criadoEm;
+    ST.eventos[idx]=entrada;
+  } else ST.eventos.push(entrada);
   _agEvId=null;
   save();
   toast('Evento salvo ✅');
@@ -12778,6 +12787,7 @@ function _proxNumContrato(){
 
 function abrirModalCadastro(id,tipo,dadosLead){
   _cadId=id||null;
+  _conflCapture('cadastros',ST.cadastros,_cadId); // detecção de conflito: mesma proteção dos outros modais
   const tipoInicial=tipo||'cliente';
   const tipoEl=document.getElementById('cad-tipo');
   const TITULOS={parceiro:'Especificador',funcionario:'Funcionário',cliente:'Cliente',fornecedor:'Fornecedor'};
@@ -13023,8 +13033,9 @@ function salvarCadastro(){
     });
   });
   const mesmoEnd=document.getElementById('cad-cli-mesmo-end')?.checked||false;
+  if(!_conflOk('cadastros',ST.cadastros,_cadId,'cadastro')) return; // avisa se outra pessoa alterou este cadastro enquanto você editava
   const cad={
-    id:_cadId||_newId(), tipo, nome,
+    id:_cadId||_newId(), _uAt:Date.now(), tipo, nome,
     telefone:     document.getElementById('cad-tel').value.trim(),
     email:        document.getElementById('cad-email').value.trim(),
     obs:          document.getElementById('cad-obs').value.trim(),
@@ -13385,7 +13396,8 @@ function rFinAnalise(){
 
   // Ponto de Equilíbrio Econômico (adiciona margem de lucro desejada — 10% padrão)
   const margemDesejada = 0.10;
-  const pee = mcPct > 0 ? totalFixo / ((mcPct / 100) - margemDesejada) : 0;
+  const _peeDen = (mcPct / 100) - margemDesejada; // margem de contribuição menos o lucro desejado
+  const pee = _peeDen > 0 ? totalFixo / _peeDen : 0; // denominador ≤ 0 (margem não cobre o lucro alvo) → não calculável
 
   // Status: faturou acima ou abaixo do PE?
   const acimaPE = d.recLiq >= pe && pe > 0;
