@@ -566,6 +566,27 @@ textarea.inp{resize:vertical;min-height:68px;}
   .cfg-vals{gap:12px;}
   .tbl-wrap{overflow-x:auto;}
 }
+/* ── CELULAR (≤600px): Dashboard, CRM/Funil, Comissões, Agenda + modais ── */
+@media(max-width:600px){
+  .content{padding:14px 12px;}
+  /* Modais aproveitam melhor a largura do celular */
+  .modal-bg{padding:10px 8px;}
+  .modal-hdr{padding:14px 16px;}
+  .modal-body{padding:16px 16px 22px;}
+  /* Dashboard: KPIs/estatísticas em 2 colunas */
+  .home-kpi-row{grid-template-columns:1fr 1fr;gap:8px;}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px;}
+  /* CRM / Funil: cada etapa quase cheia, deslize com encaixe (uma por vez) */
+  .pipe-wrap{scroll-snap-type:x mandatory;gap:10px;}
+  .pipe-col{flex:0 0 84vw;max-width:320px;scroll-snap-align:start;}
+  /* Comissões: some o cabeçalho de 6 colunas (as linhas já se explicam); resumo 2 por linha */
+  .com-vendas-hdr{display:none;}
+  .com-resumo-item{min-width:calc(50% - 1px);flex:1 0 calc(50% - 1px);}
+  /* Agenda: calendário compacto para caber as 7 colunas */
+  .ag-cal-dow{padding:6px 1px;font-size:9px;letter-spacing:0;}
+  .ag-cal-day{min-height:48px;padding:2px 3px;}
+  .ag-cal-day .ag-day-num{font-size:11px;}
+}
 </style>
 </head>
 <body>
