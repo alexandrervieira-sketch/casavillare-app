@@ -30,3 +30,5 @@ _purge_segredos.js
 _set_claims.js
 
 _check_villare.js
+_reset_senhas.js
+_test_cancel.js

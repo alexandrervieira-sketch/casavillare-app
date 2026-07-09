@@ -2777,6 +2777,9 @@ function _esc(s){
 }
 // URL segura para href: só http(s)/mailto; bloqueia javascript:, data:, etc.
 function _safeHref(u){ u=String(u==null?'':u).trim(); return /^(https?:|mailto:)/i.test(u)?u:'#'; }
+// Escapa string p/ argumento de string JS single-quoted DENTRO de atributo HTML: onclick="fn('${_jsq(x)}')".
+// _esc não serve aqui — o parser HTML decodifica a entidade antes de o JS rodar (nome com ' quebraria/injetaria).
+function _jsq(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // ── Segurança: hash SHA-256 via Web Crypto API (nativa, sem biblioteca) ──
 async function _hashSenha(senha, salt='cvp2024'){
@@ -3648,8 +3651,12 @@ function liquidoFolha(f){
   const info=infoFunc(f.pessoa);
   let com=0;
   if(info.area==='comercial'){
-    const net=(f.vendas||[]).reduce((a,v)=>a+(v.valor||0)-(v.taxas||0),0);
-    com=net*((f.pct||0)/100)+(f.recuperados||0)+(f.bonus||0)-(f.desconto||0);
+    // Fonte única: usa o snapshot da comissão do CRM gravado no salvamento.
+    // Fallback (folhas antigas sem snapshot): modelo legado vendas×pct.
+    const base=(f.comissaoBase!=null)
+      ? f.comissaoBase
+      : (f.vendas||[]).reduce((a,v)=>a+(v.valor||0)-(v.taxas||0),0)*((f.pct||0)/100);
+    com=base+(f.recuperados||0)+(f.bonus||0)-(f.desconto||0);
   } else {
     com=(ST.comissoes||[]).filter(c=>c.pessoa===f.pessoa&&c.mesAno===f.mesAno).reduce((a,c)=>a+c.valor,0);
   }
@@ -4576,11 +4583,11 @@ function rPag(){
         </tr>`;
       }
       return `<tr>
-        <td class="td-bold">${iconeFunc(p.perfil)} ${p.nome}</td>
+        <td class="td-bold">${iconeFunc(p.perfil)} ${_esc(p.nome)}</td>
         <td style="color:var(--gl);font-size:12px;">${p.perfil}</td>
         <td>—</td><td>—</td>
         <td><span class="badge b-wait">Sem folha</span></td>
-        <td><div class="td-actions"><button class="btn btn-p btn-sm" onclick="abrirModalFolha(null,'${p.nome}')">+ Criar</button></div></td>
+        <td><div class="td-actions"><button class="btn btn-p btn-sm" onclick="abrirModalFolha(null,'${_jsq(p.nome)}')">+ Criar</button></div></td>
       </tr>`;
     }).join('');
     document.getElementById('fin-content').innerHTML=`
@@ -4653,19 +4660,21 @@ function gerarReciboFolha(id){
   // Linhas de composição
   const linhas=[];
   if(f.salarioBase)    linhas.push(['Salário base',                        f.salarioBase]);
-  if(f.pct||f.comissao){
-    const infoRec=infoFunc(f.pessoa);
-    const comV=infoRec.area==='comercial'
-      ? (f.vendas||[]).reduce((a,v)=>a+((v.valor||0)-(v.taxas||0)),0)*(f.pct||0)/100+(f.recuperados||0)+(f.bonus||0)-(f.desconto||0)
-      : (ST.comissoes||[]).filter(c=>c.pessoa===f.pessoa&&c.mesAno===f.mesAno).reduce((a,c)=>a+(c.valor||0),0);
-    if(comV>0) linhas.push(['Comissão',comV]);
+  const infoRec=infoFunc(f.pessoa);
+  if(infoRec.area==='comercial'){
+    // Comissão = mesmo snapshot do CRM que liquidoFolha usa (fonte única). Fallback p/ folhas antigas: vendas×pct.
+    const base=(f.comissaoBase!=null)
+      ? f.comissaoBase
+      : (f.vendas||[]).reduce((a,v)=>a+((v.valor||0)-(v.taxas||0)),0)*(f.pct||0)/100;
+    if(base>0)        linhas.push(['Comissão sobre vendas', base]);
+    if(f.recuperados) linhas.push(['Recuperados',           f.recuperados]);
+    if(f.bonus)       linhas.push(['Bônus',                 f.bonus]);
+  } else {
+    const comV=(ST.comissoes||[]).filter(c=>c.pessoa===f.pessoa&&c.mesAno===f.mesAno).reduce((a,c)=>a+(c.valor||0),0);
+    if(comV>0)        linhas.push(['Comissão', comV]);
   }
-  // Vendas individuais (comercial) — detalhamento por cliente
-  (f.vendas||[]).forEach(v=>linhas.push([`Comissão — ${v.cliente||'Venda'}`,((v.valor||0)-(v.taxas||0))*(f.pct||0)/100]));
-  // Créditos
+  // Créditos extras
   (f.credExtras||[]).forEach(c=>linhas.push([c.desc||'Crédito extra',c.valor||0]));
-  if(f.recuperados)    linhas.push(['Recuperados',                          f.recuperados]);
-  if(f.bonus)          linhas.push(['Bônus',                                f.bonus]);
 
   const deduções=[];
   if(f.desconto)       deduções.push(['Desconto',                           f.desconto]);
@@ -4677,7 +4686,7 @@ function gerarReciboFolha(id){
 
   const linhaTr=(desc,val,cor='')=>`
     <tr>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;">${desc}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;">${_esc(String(desc))}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;text-align:right;white-space:nowrap;${cor?'color:'+cor+';font-weight:600;':''}">${cor?'− ':''}R$ ${fmtBRL(val)}</td>
     </tr>`;
 
@@ -4786,6 +4795,183 @@ ${f.obs?`<div style="margin-top:8px;font-size:10.5px;color:#555;font-style:itali
 }
 
 // ══════════════════════════════════════════════════════
+// RECIBO GENÉRICO (cliente ↔ empresa ↔ fornecedor)
+// ══════════════════════════════════════════════════════
+// Valor por extenso em pt-BR (reais e centavos). Documento fiscal — precisa estar correto.
+function _valorPorExtenso(valor){
+  valor=Number(valor); if(!isFinite(valor)||valor<0) valor=0; // documento fiscal: nunca gerar lixo p/ NaN/negativo
+  const cent=Math.round(valor*100);
+  const reais=Math.floor(cent/100), centavos=cent%100;
+  const uni=['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  const dez=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  const cen=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  const tri=x=>{ // 1..999
+    if(x===100) return 'cem';
+    const p=[]; const c=Math.floor(x/100), r=x%100;
+    if(c) p.push(cen[c]);
+    if(r){ if(r<20) p.push(uni[r]); else{ const d=Math.floor(r/10), u=r%10; p.push(u?dez[d]+' e '+uni[u]:dez[d]); } }
+    return p.join(' e ');
+  };
+  const inteiro=n=>{
+    if(n===0) return 'zero';
+    const escalas=[{v:1e9,s:'bilhão',p:'bilhões'},{v:1e6,s:'milhão',p:'milhões'},{v:1e3,s:'mil',p:'mil'},{v:1,s:'',p:''}];
+    const grupos=[]; let resto=n;
+    for(const e of escalas){ const q=Math.floor(resto/e.v); resto%=e.v; if(!q) continue;
+      let txt; if(e.v===1e3&&q===1) txt='mil'; else if(e.v===1) txt=tri(q); else txt=tri(q)+' '+(q===1?e.s:e.p);
+      grupos.push({q,txt}); }
+    let out='';
+    grupos.forEach((g,i)=>{ if(i===0){ out=g.txt; return; }
+      const last=i===grupos.length-1;
+      out+=((last&&(g.q<100||g.q%100===0))?' e ':', ')+g.txt; });
+    return out;
+  };
+  const de=reais>0&&reais%1000000===0; // milhão/bilhão exato → "de reais"
+  let s=inteiro(reais)+(de?' de reais':' '+(reais===1?'real':'reais'));
+  if(centavos>0) s+=' e '+inteiro(centavos)+' '+(centavos===1?'centavo':'centavos');
+  return s;
+}
+
+// Gera a página de impressão do recibo. o = {valor, referente, metodo, dataPgto, numero,
+//   pagador:{nome,doc,endereco}, recebedor:{nome,doc,endereco}}. Quem RECEBE assina.
+function _gerarReciboDoc(o){
+  const emp=ST.empresa||{};
+  const nomeEmp=emp.nome||'Casa Villare Ambientes Planejados';
+  const cnpjEmp=emp.cnpj||'63.120.610/0001-49';
+  const endEmp =emp.endereco||'';
+  const cidEmp =emp.cidade||'Valinhos — SP';
+  const fmtBRL=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const valor=o.valor||0;
+  const rec=o.recebedor||{}, pag=o.pagador||{};
+  const nomeArq=('Recibo_'+String(rec.nome||'recibo')+'_'+valor.toFixed(0)).replace(/[^\w.-]+/g,'_'); // sanitiza p/ não quebrar a string do onclick (ex.: apóstrofo em "D'Angelo")
+  const bloco=(titulo,d,cor)=>`
+    <div style="padding:8px 12px;">
+      <div style="font-size:9px;color:${cor};text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:3px;">${titulo}</div>
+      <div style="font-size:13px;font-weight:700;">${_esc(d.nome||'—')}</div>
+      ${d.doc?`<div style="font-size:11px;margin-top:2px;">CPF/CNPJ: ${_esc(d.doc)}</div>`:''}
+      ${d.endereco?`<div style="font-size:10.5px;color:#444;margin-top:2px;">${_esc(d.endereco)}</div>`:''}
+    </div>`;
+
+  const html=`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"/>
+<title>Recibo — ${_esc(rec.nome||'')}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff;}
+.page{width:210mm;min-height:148mm;padding:12mm 14mm;margin:0 auto;}
+.header{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:10px;border:1px solid #000;padding:8px 10px;}
+.logo-area{border-right:1px solid #000;padding-right:10px;min-height:50px;display:flex;align-items:center;justify-content:center;}
+.company-info{font-size:9px;line-height:1.6;text-align:center;}
+.doc-num{border-left:1px solid #000;padding-left:10px;text-align:center;font-weight:bold;font-size:11px;white-space:nowrap;}
+.valor-box{border:1px solid #000;border-top:none;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f7f7f7;}
+.valor-box .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.valor-box .val{font-size:22px;font-weight:900;}
+.partes{border:1px solid #000;border-top:none;display:grid;grid-template-columns:1fr 1fr;}
+.partes > div:first-child{border-right:1px solid #000;}
+.corpo{border:1px solid #000;border-top:none;padding:14px;font-size:12.5px;line-height:1.7;text-align:justify;}
+.corpo strong{font-weight:700;}
+.meta{border:1px solid #000;border-top:none;padding:8px 14px;font-size:11px;display:flex;gap:24px;flex-wrap:wrap;}
+.assin{display:grid;grid-template-columns:1fr;gap:10px;margin-top:48px;justify-items:center;}
+.assin-line{border-top:1px solid #000;padding-top:6px;text-align:center;font-size:11px;width:70%;}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;display:flex;align-items:center;justify-content:space-between;padding:8px 20px;gap:10px;}
+.toolbar span{color:#fff;font-size:13px;font-weight:600;}
+.tb-btn{border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+.tb-print{background:#e0e0e0;color:#1a1a2e;}
+.tb-pdf{background:#c0392b;color:#fff;}
+body.has-toolbar{padding-top:48px;}
+@media print{.toolbar{display:none!important;}body{padding-top:0!important;}}
+</style></head><body class="has-toolbar">
+<div class="toolbar">
+  <span>🧾 Recibo — ${_esc(rec.nome||'')} — R$ ${fmtBRL(valor)}</span>
+  <div style="display:flex;gap:8px;">
+    <button class="tb-btn tb-print" onclick="window.print()">🖨 Imprimir</button>
+    <button class="tb-btn tb-pdf" onclick="var _t=document.title;document.title='${nomeArq}';window.print();setTimeout(()=>document.title=_t,300);">📥 Salvar PDF</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="header">
+    <div class="logo-area">${_docLogoHtml()}</div>
+    <div class="company-info"><strong>${nomeEmp.toUpperCase()}</strong><br>CNPJ: ${cnpjEmp}${endEmp?'<br>'+endEmp:''}<br>${cidEmp}</div>
+    <div class="doc-num">RECIBO${o.numero?'<br><span style="font-size:10px;font-weight:400;">Nº '+_esc(o.numero)+'</span>':''}</div>
+  </div>
+
+  <div class="valor-box">
+    <span class="lbl">Valor</span>
+    <span class="val">R$ ${fmtBRL(valor)}</span>
+  </div>
+
+  <div class="partes">
+    ${bloco('Recebedor (quem recebeu)',rec,'#166534')}
+    ${bloco('Pagador (quem pagou)',pag,'#B45309')}
+  </div>
+
+  <div class="corpo">
+    Recebi de <strong>${_esc(pag.nome||'—')}</strong>${pag.doc?', CPF/CNPJ '+_esc(pag.doc)+',':''}
+    a importância de <strong>R$ ${fmtBRL(valor)}</strong> (${_valorPorExtenso(valor)}),
+    referente a <strong>${_esc(o.referente||'pagamento')}</strong>,
+    dando plena e total quitação pelo valor recebido.
+  </div>
+
+  ${(o.metodo||o.dataPgto)?`<div class="meta">
+    ${o.metodo?`<span>💳 <strong>Forma:</strong> ${_esc(o.metodo)}</span>`:''}
+    ${o.dataPgto?`<span>📅 <strong>Data do pagamento:</strong> ${_esc(o.dataPgto)}</span>`:''}
+  </div>`:''}
+
+  <div style="text-align:right;font-size:11px;margin-top:16px;">${cidEmp}, ${hoje}</div>
+
+  <div class="assin">
+    <div class="assin-line">
+      Recebi a importância acima<br>
+      <strong>${_esc((rec.nome||'').toUpperCase())}</strong>${rec.doc?'<br>CPF/CNPJ: '+_esc(rec.doc):''}
+    </div>
+  </div>
+
+</div><!-- /page -->
+</body></html>`;
+
+  const w=window.open('','_blank','width=900,height=720');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('❌ Popup bloqueado — permita pop-ups');
+}
+
+// Recibo de RECEBIMENTO de cliente (cliente paga → empresa recebe).
+function crGerarRecibo(leadId, condId){
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
+  const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(condId));
+  if(!c){ toast('Parcela não encontrada'); return; }
+  const emp=ST.empresa||{};
+  const cad=(ST.cadastros||[]).find(x=>x.tipo==='cliente'&&(x.leadId===String(leadId)||x.nome===l.nome));
+  const forma=(typeof PGTO_FORMAS!=='undefined'&&PGTO_FORMAS[c.forma])?PGTO_FORMAS[c.forma].label:(c.forma||'');
+  const _br=d=>d?d.split('-').reverse().join('/'):'';
+  _gerarReciboDoc({
+    valor:c.valor||0,
+    referente:(c.desc||'Pagamento')+(l.nome?' — '+l.nome:'')+(cad&&cad.numContrato?' (Contrato '+cad.numContrato+')':''),
+    metodo:forma,
+    dataPgto:_br(c.dataPagamento),
+    pagador:{ nome:l.nome||(cad&&cad.nome)||'—', doc:(cad&&(cad.cpfCli||cad.documento))||'', endereco:(cad&&(cad.enderecoCli||cad.endereco))||'' },
+    recebedor:{ nome:emp.nome||'Casa Villare Ambientes Planejados', doc:emp.cnpj||'63.120.610/0001-49', endereco:emp.endereco||emp.cidade||'' }
+  });
+}
+
+// Recibo de PAGAMENTO à fábrica/fornecedor (empresa paga → fornecedor recebe).
+function fabGerarRecibo(pedId){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId));
+  if(!p){ toast('Pedido não encontrado'); return; }
+  const emp=ST.empresa||{};
+  const forn=(ST.cadastros||[]).find(x=>x.tipo==='fornecedor'&&x.nome===p.fornecedor);
+  const _br=d=>d?d.split('-').reverse().join('/'):'';
+  _gerarReciboDoc({
+    valor:p.valorFabrica||0,
+    referente:'Pagamento à fábrica — Pedido #'+p.id+(p.clienteNome||p.cliente?' · Cliente: '+(p.clienteNome||p.cliente):''),
+    dataPgto:_br(p.datePgFab),
+    pagador:{ nome:emp.nome||'Casa Villare Ambientes Planejados', doc:emp.cnpj||'63.120.610/0001-49', endereco:emp.endereco||emp.cidade||'' },
+    recebedor:{ nome:p.fornecedor||(forn&&forn.nome)||'—', doc:(forn&&(forn.cnpj||forn.cpf))||'', endereco:(forn&&forn.endereco)||'' }
+  });
+}
+
+// ══════════════════════════════════════════════════════
 // MODAL FOLHA
 // ══════════════════════════════════════════════════════
 let _pfId=null, _pfVendas=[], _pfCreds=[], _pfDebs=[];
@@ -4869,8 +5055,8 @@ function pfRenderComsAuto(){
   if(isProj){
     (ST.pedidos||[]).filter(pd=>pd.projetista===nome).forEach(pd=>{
       const c=_calcComProjetista(pd);
-      const cl=pd.clienteNome||pd.cliente||'—';
-      const desc=pd.descricao?'· '+pd.descricao:'';
+      const cl=_esc(pd.clienteNome||pd.cliente||'—');
+      const desc=pd.descricao?'· '+_esc(pd.descricao):'';
       if(c.libA&&c.mesA===mes) linhasProj.push(`<div class="com-row"><span style="flex:1;">✅ ${cl} ${desc} <span style="font-size:10px;color:var(--gl);">(1% exec. assinado)</span></span><strong style="color:var(--ok);">${fmt(c.comA)}</strong></div>`);
       if(c.libB&&c.mesB===mes) linhasProj.push(`<div class="com-row"><span style="flex:1;">✅ ${cl} ${desc} <span style="font-size:10px;color:var(--gl);">(0,5% pedido fábrica)</span></span><strong style="color:var(--ok);">${fmt(c.comB)}</strong></div>`);
       if(c.libC&&c.mesC===mes) linhasProj.push(`<div class="com-row"><span style="flex:1;">✅ ${cl} ${desc} <span style="font-size:10px;color:var(--gl);">(0,5% concluído)</span></span><strong style="color:var(--ok);">${fmt(c.comC)}</strong></div>`);
@@ -5023,6 +5209,8 @@ function salvarFolha(){
     id:_pfId||_newId(), _uAt:Date.now(), pessoa, mesAno, tipo:info.area,
     vendas:   info.area==='comercial'?_pfVendas:[],
     pct:      info.area==='comercial'?(parseFloat(document.getElementById('pf-pct').value)||null):null,
+    comissaoBase: info.area==='comercial'?pfRenderComsComercial():null, // snapshot da comissão do CRM (o mesmo total exibido no modal) — evita zerar em liquidoFolha/recibo/DRE
+
     recuperados:_parseBRL(document.getElementById('pf-rec').value),
     bonus:    _parseBRL(document.getElementById('pf-bonus').value),
     desconto: _parseBRL(document.getElementById('pf-desco').value),
@@ -7394,7 +7582,7 @@ function _rComMontadorHtml(p, comsMan, mesStr){
     return`<div class="com-venda-row">
       <div class="com-venda-info" onclick="abrirModalPedido('${_sid(pd.id)}')" style="cursor:pointer;">
         <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
-        <span class="com-venda-data">${pd.descricao||''} · ${etLabel}</span>
+        <span class="com-venda-data">${_esc(pd.descricao||'')} · ${etLabel}</span>
       </div>
       <div class="com-venda-vals">
         ${c.semValor
@@ -7506,7 +7694,7 @@ function rComissoes(){
             <div class="com-name">${_esc(p.nome)}</div>
             <div class="com-role">${iconeFunc(p.perfil)} ${p.perfil}</div>
           </div>
-          ${isG?`<button class="btn btn-p btn-sm" onclick="abrirModalVendaCom(null,'${p.nome}')">+ Lançar venda</button>`:''}
+          ${isG?`<button class="btn btn-p btn-sm" onclick="abrirModalVendaCom(null,'${_jsq(p.nome)}')">+ Lançar venda</button>`:''}
         </div>
         <div class="com-resumo-row">
           <div class="com-resumo-item">
@@ -7584,7 +7772,7 @@ function rComissoes(){
         return`<div class="com-venda-row" onclick="abrirModalPedido('${_sid(pd.id)}')">
           <div class="com-venda-info">
             <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
-            <span class="com-venda-data">${pd.descricao||''} · ${etapaLabel}</span>
+            <span class="com-venda-data">${_esc(pd.descricao||'')} · ${etapaLabel}</span>
           </div>
           <div class="com-venda-vals">
             ${c.semValor
@@ -7632,7 +7820,7 @@ function rComissoes(){
           return`<div class="com-venda-row" onclick="abrirModalPedido('${_sid(pd.id)}')">
             <div class="com-venda-info">
               <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
-              <span class="com-venda-data">${pd.descricao||''} · ${etLabel}</span>
+              <span class="com-venda-data">${_esc(pd.descricao||'')} · ${etLabel}</span>
             </div>
             <div class="com-venda-vals" style="flex-direction:column;align-items:flex-end;gap:3px;">
               <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
@@ -7989,10 +8177,10 @@ function rConfig(){
         const cfg=(ST.configs||{})[p.nome]||{};
         return `<div class="cfg-row">
           <div style="flex:1;">
-            <div class="cfg-name">${iconeFunc(p.perfil)} ${p.nome}</div>
+            <div class="cfg-name">${iconeFunc(p.perfil)} ${_esc(p.nome)}</div>
             <div class="cfg-info">
-              ${p.perfil}${cfg.cargo?' · '+cfg.cargo:''}${p.tel?' · '+p.tel.slice(2):''}
-              ${p.email?'<br><span style="font-size:11px;color:var(--gl);">'+p.email+'</span>':''}
+              ${p.perfil}${cfg.cargo?' · '+_esc(cfg.cargo):''}${p.tel?' · '+_esc(p.tel.slice(2)):''}
+              ${p.email?'<br><span style="font-size:11px;color:var(--gl);">'+_esc(p.email)+'</span>':''}
               ${cfg.dataAdmissao?'<br><span style="font-size:11px;color:var(--gl);">Admissão: '+_fmtDateBR(cfg.dataAdmissao)+'</span>':''}
               ${cfg.situacao==='desligado'?'<br><span style="font-size:11px;color:#B91C1C;font-weight:600;">🚪 Desligado'+(cfg.dataDemissao?' em '+_fmtDateBR(cfg.dataDemissao):'')+'</span>':''}
               ${cfg.tipoPessoa==='pj'?'<span style="font-size:10px;background:#EDE9FE;color:#6D28D9;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600;">PJ</span>':''}
@@ -8027,27 +8215,27 @@ function rConfig(){
         <div class="cfg-row" style="flex-direction:column;align-items:stretch;gap:14px;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Nome / Razão Social</label>
-              <input class="inp" id="cfg-emp-nome" value="${emp.nome||'Casa Villare Ambientes Planejados'}" placeholder="Nome da empresa"/></div>
+              <input class="inp" id="cfg-emp-nome" value="${_esc(emp.nome||'Casa Villare Ambientes Planejados')}" placeholder="Nome da empresa"/></div>
             <div><label class="lbl">CNPJ</label>
-              <input class="inp" id="cfg-emp-cnpj" value="${emp.cnpj||''}" placeholder="00.000.000/0000-00"/></div>
+              <input class="inp" id="cfg-emp-cnpj" value="${_esc(emp.cnpj||'')}" placeholder="00.000.000/0000-00"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Telefone</label>
-              <input class="inp" id="cfg-emp-tel" value="${emp.tel||''}" placeholder="(19) 00000-0000"/></div>
+              <input class="inp" id="cfg-emp-tel" value="${_esc(emp.tel||'')}" placeholder="(19) 00000-0000"/></div>
             <div><label class="lbl">E-mail</label>
-              <input class="inp" id="cfg-emp-email" value="${emp.email||''}" placeholder="contato@casavillare.com.br"/></div>
+              <input class="inp" id="cfg-emp-email" value="${_esc(emp.email||'')}" placeholder="contato@casavillare.com.br"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Endereço</label>
-              <input class="inp" id="cfg-emp-end" value="${emp.endereco||''}" placeholder="Rua, número, bairro"/></div>
+              <input class="inp" id="cfg-emp-end" value="${_esc(emp.endereco||'')}" placeholder="Rua, número, bairro"/></div>
             <div><label class="lbl">Cidade / UF</label>
-              <input class="inp" id="cfg-emp-cidade" value="${emp.cidade||'Valinhos / SP'}" placeholder="Valinhos / SP"/></div>
+              <input class="inp" id="cfg-emp-cidade" value="${_esc(emp.cidade||'Valinhos / SP')}" placeholder="Valinhos / SP"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Site</label>
-              <input class="inp" id="cfg-emp-site" value="${emp.site||''}" placeholder="www.casavillare.com.br"/></div>
+              <input class="inp" id="cfg-emp-site" value="${_esc(emp.site||'')}" placeholder="www.casavillare.com.br"/></div>
             <div><label class="lbl">Instagram</label>
-              <input class="inp" id="cfg-emp-ig" value="${emp.instagram||''}" placeholder="@casavillare"/></div>
+              <input class="inp" id="cfg-emp-ig" value="${_esc(emp.instagram||'')}" placeholder="@casavillare"/></div>
           </div>
           <div style="text-align:right;">
             <button class="btn btn-p btn-sm" onclick="cfgSalvarEmpresa()">💾 Salvar dados</button>
@@ -8084,13 +8272,13 @@ function rConfig(){
       return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
         <div style="font-size:18px;">${iconeFunc(p.perfil)}</div>
         <div style="flex:1;">
-          <div style="font-weight:600;color:var(--dark);font-size:13px;">${p.nome}</div>
+          <div style="font-weight:600;color:var(--dark);font-size:13px;">${_esc(p.nome)}</div>
           <div style="font-size:12px;color:${emailOk?'var(--mid)':'#B91C1C'};margin-top:2px;">
             ${emailOk?'✅ '+emailReal:'⚠️ '+emailReal+' (derivado do nome — salve o cadastro para fixar)'}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="cfgResetarSenhaUsuario('${emailReal}','${p.nome.split(' ')[0]}')" title="Envia e-mail de redefinição de senha">✉️ Resetar senha</button>
+          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="cfgResetarSenhaUsuario('${_jsq(emailReal)}','${_jsq(p.nome.split(' ')[0])}')" title="Envia e-mail de redefinição de senha">✉️ Resetar senha</button>
         </div>
       </div>`;
     }).join('');
@@ -8197,25 +8385,25 @@ function rConfig(){
         <div class="cfg-row" style="flex-direction:column;align-items:stretch;gap:14px;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Nome da Fábrica</label>
-              <input class="inp" id="cfg-fab-nome" value="${fab.nome||''}" placeholder="Ex: Móveis Favorita"/></div>
+              <input class="inp" id="cfg-fab-nome" value="${_esc(fab.nome||'')}" placeholder="Ex: Móveis Favorita"/></div>
             <div><label class="lbl">CNPJ</label>
-              <input class="inp" id="cfg-fab-cnpj" value="${fab.cnpj||''}" placeholder="00.000.000/0000-00"/></div>
+              <input class="inp" id="cfg-fab-cnpj" value="${_esc(fab.cnpj||'')}" placeholder="00.000.000/0000-00"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label class="lbl">📧 E-mail(s) para envio do comprovante <span style="color:#EF4444;">*</span></label>
-              <input class="inp" id="cfg-fab-email" type="email" multiple value="${fab.email||''}" placeholder="pedidos@fabrica.com.br, financeiro@fabrica.com.br"
+              <input class="inp" id="cfg-fab-email" type="email" multiple value="${_esc(fab.email||'')}" placeholder="pedidos@fabrica.com.br, financeiro@fabrica.com.br"
                 style="border-color:${fab.email?'#16A34A':'#C8A97A'};"/>
               <div style="font-size:10px;color:var(--gl);margin-top:3px;">Usado no botão "Enviar à Fábrica" dos pedidos. Para <b>vários e-mails</b>, separe por <b>vírgula</b> — todos recebem juntos.</div>
             </div>
             <div><label class="lbl">Telefone / WhatsApp</label>
-              <input class="inp" id="cfg-fab-tel" value="${fab.tel||''}" placeholder="(11) 00000-0000"/></div>
+              <input class="inp" id="cfg-fab-tel" value="${_esc(fab.tel||'')}" placeholder="(11) 00000-0000"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Representante / Contato</label>
-              <input class="inp" id="cfg-fab-contato" value="${fab.contato||''}" placeholder="Nome do representante"/></div>
+              <input class="inp" id="cfg-fab-contato" value="${_esc(fab.contato||'')}" placeholder="Nome do representante"/></div>
             <div><label class="lbl">Cidade / UF</label>
-              <input class="inp" id="cfg-fab-cidade" value="${fab.cidade||''}" placeholder="Ex: São Paulo / SP"/></div>
+              <input class="inp" id="cfg-fab-cidade" value="${_esc(fab.cidade||'')}" placeholder="Ex: São Paulo / SP"/></div>
           </div>
           <div><label class="lbl">Observações (aparece no corpo do e-mail)</label>
             <textarea class="inp" id="cfg-fab-obs" rows="2" placeholder="Ex: Incluir nº do pedido no assunto...">${_esc(fab.obs||'')}</textarea></div>
@@ -8299,28 +8487,28 @@ function rConfig(){
 
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
             <div><label class="lbl">Inscrição Estadual</label>
-              <input class="inp" id="nfe-ie" placeholder="708281956111" value="${nfe.ie||''}"/></div>
+              <input class="inp" id="nfe-ie" placeholder="708281956111" value="${_esc(nfe.ie||'')}"/></div>
             <div><label class="lbl">Série NFe</label>
-              <input class="inp" type="number" id="nfe-serie" placeholder="1" value="${nfe.serie||'1'}"/></div>
+              <input class="inp" type="number" id="nfe-serie" placeholder="1" value="${_esc(nfe.serie||'1')}"/></div>
             <div><label class="lbl">Próximo número NFe</label>
-              <input class="inp" type="number" id="nfe-proxnum" placeholder="42" value="${nfe.proxNum||''}"/>
+              <input class="inp" type="number" id="nfe-proxnum" placeholder="42" value="${_esc(nfe.proxNum||'')}"/>
               <div style="font-size:10px;color:var(--gl);margin-top:3px;">Numeração controlada pela emissão</div></div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
             <div><label class="lbl">NCM padrão (móveis)</label>
-              <input class="inp" id="nfe-ncm" placeholder="94036000" value="${nfe.ncm||'94036000'}"/></div>
+              <input class="inp" id="nfe-ncm" placeholder="94036000" value="${_esc(nfe.ncm||'94036000')}"/></div>
             <div><label class="lbl">CFOP padrão</label>
-              <input class="inp" id="nfe-cfop" placeholder="5102" value="${nfe.cfop||'5102'}"/></div>
+              <input class="inp" id="nfe-cfop" placeholder="5102" value="${_esc(nfe.cfop||'5102')}"/></div>
             <div><label class="lbl">CSOSN</label>
-              <input class="inp" id="nfe-csosn" placeholder="102" value="${nfe.csosn||'102'}"/></div>
+              <input class="inp" id="nfe-csosn" placeholder="102" value="${_esc(nfe.csosn||'102')}"/></div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="lbl">Natureza da Operação</label>
-              <input class="inp" id="nfe-natureza" placeholder="Venda de mercadorias" value="${nfe.natureza||'Venda de mercadorias'}"/></div>
+              <input class="inp" id="nfe-natureza" placeholder="Venda de mercadorias" value="${_esc(nfe.natureza||'Venda de mercadorias')}"/></div>
             <div><label class="lbl">Informações complementares (padrão)</label>
-              <input class="inp" id="nfe-infcompl" placeholder="NFe referente ao contrato de venda #" value="${nfe.infCompl||'NFe referente ao contrato de venda #'}"/></div>
+              <input class="inp" id="nfe-infcompl" placeholder="NFe referente ao contrato de venda #" value="${_esc(nfe.infCompl||'NFe referente ao contrato de venda #')}"/></div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr;gap:12px;">
@@ -9239,7 +9427,7 @@ function ldRenderAnexos(){
       <div id="anx-prev-${a.id}" style="height:64px;display:flex;align-items:center;justify-content:center;background:#F5F0E8;font-size:28px;">
         ${isImg?'⏳':'📄'}
       </div>
-      <div style="padding:4px 4px 6px;font-size:10px;color:var(--dark);word-break:break-all;line-height:1.3;">${a.nome.length>18?a.nome.slice(0,15)+'…':a.nome}</div>
+      <div style="padding:4px 4px 6px;font-size:10px;color:var(--dark);word-break:break-all;line-height:1.3;">${_esc(a.nome.length>18?a.nome.slice(0,15)+'…':a.nome)}</div>
       <div style="font-size:9px;color:var(--gl);padding-bottom:4px;">${ldFmtTamanho(a.tamanho)}</div>
       <div style="display:flex;justify-content:center;gap:4px;padding-bottom:6px;">
         <button onclick="ldAbrirAnexo('${a.id}')" title="Visualizar" style="background:none;border:none;cursor:pointer;font-size:13px;padding:0;">👁</button>
@@ -9482,7 +9670,7 @@ function ldRenderConds(){
       : `<span style="font-size:11px;color:var(--gl);">📅 ${vencTxt}${parcTxt}${absTxt}</span>`;
     return`<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;flex-wrap:wrap;">
       <span style="font-size:10px;font-weight:700;background:${f.cor};color:${f.txt};padding:3px 9px;border-radius:12px;white-space:nowrap;">${f.icon} ${f.label}</span>
-      <span style="flex:1;font-size:12.5px;color:var(--dark);">${c.desc}</span>
+      <span style="flex:1;font-size:12.5px;color:var(--dark);">${_esc(c.desc)}</span>
       ${valorCell}
       ${taxaTxt}
       ${lojaTxt}
@@ -9760,8 +9948,8 @@ function leadCardHtml(l,etapa){
     ${l.responsavel?`<div class="pipe-card-row">👤 ${_esc(l.responsavel)}</div>`:''}
     ${_espBadge(l)}
     ${l.valor?`<div class="pipe-card-row" style="color:var(--p);font-weight:700;">💰 ${fmt(_leadValorVenda(l))}${l.tipoParcelamento&&l.parcelas?` <span style="font-size:10px;font-weight:400;color:var(--gl);">${l.tipoParcelamento==='cartao'?'💳':'🏦'} ${l.parcelas}x</span>`:''}</div>`:''}
-    ${l.ambiente?`<div class="pipe-card-row">🏠 ${l.ambiente}</div>`:''}
-    ${l.cidade?`<div class="pipe-card-row" style="color:var(--gl);font-size:11px;">📍 ${l.cidade}</div>`:''}
+    ${l.ambiente?`<div class="pipe-card-row">🏠 ${_esc(l.ambiente)}</div>`:''}
+    ${l.cidade?`<div class="pipe-card-row" style="color:var(--gl);font-size:11px;">📍 ${_esc(l.cidade)}</div>`:''}
     ${l.proxContato?`<div class="pipe-card-row" style="color:${atrasado?'var(--fail)':'var(--gl)'};">${atrasado?'⚠️ Atrasado':'📅'} ${new Date(l.proxContato+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}
     ${etaIdx>=CRM_ETAPAS.findIndex(e=>e.id==='fechamento')&&l.prazoEntrega?`<div class="pipe-card-row" style="color:#0369A1;">🚚 ${l.prazoEntrega} dias úteis</div>`:''}
     ${etaIdx>=CRM_ETAPAS.findIndex(e=>e.id==='fechamento')&&l.tipoVenda?`<div class="pipe-card-row"><span style="font-size:10px;background:${l.tipoVenda==='programada'?'#EDE9FE':'#DCFCE7'};color:${l.tipoVenda==='programada'?'#6D28D9':'#166534'};padding:1px 7px;border-radius:10px;font-weight:600;">${l.tipoVenda==='programada'?'📅 Programada':'🛒 Normal'}</span></div>`:''}
@@ -10347,7 +10535,7 @@ function gerarOrcamentoLead(){
         totalValor += v;
         itemRows += `<tr>
           <td style="text-align:center;">${ri}</td>
-          <td>${a.descricao||''}</td>
+          <td>${_esc(a.descricao||'')}</td>
           <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(v)}</td>
         </tr>`;
       });
@@ -10512,7 +10700,7 @@ ${(_ldCondPgto&&_ldCondPgto.length)?`
         const vencTxt=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—';
         return`<tr>
           <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:center;">${i+1}</td>
-          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;">${c.desc||fLabel}</td>
+          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;">${_esc(c.desc||fLabel)}</td>
           <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:center;">${vencTxt}</td>
           <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:center;">${fLabel}${parcTxt}${absTxt}</td>
           <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:right;white-space:nowrap;">R$ ${fmtBRL(c.valor)}</td>
@@ -10531,8 +10719,8 @@ ${obsHtml}
 <div style="margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:60px;">
   <div style="text-align:center;">
     <div style="border-top:1px solid #000;padding-top:8px;font-size:10px;">
-      <div style="font-weight:bold;">${(ST.empresa&&ST.empresa.nome?ST.empresa.nome:'Casa Villare Ambientes Planejados').toUpperCase()}</div>
-      <div style="color:#555;margin-top:2px;">${ST.empresa&&ST.empresa.cidade?ST.empresa.cidade:'Valinhos — SP'}, ${fmtD(hoje)}</div>
+      <div style="font-weight:bold;">${_esc((ST.empresa&&ST.empresa.nome?ST.empresa.nome:'Casa Villare Ambientes Planejados').toUpperCase())}</div>
+      <div style="color:#555;margin-top:2px;">${_esc(ST.empresa&&ST.empresa.cidade?ST.empresa.cidade:'Valinhos — SP')}, ${fmtD(hoje)}</div>
     </div>
   </div>
   <div style="text-align:center;">
@@ -10591,8 +10779,8 @@ function ctAtualizarXmlInfo(){
       const _itens=a.itens||[];
       const itensTr=_itens.map(it=>`
         <tr>
-          <td style="padding:3px 8px;font-size:11px;">${it.desc}${it.ref?' <span style="color:#94a3b8;font-size:10px;">('+it.ref+')</span>':''}</td>
-          <td style="padding:3px 8px;font-size:11px;text-align:center;white-space:nowrap;">${it.qtd}${it.dim?' · <span style="color:#64748b;">'+it.dim+'</span>':''}</td>
+          <td style="padding:3px 8px;font-size:11px;">${_esc(it.desc)}${it.ref?' <span style="color:#94a3b8;font-size:10px;">('+_esc(it.ref)+')</span>':''}</td>
+          <td style="padding:3px 8px;font-size:11px;text-align:center;white-space:nowrap;">${it.qtd}${it.dim?' · <span style="color:#64748b;">'+_esc(it.dim)+'</span>':''}</td>
           <td style="padding:3px 8px;font-size:11px;text-align:right;white-space:nowrap;">${it.vUnit>0?fmt(it.vUnit):'—'}</td>
           <td style="padding:3px 8px;font-size:11px;text-align:right;white-space:nowrap;font-weight:600;">${it.vTotal>0?fmt(it.vTotal):'—'}</td>
         </tr>`).join('');
@@ -10805,7 +10993,7 @@ function gerarContrato(cadId){
         const absTxt=showParc?(p.absorcao==='loja'?' (loja)':' (cliente)'):'';
         return`<tr>
           <td style="text-align:center;">${i+1}</td>
-          <td>${p.desc||fLabel}</td>
+          <td>${_esc(p.desc||fLabel)}</td>
           <td style="text-align:center;">${fmtDate(p.vencimento)}</td>
           <td style="text-align:center;">${fLabel}${parcTxt}${absTxt}</td>
           <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(p.valor)}</td></tr>`; })
@@ -11148,15 +11336,15 @@ ${obsRows?`
     <div style="text-align:center;">
       <div style="border-top:1px solid #000;padding-top:8px;">
         <div style="font-size:10.5px;font-weight:bold;">CONTRATADA</div>
-        <div style="font-size:10px;">${(ST.empresa&&ST.empresa.nome?ST.empresa.nome:'Casa Villare Ambientes Planejados').toUpperCase()}</div>
-        ${ST.empresa&&ST.empresa.cnpj?`<div style="font-size:9.5px;color:#444;">CNPJ: ${ST.empresa.cnpj}</div>`:''}
+        <div style="font-size:10px;">${_esc((ST.empresa&&ST.empresa.nome?ST.empresa.nome:'Casa Villare Ambientes Planejados').toUpperCase())}</div>
+        ${ST.empresa&&ST.empresa.cnpj?`<div style="font-size:9.5px;color:#444;">CNPJ: ${_esc(ST.empresa.cnpj)}</div>`:''}
       </div>
     </div>
     <div style="text-align:center;">
       <div style="border-top:1px solid #000;padding-top:8px;">
         <div style="font-size:10.5px;font-weight:bold;">CONTRATANTE</div>
-        <div style="font-size:10px;">${c.nome.toUpperCase()}</div>
-        ${c.cpf?`<div style="font-size:9.5px;color:#444;">CPF: ${c.cpf}</div>`:''}
+        <div style="font-size:10px;">${_esc(c.nome.toUpperCase())}</div>
+        ${c.cpf?`<div style="font-size:9.5px;color:#444;">CPF: ${_esc(c.cpf)}</div>`:''}
       </div>
     </div>
   </div>
@@ -11647,7 +11835,7 @@ function verComprovante(pedId){
   if(!ped?.comprovante){toast('Nenhum comprovante anexado');return;}
   const w=window.open('','_blank');
   const isPdf=ped.comprovante.startsWith('data:application/pdf');
-  w.document.write(`<!DOCTYPE html><html><head><title>${ped.comprovanteNome||'Comprovante'}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>${_esc(ped.comprovanteNome||'Comprovante')}</title>
     <style>body{margin:0;background:#1E1D1D;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px;box-sizing:border-box;}
     img{max-width:100%;border-radius:8px;}embed{width:100%;height:98vh;}</style></head><body>
     ${isPdf?`<embed src="${ped.comprovante}" type="application/pdf"/>`:`<img src="${ped.comprovante}" alt="Comprovante"/>`}
@@ -12021,7 +12209,7 @@ function pdAtVerComp(){
   if(!_pdAtCompData) return;
   const w=window.open('','_blank');
   const isPdf=_pdAtCompData.startsWith('data:application/pdf');
-  w.document.write(`<!DOCTYPE html><html><head><title>${_pdAtCompNome||'Comprovante AT'}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>${_esc(_pdAtCompNome||'Comprovante AT')}</title>
     <style>body{margin:0;background:#111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px;box-sizing:border-box;}</style></head>
     <body>${isPdf?`<embed src="${_pdAtCompData}" width="100%" height="900px" type="application/pdf"/>`:`<img src="${_pdAtCompData}" style="max-width:100%;border-radius:8px;"/>`}</body></html>`);
   w.document.close();
@@ -12048,7 +12236,7 @@ function pdPgfabVerComp(){
   if(!_pdPgfabCompData) return;
   const w=window.open('','_blank');
   const isPdf=_pdPgfabCompData.startsWith('data:application/pdf');
-  w.document.write(`<!DOCTYPE html><html><head><title>${_pdPgfabCompNome||'Comprovante'}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>${_esc(_pdPgfabCompNome||'Comprovante')}</title>
     <style>body{margin:0;background:#111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px;box-sizing:border-box;}</style></head>
     <body>${isPdf?`<embed src="${_pdPgfabCompData}" width="100%" height="900px" type="application/pdf"/>`:`<img src="${_pdPgfabCompData}" style="max-width:100%;border-radius:8px;"/>`}</body></html>`);
   w.document.close();
@@ -12313,6 +12501,9 @@ function salvarPedido(){
     pedido.datePgFab     = prev.datePgFab     || null;
     pedido.datePedidoFab = prev.datePedidoFab || null;
     pedido.dateConcluido = prev.dateConcluido || null;
+    // Preservar a NFe emitida — editar o pedido ou mudar de etapa NÃO pode apagar a nota
+    // (senão o pedido "ressuscita" em Fiscal › Pendentes). O formulário não gerencia esse campo.
+    if(prev.nfe!==undefined) pedido.nfe = prev.nfe;
     _pedBackfillMarcos(pedido); // carimba todos os marcos já atingidos (inclusive se a etapa foi pulada)
     ST.pedidos[idx]=pedido;
   } else {
@@ -12391,7 +12582,7 @@ function cadSubTab(tipo){
               <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
                 <span style="font-size:18px;">${iconeFunc(p.perfil)}</span>
                 <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:600;">${p.nome}</div>
+                  <div style="font-size:13px;font-weight:600;">${_esc(p.nome)}</div>
                   <div style="font-size:11px;color:var(--gl);">${p.perfil} · ${p.area}</div>
                 </div>
                 <button class="btn btn-s btn-sm" onclick="navTo('tab-config');setTimeout(()=>{cfgSubTab('equipe');},100);">✏️ Editar</button>
@@ -13361,14 +13552,14 @@ function cpPagarConta(id){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
   if(!c||!confirm(`Confirmar pagamento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.descricao}?`)) return;
-  c.pago=true; c.dataPagamento=_hojeLocal();
+  c.pago=true; c.dataPagamento=_hojeLocal(); c._uAt=Date.now();
   save(); toast('✅ Pagamento registrado!'); rFinCP();
 }
 function cpEstornarConta(id){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
   if(!c||!confirm('Estornar este pagamento?')) return;
-  c.pago=false; c.dataPagamento=null;
+  c.pago=false; c.dataPagamento=null; c._uAt=Date.now();
   save(); toast('Estorno realizado'); rFinCP();
 }
 function abrirModalCP(id){
@@ -13545,10 +13736,11 @@ function rFabPagamentos(){
   const linhas=peds.map(p=>{
     const fab=p.fornecedor||'—';
     const temComp=!!p.comprovante;
-    const compCell=temComp
+    const compCell=(temComp
       ? `<button class="btn btn-s btn-sm" onclick="verComprovante('${p.id}')">👁️ Ver</button>
          <button class="btn btn-s btn-sm" onclick="enviarComprovanteEmail('${p.id}')" title="Enviar à fábrica por e-mail">📧</button>`
-      : `<button class="btn btn-s btn-sm" onclick="anexarComprovante('${p.id}')">📎 Anexar</button>`;
+      : `<button class="btn btn-s btn-sm" onclick="anexarComprovante('${p.id}')">📎 Anexar</button>`)
+      + `<button class="btn btn-p btn-sm" onclick="fabGerarRecibo('${p.id}')" title="Gerar recibo de pagamento à fábrica">🧾 Recibo</button>`;
     const et=PED_ETAPAS.find(e=>e.id===p.status)||{label:p.status||'—',cor:'#6B7280',icon:''};
     return `<tr>
       <td style="padding:7px 10px;font-size:13px;">${_esc(p.clienteNome||p.cliente||'—')}</td>
@@ -13714,7 +13906,7 @@ function crReceberMassa(){
     const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
     if(!l||!l.condicoesPgto) return;
     const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
-    if(c){c.pago=true;c.dataPagamento=hoje;}
+    if(c){c.pago=true;c.dataPagamento=hoje;l._uAt=Date.now();}
   });
   save(); toast(`✅ ${checks.length} parcela${checks.length!==1?'s':''} recebida${checks.length!==1?'s':''}!`); rFinCR();
 }
@@ -13793,6 +13985,7 @@ function crReceberParcela(leadId, condId){
   if(!confirm(`Confirmar recebimento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.desc}?`)) return;
   c.pago=true;
   c.dataPagamento=_hojeLocal();
+  l._uAt=Date.now(); // carimba a versão: sem isso, editar o lead depois apaga o recebimento sem disparar a trava de conflito
   save(); toast('✅ Recebimento registrado!'); rFinCR();
 }
 function crEstornarParcela(leadId, condId){
@@ -13801,6 +13994,7 @@ function crEstornarParcela(leadId, condId){
   const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
   if(!c||!confirm('Estornar este recebimento?')) return;
   c.pago=false; c.dataPagamento=null;
+  l._uAt=Date.now();
   save(); toast('Estorno realizado'); rFinCR();
 }
 // Estado do filtro de Contas a Receber
@@ -13894,7 +14088,8 @@ function rFinCR(){
     <td style="${!isPago&&p.vencimento&&p.vencimento<hoje?'color:#DC2626;font-weight:600;':''}">${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}${!isPago&&p.vencimento&&p.vencimento<hoje?' ⚠️':''}</td>
     <td>${isPago?`<span style="color:#166534;font-size:11px;">✅ ${p.dataPagamento?new Date(p.dataPagamento+'T12:00').toLocaleDateString('pt-BR'):'Recebido'}</span>`:'<span style="color:#92400E;font-size:11px;">⏳ Pendente</span>'}</td>
     <td>${isPago
-      ?`<button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
+      ?`<button class="btn btn-p btn-sm" onclick="crGerarRecibo('${p.leadId}','${p.id}')" title="Gerar recibo de pagamento">🧾 Recibo</button>
+        <button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
       :`<button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
     </td></tr>`;
 
@@ -14473,7 +14668,7 @@ function rMetas(){
     html=`
     <div class="meta-grid">
       <div class="meta-card" style="border-color:var(--p);border-width:1.5px;">
-        <div class="meta-card-nome">${icon} ${ST.nome} <span style="font-size:11px;color:var(--muted);font-weight:400;">(você)</span></div>
+        <div class="meta-card-nome">${icon} ${_esc(ST.nome)} <span style="font-size:11px;color:var(--muted);font-weight:400;">(você)</span></div>
         <div class="meta-card-ven">${fmt(ven)}</div>
         <div class="meta-card-meta">${meta>0?'Meta: '+fmt(meta):'Meta não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pct}%;background:${cor};"></div></div>
@@ -15072,7 +15267,7 @@ function rMetas(){
       const pct=meta>0?Math.min(Math.round(real/meta*100),100):0;
       const cor=meta>0?_metBarCor2(pct):'#6B7280';
       return `<div class="meta-card">
-        <div class="meta-card-nome">${icon} ${v.nome}</div>
+        <div class="meta-card-nome">${icon} ${_esc(v.nome)}</div>
         <div class="meta-card-ven" style="font-size:22px;">${real}</div>
         <div class="meta-card-meta">${meta>0?'Meta: '+meta+' '+titulo.toLowerCase()+(wr?' (sem.)':''):'Meta não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pct}%;background:${cor};"></div></div>
@@ -15156,7 +15351,7 @@ function rMetas(){
         return n>0?`<span style="font-size:10px;background:#F5F0E8;color:var(--p);padding:1px 6px;border-radius:10px;">${ESP_ICONS[t]} ${t}: ${n}</span>`:null;
       }).filter(Boolean).join(' ');
       return `<div class="meta-card">
-        <div class="meta-card-nome">🏛️ ${v.nome}</div>
+        <div class="meta-card-nome">🏛️ ${_esc(v.nome)}</div>
         <div class="meta-card-ven" style="font-size:22px;">${total}</div>
         <div class="meta-card-meta">${meta>0?'Meta: '+meta+' especificadores'+(ewr?' (sem.)':''):'Meta não definida'}</div>
         <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pct}%;background:${cor};"></div></div>
@@ -15290,7 +15485,7 @@ function abrirModalMeta(){
   document.getElementById('meta-loja-val').value=fmtMetaVal(metMes.loja||0);
   document.getElementById('meta-vend-rows').innerHTML=vends.map(v=>`
     <div class="meta-vend-row">
-      <label>${iconeFunc(v.perfil)} ${v.nome}</label>
+      <label>${iconeFunc(v.perfil)} ${_esc(v.nome)}</label>
       <input type="text" inputmode="numeric" id="meta-v-${v.nome.replace(/\s/g,'_')}"
         value="${fmtMetaVal(metMes.vendedores?.[v.nome]||0)}" placeholder="Ex: 175.000,00">
     </div>`).join('');
@@ -15298,7 +15493,7 @@ function abrirModalMeta(){
   const atendVends=metMes.atendVendedores||{};
   document.getElementById('meta-atend-rows').innerHTML=vends.map(v=>`
     <div class="meta-vend-row">
-      <label>${iconeFunc(v.perfil)} ${v.nome}</label>
+      <label>${iconeFunc(v.perfil)} ${_esc(v.nome)}</label>
       <input type="number" min="0" step="1" id="meta-atend-${v.nome.replace(/\s/g,'_')}"
         value="${atendVends[v.nome]||''}" placeholder="qtd">
     </div>`).join('');
@@ -15306,7 +15501,7 @@ function abrirModalMeta(){
   const apresVends=metMes.apresVendedores||{};
   document.getElementById('meta-apres-rows').innerHTML=vends.map(v=>`
     <div class="meta-vend-row">
-      <label>${iconeFunc(v.perfil)} ${v.nome}</label>
+      <label>${iconeFunc(v.perfil)} ${_esc(v.nome)}</label>
       <input type="number" min="0" step="1" id="meta-apres-${v.nome.replace(/\s/g,'_')}"
         value="${apresVends[v.nome]||''}" placeholder="qtd">
     </div>`).join('');
@@ -15314,7 +15509,7 @@ function abrirModalMeta(){
   const fechVends=metMes.fechVendedores||{};
   document.getElementById('meta-fech-rows').innerHTML=vends.map(v=>`
     <div class="meta-vend-row">
-      <label>${iconeFunc(v.perfil)} ${v.nome}</label>
+      <label>${iconeFunc(v.perfil)} ${_esc(v.nome)}</label>
       <input type="number" min="0" step="1" id="meta-fech-${v.nome.replace(/\s/g,'_')}"
         value="${fechVends[v.nome]||''}" placeholder="qtd">
     </div>`).join('');
@@ -15322,7 +15517,7 @@ function abrirModalMeta(){
   const espVends=metMes.espVendedores||{};
   document.getElementById('meta-esp-rows').innerHTML=vends.map(v=>`
     <div class="meta-vend-row">
-      <label>${iconeFunc(v.perfil)} ${v.nome}</label>
+      <label>${iconeFunc(v.perfil)} ${_esc(v.nome)}</label>
       <input type="number" min="0" step="1" id="meta-esp-${v.nome.replace(/\s/g,'_')}"
         value="${espVends[v.nome]||''}" placeholder="qtd">
     </div>`).join('');
@@ -15500,6 +15695,7 @@ async function nfeEnviarEmail(){
 }
 // Carta de Correção (CC-e): corrige erros de TEXTO de uma nota autorizada, sem cancelar.
 async function nfeCartaCorrecao(pedidoId){
+  if(!_podeEditar('fiscal')){ toast('🔒 Sem permissão para ações fiscais.'); return; }
   const pid=pedidoId||_nfePedidoId;
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pid));
   if(!p||!p.nfe||!p.nfe.ref){ toast('Sem nota para corrigir'); return; }
@@ -15525,6 +15721,7 @@ async function nfeCartaCorrecao(pedidoId){
 }
 // Cancela a NFe autorizada (dentro do prazo legal), com justificativa exigida pela SEFAZ.
 async function nfeCancelar(pedidoId){
+  if(!_podeEditar('fiscal')){ toast('🔒 Sem permissão para cancelar NFe.'); return; }
   const pid=pedidoId||_nfePedidoId;
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pid));
   if(!p||!p.nfe||!p.nfe.ref){ toast('Sem nota para cancelar'); return; }
@@ -15572,8 +15769,8 @@ async function nfeConsultarStatusUI(){
       statusEl.innerHTML=`<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px 16px;font-size:13px;color:#166534;margin-bottom:12px;">
         🟢 <strong>NFe autorizada!</strong><br>Número: <strong>${p.nfe.numero||'—'}</strong> · Série: ${p.nfe.serie||1}<br>
         Chave: <code style="font-size:10px;">${p.nfe.chaveAcesso||'—'}</code><br>
-        ${(p.nfe.danfeArquivado||p.nfe.danfeUrl)?`<a href="${p.nfe.danfeArquivado||p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
-        ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
+        ${(p.nfe.danfeArquivado||p.nfe.danfeUrl)?`<a href="${_esc(_safeHref(p.nfe.danfeArquivado||p.nfe.danfeUrl))}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
+        ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)?`<a href="${_esc(_safeHref(p.nfe.xmlArquivado||p.nfe.xmlUrl))}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">📦 XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:${p.nfe.xmlArquivado?'#166534':'#92400E'};">${p.nfe.xmlArquivado?'✅ XML arquivado com segurança (guarda de 5 anos)':'⏳ Arquivando XML/DANFE no sistema…'}</div>
         ${nfeEmailBoxHtml(p)}
         <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -15856,6 +16053,7 @@ function nfeMontarPayload(){
 }
 
 async function nfeEmitir(){
+  if(!_podeEditar('fiscal')){ toast('🔒 Sem permissão para emitir NFe.'); return; }
   const cfg=ST.configNFe||{};
   const statusEl=document.getElementById('nfe-status-box');
   const btnEmitir=document.getElementById('nfe-btn-emitir');
@@ -15917,8 +16115,8 @@ async function nfeEmitir(){
         🟢 <strong>NFe autorizada!</strong><br>
         Número: <strong>${data.numero||'—'}</strong>&nbsp;|&nbsp;Série: ${data.serie||cfg.serie||1}<br>
         Chave: <code style="font-size:10px;">${data.chave||'—'}</code><br>
-        ${data.danfeUrl?`<a href="${data.danfeUrl}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
-        ${data.xmlUrl?`<a href="${data.xmlUrl}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
+        ${data.danfeUrl?`<a href="${_esc(_safeHref(data.danfeUrl))}" target="_blank" class="btn btn-p" style="margin-top:8px;display:inline-block;">📄 DANFE</a>`:''}
+        ${data.xmlUrl?`<a href="${_esc(_safeHref(data.xmlUrl))}" target="_blank" class="btn btn-s" style="margin-top:8px;display:inline-block;">XML</a>`:''}
         <div style="font-size:11px;margin-top:8px;color:#92400E;">⏳ Arquivando XML/DANFE no sistema (guarda de 5 anos)…</div>
         ${p?nfeEmailBoxHtml(p):''}
         <div style="margin-top:10px;border-top:1px solid #BBF7D0;padding-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -16069,7 +16267,7 @@ function rFiscalPendentes(){
         return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:16px;">
           <div style="flex:1;min-width:0;">
             <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:500;color:var(--dark);margin-bottom:3px;">${_esc(p.clienteNome||'—')}</div>
-            <div style="font-size:12px;color:var(--gl);">${p.descricao||'Sem descrição'}</div>
+            <div style="font-size:12px;color:var(--gl);">${_esc(p.descricao||'Sem descrição')}</div>
             <div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;">
               <span style="font-size:11px;background:#F5F0E8;color:var(--p);padding:2px 8px;border-radius:20px;">Pedido #${p.id}</span>
               ${(()=>{const e=PED_ETAPAS.find(x=>x.id===p.status);return e?`<span style="font-size:11px;background:${e.cor}18;color:${e.cor};padding:2px 8px;border-radius:20px;">${e.icon||''} ${e.label}</span>`:'';})()}
@@ -16137,7 +16335,7 @@ function rFiscalEmitidas(){
               <span style="font-family:'Sora',sans-serif;font-size:13px;font-weight:600;color:var(--dark);">${_esc(p.clienteNome||'—')}</span>
               ${nfeStatusBadge(st)}
             </div>
-            <div style="font-size:11px;color:var(--gl);">${p.descricao||''}</div>
+            <div style="font-size:11px;color:var(--gl);">${_esc(p.descricao||'')}</div>
             <div style="margin-top:5px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
               ${p.nfe.numero?`<span style="font-size:11px;background:#F3F4F6;color:#374151;padding:2px 8px;border-radius:20px;border:1px solid #E5E7EB;font-weight:600;">NFe #${p.nfe.numero} · Série ${p.nfe.serie||ST.configNFe?.serie||1}</span>`:'<span style="font-size:11px;color:var(--gl);">Nº pendente</span>'}
               <span style="font-size:11px;color:var(--gl);">${fmtData(p.nfe.emitidaEm)}</span>
@@ -16148,10 +16346,10 @@ function rFiscalEmitidas(){
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
             ${(p.nfe.ref&&p.nfe.status!=='emitida')?`<button onclick="nfeConsultarStatus('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">🔄 Consultar</button>`:''}
             ${(p.nfe.danfeArquivado||p.nfe.danfeUrl)&&st==='emitida'
-              ?`<a href="${p.nfe.danfeArquivado||p.nfe.danfeUrl}" target="_blank" class="btn btn-p" style="font-size:11px;padding:5px 14px;">📄 DANFE</a>`
+              ?`<a href="${_esc(_safeHref(p.nfe.danfeArquivado||p.nfe.danfeUrl))}" target="_blank" class="btn btn-p" style="font-size:11px;padding:5px 14px;">📄 DANFE</a>`
               :`<button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">📎 Informar DANFE</button>`}
             ${(p.nfe.xmlArquivado||p.nfe.xmlUrl)&&st==='emitida'
-              ?`<a href="${p.nfe.xmlArquivado||p.nfe.xmlUrl}" target="_blank" class="btn btn-s" style="font-size:11px;padding:5px 14px;">📦 XML</a>`
+              ?`<a href="${_esc(_safeHref(p.nfe.xmlArquivado||p.nfe.xmlUrl))}" target="_blank" class="btn btn-s" style="font-size:11px;padding:5px 14px;">📦 XML</a>`
               :''}
             ${st==='emitida'?`<button onclick="nfeCartaCorrecao('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">📝 CC-e</button>`:''}
             ${st==='emitida'?`<button onclick="nfeCancelar('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar</button>`:''}
