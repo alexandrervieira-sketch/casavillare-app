@@ -3009,7 +3009,10 @@ function _tombMergeIncoming(inc){
 // Carimbo de tempo por documento de config (anti-clobber de edição simultânea):
 // marca QUANDO esta máquina editou a config; uma versão mais ANTIGA nunca sobrescreve
 // uma edição local mais nova. _cfgUAt é LOCAL (não sincroniza).
-function _cfgTouch(key){ if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={}; ST._cfgUAt[key]=Date.now(); }
+// RELÓGIO LÓGICO (Lamport): o carimbo é sempre MAIOR que qualquer versão já vista para a
+// chave (o listener carimba _cfgUAt[key] com o _uAt da nuvem ao aplicar). Assim, quem edita
+// DEPOIS de ver a mudança do outro sempre vence — imune a skew de relógio entre máquinas.
+function _cfgTouch(key){ if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUAt={}; ST._cfgUAt[key]=Math.max(Date.now(),(ST._cfgUAt[key]||0)+1); }
 // Anti-perda de config: bloqueia salvar quando ONLINE mas a nuvem ainda NÃO carregou nesta sessão.
 // Sem isto, um salvar pré-sync carimba mais novo que a nuvem e a sobrescreve (metas/equipe "somem").
 // Offline puro (sem Firebase) continua liberado — é edição local legítima.
@@ -3406,7 +3409,15 @@ function _fsSubscribe(){
             try{ _fbDb.collection(col).doc(rid).delete(); }catch(e){}
             if(idx>=0){ ST[col].splice(idx,1); delete _fsSeen[col+'/'+rid]; mudou=true; }
           }
-          else { if(idx>=0) ST[col][idx]=rec; else ST[col].push(rec); _fsSeen[col+'/'+rid]=JSON.stringify(rec); mudou=true; }
+          else if(idx>=0){
+            const cur=ST[col][idx];
+            // Guard de versão: não deixa a nuvem sobrescrever uma edição local MAIS NOVA (só quando ambos têm _uAt).
+            if(rec._uAt && cur && cur._uAt && rec._uAt < cur._uAt){
+              _fsSeen[col+'/'+rid]=JSON.stringify(rec);        // registra o que a nuvem tem (versão antiga)…
+              _fsSyncCollection(col,ST[col]).catch(()=>{});     // …e reempurra a local p/ a nuvem convergir com a mais recente
+            } else { ST[col][idx]=rec; _fsSeen[col+'/'+rid]=JSON.stringify(rec); mudou=true; }
+          }
+          else { ST[col].push(rec); _fsSeen[col+'/'+rid]=JSON.stringify(rec); mudou=true; }
         });
         if(mudou){ try{localStorage.setItem('cvp_pay',JSON.stringify(ST));}catch(e){} _reRenderAtual(); }
       }, err=>console.warn('[CVP] listener',col,'erro:',err&&err.message));
@@ -5097,7 +5108,7 @@ function pfRenderComsComercial(){
     const {pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l)); // taxa absorvida pela loja entra como desconto
     const {taxa:taxaVal,rt:rtVal,liquido:valorLiq}=_vendaLiquido(l);
     const valorLiqCom=_aplicarMargemErro(valorLiq);
-    return {cliente:l.nome,valorBruto:l.valor,desconto:desc,pontos,comissaoPct:pct,valorLiq,valorCom:valorLiqCom*(pct/100),fromLead:true,rtPct:l.rtPct||0,rtVal};
+    return {cliente:l.nome,valorBruto:l.valor,desconto:desc,pontos,comissaoPct:pct,valorLiq,valorCom:_round2(valorLiqCom*(pct/100)),fromLead:true,rtPct:l.rtPct||0,rtVal};
   });
   const vendasM=(ST.vendasCom||[]).filter(v=>v.pessoa===nome&&v.mesAno===mes);
   const todas=[...leadsG,...vendasM];
@@ -6270,7 +6281,7 @@ function rRelResumo(){
         const leadsG=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
         const vendasM=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno);
         const todas=[
-          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l));const vl=_aplicarMargemErro(_valorLiquidoVenda(l));return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:vl*(pct/100)};}),
+          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l));const vl=_aplicarMargemErro(_valorLiquidoVenda(l));return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:_round2(vl*(pct/100))};}),
           ...vendasM.map(v=>({pessoa:v.pessoa,cliente:v.cliente,valorBruto:v.valorBruto,desconto:v.desconto,pontos:v.pontos,comissaoPct:v.comissaoPct,valorCom:v.valorCom}))
         ];
         if(!todas.length) return`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda comercial neste mês.</td></tr>`;
@@ -7127,6 +7138,8 @@ function _getComMont(){ return _getCfgCom().montador??COM_DEFAULTS.montador; }
 function _getMargemErroFator(){ const m=parseFloat(_getCfgCom().margemErro)||0; return 1-(m/100); }
 // Aplica margem de erros ao valor líquido antes de calcular comissão
 function _aplicarMargemErro(valorLiq){ return valorLiq*_getMargemErroFator(); }
+// Arredonda a centavos — fonte única p/ a comissão bater entre rentabilidade, Comissões e folha
+function _round2(v){ return Math.round((v||0)*100)/100; }
 function _getComVend(pontos){
   const faixas=_getFaixas();
   const p=parseFloat(pontos)||0;
@@ -7317,7 +7330,7 @@ function _cascataProjeto(p){
     desconto=Math.max(0,vendaBruta-liquido); taxa=0; rt=0;
   }
   const {pct:vendPct}=lead?_calcComVendaPontos(_descEfetivoComissao(lead)):{pct:0};
-  const comVend=liquido>0?Math.round(_aplicarMargemErro(liquido)*vendPct/100*100)/100:0;
+  const comVend=liquido>0?_round2(_aplicarMargemErro(liquido)*vendPct/100):0;
   const proj=_calcComProjetista(p), mont=_calcComMontador(p), sup=_calcComSupervisor(p);
   const custoFabManual=(p&&p.valorFabrica)||0;
   const bipFab=_bipartidoLead(lead);
@@ -7409,7 +7422,7 @@ function calcVendaCom(){
   const valorApdesc=bruto*(1-desc/100);
   const taxaValor  =pgto!=='avista'&&assume==='loja'?valorApdesc*(taxaPct/100):0;
   const valorLiq   =valorApdesc-taxaValor;
-  const valorCom   =_aplicarMargemErro(valorLiq)*(pct/100);
+  const valorCom   =_round2(_aplicarMargemErro(valorLiq)*(pct/100));
 
   const res2=document.getElementById('vc-resultado2');
   if(bruto>0){
@@ -7500,7 +7513,7 @@ function salvarVendaCom(){
   const valorApdesc =bruto*(1-desc/100);
   const taxaValor   =pgto!=='avista'&&assume==='loja'?valorApdesc*(taxaPct/100):0;
   const valorLiq    =valorApdesc-taxaValor;
-  const valorCom    =_aplicarMargemErro(valorLiq)*(pct/100);
+  const valorCom    =_round2(_aplicarMargemErro(valorLiq)*(pct/100));
   const mesAno      =dataIso.substring(0,7);
 
   if(!_conflOk('vendasCom',ST.vendasCom,_vcId,'venda')) return;
@@ -7669,7 +7682,7 @@ function rComissoes(){
             id:l.id, cliente:l.nome,
             data:l.proxContato?new Date(l.proxContato+'T12:00').toLocaleDateString('pt-BR'):'',
             valorBruto:l.valor, desconto:desc, pontos, comissaoPct:pct,
-            valorLiq, valorCom:_aplicarMargemErro(valorLiq)*(pct/100), fromLead:true, rtPct:l.rtPct||0, rtVal
+            valorLiq, valorCom:_round2(_aplicarMargemErro(valorLiq)*(pct/100)), fromLead:true, rtPct:l.rtPct||0, rtVal
           };
         }),
         ...vendasP
