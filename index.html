@@ -5688,9 +5688,10 @@ function agConfigurarGcal(){
 function abrirModalEvento(id, dataPre){
   _agEvId=id||null;
   _conflCapture('eventos',ST.eventos,_agEvId);
-  const todos=todosFunc();
+  const _evCurResp = id ? (((ST.eventos||[]).find(x=>String(x.id)===String(id))||{}).resp||'') : '';
+  const todos=todosFunc().filter(p=>!_estaDesligado(p.nome)||p.nome===_evCurResp); // esconde desligados; mantém o responsável atual do evento
   const respSel=document.getElementById('ev-resp');
-  respSel.innerHTML='<option value="">—</option>'+todos.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
+  respSel.innerHTML='<option value="">—</option>'+todos.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}${_estaDesligado(p.nome)?' 🚪':''}</option>`).join('');
   // preenche datalist de clientes
   const dl=document.getElementById('ev-cliente-list');
   if(dl){
@@ -12339,18 +12340,21 @@ function pdAtEnviarEmail(){
 function abrirModalPedido(id){
   _pdId=id||null;
   _pdBaseUAt=id?(((ST.pedidos||[]).find(x=>String(x.id)===String(id))||{})._uAt||0):0; // base p/ detectar conflito ao salvar
-  const obras=[...(ST.equipe.obras||[]),...(ST.equipe.gestor||[])];
+  // Esconde desligados das atribuições NOVAS, mas mantém quem já está no pedido (não reatribui ao salvar)
+  const _pdCur = id ? ((ST.pedidos||[]).find(x=>String(x.id)===String(id))||{}) : {};
+  const _mkOpt=(p,pref)=>`<option value="${_esc(p.nome)}">${pref||''}${_esc(p.nome)}${_estaDesligado(p.nome)?' 🚪':''}</option>`;
+  const obras=[...(ST.equipe.obras||[]),...(ST.equipe.gestor||[])].filter(p=>!_estaDesligado(p.nome)||p.nome===_pdCur.responsavel);
   document.getElementById('pd-resp').innerHTML=
     '<option value="">— Selecione —</option>'+
-    obras.map(p=>`<option value="${_esc(p.nome)}">${iconeFunc(p.perfil)} ${_esc(p.nome)}</option>`).join('');
-  const projetistas=(ST.equipe.obras||[]).filter(p=>p.perfil==='projetista');
+    obras.map(p=>_mkOpt(p,iconeFunc(p.perfil)+' ')).join('');
+  const projetistas=(ST.equipe.obras||[]).filter(p=>p.perfil==='projetista'&&(!_estaDesligado(p.nome)||p.nome===_pdCur.projetista));
   document.getElementById('pd-projetista').innerHTML=
     '<option value="">— Nenhum —</option>'+
-    projetistas.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
-  const montadores=(ST.equipe.obras||[]).filter(p=>p.perfil==='montador');
+    projetistas.map(p=>_mkOpt(p)).join('');
+  const montadores=(ST.equipe.obras||[]).filter(p=>p.perfil==='montador'&&(!_estaDesligado(p.nome)||p.nome===_pdCur.montador));
   document.getElementById('pd-montador').innerHTML=
     '<option value="">— Nenhum —</option>'+
-    montadores.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
+    montadores.map(p=>_mkOpt(p)).join('');
   const leadsAtivos=(ST.leads||[]).filter(l=>l.status!=='perdido');
   document.getElementById('pd-lead').innerHTML=
     '<option value="">— Sem vínculo —</option>'+
