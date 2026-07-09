@@ -3635,6 +3635,18 @@ function _ativoNoMes(nome, mes){
   return String(mes||'')<=corte;
 }
 function _equipeAtivaMes(area, mes){ return (ST.equipe[area]||[]).filter(p=>_ativoNoMes(p.nome, mes)); }
+// <option> de responsável (comercial + gestor) ESCONDENDO desligados — mas SEMPRE inclui o "manter"
+// (responsável já atribuído), senão salvar um lead/cliente antigo reatribuiria a outra pessoa.
+function _respOpts(manter, lista){
+  lista = lista || [...(ST.equipe.comercial||[]),...(ST.equipe.gestor||[])];
+  const vistos=new Set(), nomes=[];
+  lista.forEach(p=>{
+    if(vistos.has(p.nome)) return; vistos.add(p.nome);
+    if(!_estaDesligado(p.nome)||p.nome===manter) nomes.push(p.nome);
+  });
+  if(manter && !vistos.has(manter)) nomes.push(manter); // responsável fora da equipe atual ainda aparece
+  return nomes.map(n=>`<option value="${_esc(n)}">${_esc(n)}${_estaDesligado(n)?' 🚪 (desligado)':''}</option>`).join('');
+}
 function infoFunc(nome){
   for(const area of['gestor','comercial','obras','outros']){
     const p=(ST.equipe[area]||[]).find(x=>x.nome===nome);
@@ -7448,9 +7460,8 @@ function calcVendaCom(){
 function abrirModalVendaCom(id, pessoaNome){
   _vcId=id||null;
   _conflCapture('vendasCom',ST.vendasCom,_vcId);
-  const vends=(ST.equipe.comercial||[]);
-  document.getElementById('vc-pessoa').innerHTML=
-    vends.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
+  const _vcCur = id ? (((ST.vendasCom||[]).find(x=>String(x.id)===String(id))||{}).pessoa||'') : (pessoaNome||'');
+  document.getElementById('vc-pessoa').innerHTML=_respOpts(_vcCur, ST.equipe.comercial||[]); // esconde desligados; mantém o vendedor atual
   document.getElementById('vc-taxa').dataset.auto='1';
 
   if(id){
@@ -9988,8 +9999,8 @@ function abrirModalLead(id, etapaInicial){
   _ldId=id||null;
   _ldBaseUAt=id?(((ST.leads||[]).find(x=>String(x.id)===String(id))||{})._uAt||0):0; // base p/ detectar conflito ao salvar
   { const _dg=document.getElementById('ld-datas-gestor'); if(_dg) _dg.style.display=(ST.perfil==='gestor')?'':'none'; } // datas retroativas só p/ gestor
-  const resp=[...(ST.equipe.comercial||[]),...(ST.equipe.gestor||[])];
-  document.getElementById('ld-resp').innerHTML=resp.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
+  const _curResp = id ? (((ST.leads||[]).find(x=>String(x.id)===String(id))||{}).responsavel||'') : '';
+  document.getElementById('ld-resp').innerHTML=_respOpts(_curResp); // esconde desligados; mantém o responsável atual
   // Popular especificadores (parceiros)
   const espSel=document.getElementById('ld-especificador');
   if(espSel){
@@ -12787,9 +12798,8 @@ function cadToggleTipo(){
   document.getElementById('cad-sec-label').textContent         =isParc?'Dados do especificador':isFunc?'Dados do funcionário':isForn?'Dados do fornecedor':'Dados do cliente';
 }
 
-function _cliRespOpts(){
-  return [...(ST.equipe.comercial||[]),...(ST.equipe.gestor||[])]
-    .map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
+function _cliRespOpts(manter){
+  return _respOpts(manter); // esconde desligados; mantém o responsável já atribuído
 }
 function _proxNumContrato(){
   const nums=(ST.cadastros||[]).filter(c=>c.tipo==='cliente'&&c.numContrato)
@@ -12804,8 +12814,9 @@ function abrirModalCadastro(id,tipo,dadosLead){
   const tipoInicial=tipo||'cliente';
   const tipoEl=document.getElementById('cad-tipo');
   const TITULOS={parceiro:'Especificador',funcionario:'Funcionário',cliente:'Cliente',fornecedor:'Fornecedor'};
-  // populate resp select
-  document.getElementById('cad-cli-resp').innerHTML=_cliRespOpts();
+  // populate resp select (esconde desligados; mantém o responsável já atribuído ao cliente)
+  const _curCliResp = id ? (((ST.cadastros||[]).find(c=>String(c.id)===String(id))||{}).respVenda||'') : '';
+  document.getElementById('cad-cli-resp').innerHTML=_cliRespOpts(_curCliResp);
   if(id){
     const c=(ST.cadastros||[]).find(x=>String(x.id)===String(id));
     if(!c){toast('Não encontrado');return;}
