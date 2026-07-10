@@ -1,0 +1,17 @@
+{
+  "name": "casavillare-sistema",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de gestão Casa Villare",
+  "scripts": {
+    "lint": "node _check_lint.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexandrervieira-sketch/casavillare-app.git"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^9.39.5"
+  }
+}
