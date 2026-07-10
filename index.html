@@ -13550,7 +13550,7 @@ function rFinAnalise(){
     <div style="background:var(--card);border:1.5px solid ${peCor};border-radius:14px;padding:18px 20px;margin-bottom:20px;">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
         <div>
-          <div style="font-size:13px;font-weight:800;color:var(--txt);">⚖️ Ponto de Equilíbrio Contábil</div>
+          <div style="font-size:13px;font-weight:800;color:var(--txt);">⚖️ Ponto de Equilíbrio</div>
           <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Faturamento mínimo para cobrir todos os custos</div>
         </div>
         <div style="text-align:right;">
@@ -13572,12 +13572,12 @@ function rFinAnalise(){
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
         <div style="background:${acimaPE?'#F0FDF4':'#FEF2F2'};border-radius:8px;padding:10px 12px;">
-          <div style="font-size:10px;font-weight:700;color:${acimaPE?'#166534':'#DC2626'};text-transform:uppercase;">PE Contábil</div>
+          <div style="font-size:10px;font-weight:700;color:${acimaPE?'#166534':'#DC2626'};text-transform:uppercase;">Ponto de Equilíbrio</div>
           <div style="font-size:15px;font-weight:800;color:${acimaPE?'#166534':'#DC2626'};">${acimaPE?'✅ Atingido':'❌ '+fmt(peRestante)+' faltam'}</div>
           <div style="font-size:11px;color:#6B7280;">${fmt(pe)}</div>
         </div>
         <div style="background:${acimaPEE?'#F0FDF4':'#FFFBEB'};border-radius:8px;padding:10px 12px;">
-          <div style="font-size:10px;font-weight:700;color:${acimaPEE?'#166534':'#B45309'};text-transform:uppercase;">Meta (+${margemAlvoPct}% lucro)</div>
+          <div style="font-size:10px;font-weight:700;color:${acimaPEE?'#166534':'#B45309'};text-transform:uppercase;">Meta lucrar ${margemAlvoPct}%</div>
           <div style="font-size:15px;font-weight:800;color:${acimaPEE?'#166534':'#B45309'};">${pee>0?(acimaPEE?'✅ Atingido':'❌ '+fmt(Math.max(0,pee-d.recLiq))+' faltam'):'—'}</div>
           <div style="font-size:11px;color:#6B7280;">${pee>0?fmt(pee):'Configure receitas e custos'}</div>
         </div>
