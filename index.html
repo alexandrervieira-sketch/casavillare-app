@@ -13422,6 +13422,15 @@ function finSubTab(sub){
 // ══════════════════════════════════════════════════════
 // ANÁLISE FINANCEIRA — Margem de Contribuição + Ponto de Equilíbrio
 // ══════════════════════════════════════════════════════
+// Salva a margem de lucro ALVO (%) usada na "Meta de venda do mês". Sincroniza entre máquinas.
+function salvarMargemAlvo(v){
+  if(!_podeEditar('fin')){ toast('🔒 Sem permissão para alterar a meta.'); return; }
+  let n=parseFloat(String(v==null?'':v).replace(',','.'));
+  if(!isFinite(n)||n<0) n=0;
+  if(n>90) n=90; // sanidade: acima disso o cálculo perde sentido
+  ST.margemLucroAlvo=n; _cfgTouch('margemLucroAlvo'); save();
+  rFinAnalise();
+}
 function rFinAnalise(){
   const el=document.getElementById('fin-content');
   if(!el) return;
@@ -13443,8 +13452,9 @@ function rFinAnalise(){
   const totalFixo = d.totalCF + d.despPessoalOp;
   const pe = mcPct > 0 ? totalFixo / (mcPct / 100) : 0;
 
-  // Ponto de Equilíbrio Econômico (adiciona margem de lucro desejada — 10% padrão)
-  const margemDesejada = 0.10;
+  // Ponto de Equilíbrio Econômico (adiciona a margem de lucro ALVO — configurável, padrão 10%)
+  const margemAlvoPct = (ST.margemLucroAlvo!=null && isFinite(parseFloat(ST.margemLucroAlvo))) ? parseFloat(ST.margemLucroAlvo) : 10;
+  const margemDesejada = margemAlvoPct/100;
   const _peeDen = (mcPct / 100) - margemDesejada; // margem de contribuição menos o lucro desejado
   const pee = _peeDen > 0 ? totalFixo / _peeDen : 0; // denominador ≤ 0 (margem não cobre o lucro alvo) → não calculável
 
@@ -13499,13 +13509,33 @@ function rFinAnalise(){
     insightTxt='Lance os custos fixos e variáveis no DRE para calcular o ponto de equilíbrio.';
   } else if(acimaPE){
     const folga=d.recLiq-pe;
-    insightTxt=`✅ A loja está <strong>acima do ponto de equilíbrio</strong> este mês — com folga de ${fmt(folga)}. ${acimaPEE?'Margem econômica também atingida — excelente!':'Para atingir também o PE Econômico (lucro de 10%), faltam '+fmt(Math.max(0,pee-d.recLiq))+'.'}`;
+    insightTxt=`✅ A loja está <strong>acima do ponto de equilíbrio</strong> este mês — com folga de ${fmt(folga)}. ${acimaPEE?'Meta de lucro também atingida — excelente!':'Para atingir também a meta de '+margemAlvoPct+'% de lucro, faltam '+fmt(Math.max(0,pee-d.recLiq))+' em vendas.'}`;
   } else {
     insightTxt=`⚠️ A loja ainda está <strong>abaixo do ponto de equilíbrio</strong>. Faltam ${fmt(peRestante)} em receita para cobrir todos os custos fixos do mês.`;
   }
 
   el.innerHTML=`
   <div style="padding:8px 0 16px;">
+
+    <!-- 🎯 META DE VENDA (destaque, em português claro) -->
+    <div style="background:var(--card);border:2px solid #C8A97A;border-radius:14px;padding:16px 20px;margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:800;color:#8A6D3B;text-transform:uppercase;letter-spacing:.5px;">
+        🎯 Meta de venda do mês para lucrar
+        <input type="number" min="0" max="90" step="1" value="${margemAlvoPct}"
+          onchange="salvarMargemAlvo(this.value)" title="Ajuste o % de lucro desejado"
+          style="width:54px;padding:2px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;text-align:center;color:var(--dark);"/> %
+      </div>
+      <div style="font-size:32px;font-weight:800;color:var(--p);margin-top:4px;line-height:1.1;">${pee>0?fmt(pee):'—'}</div>
+      <div style="font-size:12.5px;color:#6B7280;margin-top:3px;">
+        ${pee>0
+          ? (acimaPEE
+              ? '✅ Meta já atingida este mês — você faturou '+fmt(d.recLiq)
+              : 'Faltam <strong style="color:#B45309;">'+fmt(Math.max(0,pee-d.recLiq))+'</strong> em vendas para lucrar '+margemAlvoPct+'% este mês')
+          : (mcPct>0
+              ? 'Sua margem de contribuição ('+mcPct.toFixed(1).replace('.',',')+'%) ainda não cobre '+margemAlvoPct+'% de lucro — reduza custos ou baixe a meta'
+              : 'Lance as receitas e os custos do mês no DRE para calcular a meta')}
+      </div>
+    </div>
 
     <!-- KPIs principais -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px;">
@@ -13547,7 +13577,7 @@ function rFinAnalise(){
           <div style="font-size:11px;color:#6B7280;">${fmt(pe)}</div>
         </div>
         <div style="background:${acimaPEE?'#F0FDF4':'#FFFBEB'};border-radius:8px;padding:10px 12px;">
-          <div style="font-size:10px;font-weight:700;color:${acimaPEE?'#166534':'#B45309'};text-transform:uppercase;">PE Econômico (+10% lucro)</div>
+          <div style="font-size:10px;font-weight:700;color:${acimaPEE?'#166534':'#B45309'};text-transform:uppercase;">Meta (+${margemAlvoPct}% lucro)</div>
           <div style="font-size:15px;font-weight:800;color:${acimaPEE?'#166534':'#B45309'};">${pee>0?(acimaPEE?'✅ Atingido':'❌ '+fmt(Math.max(0,pee-d.recLiq))+' faltam'):'—'}</div>
           <div style="font-size:11px;color:#6B7280;">${pee>0?fmt(pee):'Configure receitas e custos'}</div>
         </div>
