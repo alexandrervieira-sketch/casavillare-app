@@ -10109,7 +10109,7 @@ function abrirModalLead(id, etapaInicial){
     if(_absWrapN) _absWrapN.style.display='none';
     document.getElementById('ld-taxa-preview').style.display='none';
     document.getElementById('ld-origem').value='instagram';
-    document.getElementById('ld-resp').value=ST.area==='comercial'?ST.nome:(resp[0]?.nome||'');
+    { const _ldResp=document.getElementById('ld-resp'); _ldResp.value=ST.area==='comercial'?ST.nome:(_ldResp.options[0]?.value||''); }
     document.getElementById('ld-etapa').value=etapaInicial||'atendimento';
     document.getElementById('ld-status').value='ativo';
     document.getElementById('ld-data-criacao').value='';
