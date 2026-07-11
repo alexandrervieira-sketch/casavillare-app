@@ -13282,7 +13282,7 @@ const FIN_CATS=[
   {id:'outra_desp',   label:'Outras Despesas',                    grupo:'cv'},
 ];
 
-function finNavMes(d){_finMes+=d;if(_finMes<0){_finMes=11;_finAno--;}if(_finMes>11){_finMes=0;_finAno++;}finSubTab('dre');}
+function finNavMes(d){_finMes+=d;if(_finMes<0){_finMes=11;_finAno--;}if(_finMes>11){_finMes=0;_finAno++;}finSubTab(_finSubAtivo||'dre');}
 function pagNavMes(d){_pagMes+=d;if(_pagMes<0){_pagMes=11;_pagAno--;}if(_pagMes>11){_pagMes=0;_pagAno++;}finSubTab('pag');}
 
 function calcDRE(mesAno){
