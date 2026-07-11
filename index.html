@@ -12711,7 +12711,7 @@ function rCadastros(){
             <td><div class="td-actions">
               <button class="btn btn-p btn-sm" onclick="abrirModalContrato('${c.id}')">📄 Contrato</button>
               <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','cliente')">✏️</button>
-              <button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>
+              ${ST.perfil==='gestor'?`<button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>`:''}
             </div></td>
           </tr>`;
         }).join('')}</tbody>
@@ -12747,7 +12747,7 @@ function rCadastros(){
             <td style="text-align:right;font-weight:600;color:#8B5CF6;">${rtTotal?fmt(rtTotal):'—'}</td>
             <td><div class="td-actions">
               <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','parceiro')">✏️</button>
-              <button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>
+              ${ST.perfil==='gestor'?`<button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>`:''}
             </div></td>
           </tr>`;}).join('')}
         </tbody>
@@ -12765,7 +12765,7 @@ function rCadastros(){
           <td style="font-size:12px;color:var(--gl);">${_esc(c.contato||'—')}</td>
           <td><div class="td-actions">
             <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','fornecedor')">✏️</button>
-            <button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>
+            ${ST.perfil==='gestor'?`<button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>`:''}
           </div></td>
         </tr>`).join('')}</tbody>
       </table></div>`
@@ -12782,7 +12782,7 @@ function rCadastros(){
           <td style="color:var(--gl);font-size:12px;">${c.admissao?new Date(c.admissao+'T12:00').toLocaleDateString('pt-BR'):'—'}</td>
           <td><div class="td-actions">
             <button class="btn btn-s btn-sm" onclick="abrirModalCadastro('${c.id}','funcionario')">✏️</button>
-            <button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>
+            ${ST.perfil==='gestor'?`<button class="btn btn-danger btn-sm" onclick="excluirCadastro('${c.id}')">✕</button>`:''}
           </div></td>
         </tr>`).join('')}</tbody>
       </table></div>`
