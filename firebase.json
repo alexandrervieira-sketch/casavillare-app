@@ -3,7 +3,16 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      ".firebaserc",
       "node_modules/**",
+      "nfe-worker/**",
+      "tests/**",
+      "_*.js",
+      "*.md",
+      "package.json",
+      "package-lock.json",
+      "*.rules",
+      "firestore.indexes.json",
       "*.pptx",
       "*.pdf"
     ],

@@ -4621,6 +4621,7 @@ function abrirModalAviso(id){
   abrirModal('modal-aviso');
 }
 function salvarAviso(){
+  if(!_podeEditar('crm')){ toast('🔒 Sem permissão para publicar avisos.'); return; }
   const texto=document.getElementById('av-texto').value.trim();
   if(!texto){toast('Escreva a mensagem');return;}
   const isEdit=!!_avId;
@@ -8116,6 +8117,7 @@ function abrirModalRepo(id){
 }
 
 function salvarRepo(){
+  if(!_podeEditar('repo')){ toast('🔒 Sem permissão para editar o Repositório.'); return; }
   const nome=document.getElementById('repo-nome').value.trim();
   const link=document.getElementById('repo-link').value.trim();
   if(!nome){toast('Informe o nome do arquivo');return;}
@@ -8241,6 +8243,7 @@ function abrirModalTrei(id){
 }
 
 function salvarTrei(){
+  if(!_podeEditar('trei')){ toast('🔒 Sem permissão para editar Treinamentos.'); return; }
   const titulo=document.getElementById('trei-titulo').value.trim();
   if(!titulo){toast('Informe o título do treinamento');return;}
   if(!ST.treinamentos) ST.treinamentos=[];
@@ -10027,6 +10030,7 @@ function reativarLead(id){
   if(!l) return;
   l.status='ativo';
   l.etapa=l.etapa||'atendimento';
+  l._uAt=Date.now();
   save(); toast('Lead reativado ✅'); rCrm();
 }
 
@@ -11911,7 +11915,7 @@ ${emp.email?'E-mail: '+emp.email:''}`
   // Registrar envio
   const idx=(ST.pedidos||[]).findIndex(x=>String(x.id)===String(pedId));
   if(idx>=0){
-    ST.pedidos[idx].emailFabricaEnviado=hoje;
+    ST.pedidos[idx].emailFabricaEnviado=hoje; ST.pedidos[idx]._uAt=Date.now();
     save(); rPedidos();
   }
   toast(`📧 Abrindo e-mail para ${fab.email} — anexe o comprovante baixado!`);
@@ -11931,6 +11935,7 @@ function anexarComprovante(pedId){
       if(!ped) return;
       ped.comprovante=ev.target.result;
       ped.comprovanteNome=file.name;
+      ped._uAt=Date.now();
       save(); toast('✅ Comprovante salvo!'); rPedidos();
     };
     reader.readAsDataURL(file);
@@ -12371,7 +12376,7 @@ function pdPgfabEnviarEmail(){
   setTimeout(()=>{ window.location.href=`mailto:${_emailsParaMailto(fab.email)}?subject=${assunto}&body=${corpo}`; },500);
   if(_pdId){
     const idx=(ST.pedidos||[]).findIndex(x=>String(x.id)===String(_pdId));
-    if(idx>=0){ ST.pedidos[idx].emailFabricaEnviado=hoje; save(); }
+    if(idx>=0){ ST.pedidos[idx].emailFabricaEnviado=hoje; ST.pedidos[idx]._uAt=Date.now(); save(); }
   }
   const stEl=document.getElementById('pd-pgfab-email-status');
   if(stEl){ stEl.textContent='✅ E-mail enviado em '+hoje; stEl.style.display=''; }
@@ -16397,7 +16402,7 @@ INF. COMPLEMENTARES
   }).catch(()=>{
     // Fallback: abre numa janela
     const w=window.open('','_blank','width=600,height=700');
-    w.document.write('<pre style="font-family:monospace;font-size:12px;padding:24px;">'+resumo+'</pre>');
+    w.document.write('<pre style="font-family:monospace;font-size:12px;padding:24px;">'+_esc(resumo)+'</pre>');
   });
 }
 
