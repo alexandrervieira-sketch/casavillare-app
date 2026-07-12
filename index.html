@@ -1983,8 +1983,6 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div><label class="lbl">Vencimento</label>
           <input class="inp" id="crp-venc" type="date"/></div>
       </div>
-      <div class="fr"><label class="lbl">Forma de pagamento</label>
-        <select class="inp" id="crp-forma"></select></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">
         <button class="btn btn-s" onclick="fecharModal('modal-cr-parc')">Cancelar</button>
         <button class="btn btn-p" onclick="crSalvarParcela()">Salvar</button>
@@ -4828,7 +4826,7 @@ body.has-toolbar{padding-top:48px;}
 <!-- CABEÇALHO -->
 <div class="header">
   <div class="logo-area">${_docLogoHtml()}</div>
-  <div class="company-info"><strong>${nomeEmp.toUpperCase()}</strong><br>CNPJ: ${cnpjEmp}${endEmp?'<br>'+endEmp:''}<br>${cidEmp}</div>
+  <div class="company-info"><strong>${_esc(nomeEmp.toUpperCase())}</strong><br>CNPJ: ${_esc(cnpjEmp)}${endEmp?'<br>'+_esc(endEmp):''}<br>${_esc(cidEmp)}</div>
   <div class="doc-num">RECIBO DE<br>PAGAMENTO<br><span style="font-size:10px;font-weight:400;">Ref.: ${mesRef}</span></div>
 </div>
 
@@ -4990,7 +4988,7 @@ body.has-toolbar{padding-top:48px;}
 
   <div class="header">
     <div class="logo-area">${_docLogoHtml()}</div>
-    <div class="company-info"><strong>${nomeEmp.toUpperCase()}</strong><br>CNPJ: ${cnpjEmp}${endEmp?'<br>'+endEmp:''}<br>${cidEmp}</div>
+    <div class="company-info"><strong>${_esc(nomeEmp.toUpperCase())}</strong><br>CNPJ: ${_esc(cnpjEmp)}${endEmp?'<br>'+_esc(endEmp):''}<br>${_esc(cidEmp)}</div>
     <div class="doc-num">RECIBO${o.numero?'<br><span style="font-size:10px;font-weight:400;">Nº '+_esc(o.numero)+'</span>':''}</div>
   </div>
 
@@ -9066,6 +9064,7 @@ function rConfigComBlock(){
 }
 
 function salvarTabelaCom(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor pode alterar a tabela de comissões.'); return; }
   if(!_cfgSyncPronto()) return;
   const g=id=>parseFloat(document.getElementById(id)?.value)||0;
   if(!ST.configsCom) ST.configsCom={};
@@ -11829,6 +11828,7 @@ function pedAvancar(id){
   p.status=PED_ETAPAS[idx+1].id;
   p.statusChangedAt=_hojeLocal();
   _pedBackfillMarcos(p); // grava as datas de marco atingidas (antes só o modal fazia, e sem cobrir pulos)
+  p._uAt=Date.now(); // carimba a versão (igual pedVoltar) — sem isto o avanço pode ser revertido pela sync entre máquinas
   save(); toast(`→ ${PED_ETAPAS[idx+1].icon} ${PED_ETAPAS[idx+1].label}`); rPedidos();
 }
 
@@ -13229,6 +13229,7 @@ function salvarCadastro(){
     if(lIdx>=0 && ST.leads[lIdx].status!=='ganho'){
       ST.leads[lIdx].status='ganho';
       ST.leads[lIdx].dataFechamento=_hojeLocal();
+      ST.leads[lIdx]._uAt=Date.now(); // carimba a versão do lead ao marcar como ganho (evita reversão silenciosa)
     }
   }
 
@@ -13504,14 +13505,15 @@ function rFinAnalise(){
 
   const d=calcDRE(mesAno);
 
-  // Margem de Contribuição = Receita Líq - CV - CPV - despPrestadores
+  // Margem de Contribuição = Receita Líq - CV - CPV
   // (o que "sobra" para pagar os fixos + lucro)
   const mc = d.recLiq - d.totalCV - d.cpv;
   const mcPct = d.recLiq > 0 ? (mc / d.recLiq * 100) : 0;
 
   // Ponto de Equilíbrio Contábil = Custos Fixos / MC%
-  // Custos fixos aqui = CF + pessoal operacional (equipe fixa)
-  const totalFixo = d.totalCF + d.despPessoalOp;
+  // Custos fixos = CF + pessoal operacional + prestadores (o DRE agrupa prestadores em "Pessoal").
+  // Sem incluir prestadores, o PE/Meta ficavam SUBESTIMADOS.
+  const totalFixo = d.totalCF + d.despPessoalOp + d.despPrestadores;
   const pe = mcPct > 0 ? totalFixo / (mcPct / 100) : 0;
 
   // Ponto de Equilíbrio Econômico (adiciona a margem de lucro ALVO — configurável, padrão 10%)
@@ -13603,7 +13605,7 @@ function rFinAnalise(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px;">
       ${kpiCard('Receita Líquida', fmt(d.recLiq), `Bruta ${fmt(d.recBruta)} − Ded. ${fmt(d.ded)}`, '#0369A1', '#EFF6FF', '#BFDBFE')}
       ${kpiCard('Margem de Contribuição', fmt(mc), `${mcPct.toFixed(1).replace('.',',')}% da receita líquida`, mc>=0?'#166534':'#DC2626', mc>=0?'#F0FDF4':'#FEF2F2', mc>=0?'#86EFAC':'#FECACA')}
-      ${kpiCard('Custos Fixos Totais', fmt(totalFixo), `CF ${fmt(d.totalCF)} + Pessoal ${fmt(d.despPessoalOp)}`, '#7C3AED', '#FDF4FF', '#E9D5FF')}
+      ${kpiCard('Custos Fixos Totais', fmt(totalFixo), `CF ${fmt(d.totalCF)} + Pessoal ${fmt(d.despPessoalOp)}${d.despPrestadores>0?' + Prest. '+fmt(d.despPrestadores):''}`, '#7C3AED', '#FDF4FF', '#E9D5FF')}
       ${kpiCard('Resultado Operacional', fmt(d.resultado), d.resultado>=0?'Lucro operacional':'Prejuízo operacional', d.resultado>=0?'#166534':'#DC2626', d.resultado>=0?'#F0FDF4':'#FEF2F2', d.resultado>=0?'#86EFAC':'#FECACA')}
       ${gao?kpiCard('Alavancagem (GAO)', gao.toFixed(2)+'x', 'Para cada 1% de receita, resultado varia '+gao.toFixed(2)+'%', '#B45309', '#FFFBEB', '#FDE68A'):''}
     </div>
@@ -14129,7 +14131,8 @@ function crExportarCSV(){
   URL.revokeObjectURL(url);
   toast(`📥 ${parcelas.length} parcelas exportadas`);
 }
-// Editar uma parcela a receber (vencimento, valor, forma, descrição). Não toca em comissão/venda.
+// Editar uma parcela a receber (vencimento, valor, descrição). A FORMA não é editável aqui:
+// trocar forma afetaria taxa/comissão/bipartido. Mudar o VALOR de parcela de cartão/financiamento avisa.
 let _crpLeadId=null, _crpCondId=null;
 function crEditarParcela(leadId, condId){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
@@ -14137,13 +14140,11 @@ function crEditarParcela(leadId, condId){
   const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(condId));
   if(!c){ toast('Parcela não encontrada'); return; }
   _crpLeadId=leadId; _crpCondId=condId;
-  document.getElementById('crp-sub').textContent=(l.nome||'')+(c.desc?' · '+c.desc:'');
+  const fLbl=(typeof PGTO_FORMAS!=='undefined'&&PGTO_FORMAS[c.forma])?PGTO_FORMAS[c.forma].label:(c.forma||'—');
+  document.getElementById('crp-sub').textContent=(l.nome||'')+(c.desc?' · '+c.desc:'')+' · '+fLbl;
   document.getElementById('crp-desc').value=c.desc||'';
   document.getElementById('crp-valor').value=_fmtInputBRL(c.valor);
   document.getElementById('crp-venc').value=c.vencimento||'';
-  const f=(typeof PGTO_FORMAS!=='undefined'&&PGTO_FORMAS)?PGTO_FORMAS:{};
-  document.getElementById('crp-forma').innerHTML=Object.keys(f).map(k=>`<option value="${_esc(k)}">${(f[k].icon||'')+' '+_esc(f[k].label||k)}</option>`).join('');
-  document.getElementById('crp-forma').value=c.forma||Object.keys(f)[0]||'';
   abrirModal('modal-cr-parc');
 }
 function crSalvarParcela(){
@@ -14155,10 +14156,13 @@ function crSalvarParcela(){
   if(!novoVenc){ toast('Informe a data de vencimento'); return; }
   const novoValor=_parseBRL(document.getElementById('crp-valor').value);
   if(!(novoValor>0)){ toast('Informe um valor válido'); return; }
+  // Parcela de cartão/financiamento: mudar o VALOR altera taxa/comissão/custo de fábrica (bipartido). Avisa.
+  if(novoValor!==(c.valor||0) && (c.forma==='cartao'||c.forma==='financiamento')){
+    if(!confirm('⚠️ Esta parcela é de '+(c.forma==='cartao'?'cartão':'financiamento')+'.\n\nMudar o VALOR altera a taxa, a comissão e o custo de fábrica (bipartido) desta venda. Para só adiar o pagamento, edite apenas o vencimento.\n\nAlterar o valor mesmo assim?')) return;
+  }
   c.desc=document.getElementById('crp-desc').value.trim();
   c.valor=novoValor;
   c.vencimento=novoVenc;
-  c.forma=document.getElementById('crp-forma').value;
   l._uAt=Date.now(); // carimba a versão (mesma proteção dos recebimentos)
   save(); fecharModal('modal-cr-parc'); toast('✅ Parcela atualizada'); rFinCR();
 }
@@ -14175,6 +14179,7 @@ function crReceberParcela(leadId, condId){
   save(); toast('✅ Recebimento registrado!'); rFinCR();
 }
 function crEstornarParcela(leadId, condId){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
   if(!l||!l.condicoesPgto) return;
   const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
@@ -15718,6 +15723,7 @@ function _parseBRL(v){
   return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||0;
 }
 function salvarTodasMetas(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor pode alterar as metas.'); return; }
   // Anti-perda: nunca salvar config antes de a nuvem carregar (senão carimba mais novo e sobrescreve a nuvem).
   if(_fbReady&&!_fsPrimed){ toast('⏳ Ainda sincronizando com a nuvem — não salvei para não apagar as metas existentes. Tente de novo em instantes.'); return; }
   if(!ST.metas) ST.metas={};
@@ -15942,7 +15948,7 @@ async function nfeConsultarStatusUI(){
     const resp=await fetch(NFE_PROXY_URL+'/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
     const data=await resp.json().catch(()=>({}));
     const novo=_nfeMapStatus(data.status)||p.nfe.status;
-    p.nfe.status=novo;
+    p.nfe.status=novo; p._uAt=Date.now();
     if(data.numero)   p.nfe.numero=data.numero;
     if(data.chave)    p.nfe.chaveAcesso=data.chave;
     if(data.danfeUrl) p.nfe.danfeUrl=data.danfeUrl;
@@ -15990,7 +15996,7 @@ async function nfeConsultarStatus(pedidoId){
     const data=await resp.json().catch(()=>({}));
     if(data.error){toast('Erro: '+data.error);return;}
     const novo=_nfeMapStatus(data.status)||p.nfe.status;
-    p.nfe.status=novo;
+    p.nfe.status=novo; p._uAt=Date.now();
     if(data.numero)   p.nfe.numero=data.numero;
     if(data.chave)    p.nfe.chaveAcesso=data.chave;
     if(data.danfeUrl) p.nfe.danfeUrl=data.danfeUrl;
@@ -16293,7 +16299,8 @@ async function nfeEmitir(){
     const novoStatus=data.autorizado?'emitida':'processing';
     if(p){
       p.nfe={ provider:'focus', ambiente:amb, ref, status:novoStatus, numero:data.numero||'', serie:data.serie||cfg.serie||'1', chaveAcesso:data.chave||'', danfeUrl:data.danfeUrl||'', xmlUrl:data.xmlUrl||'', mensagem:data.mensagem||'', emitidaEm:_hojeLocal() };
-      if(novoStatus==='emitida'&&ST.configNFe?.proxNum) ST.configNFe.proxNum=String(parseInt(ST.configNFe.proxNum||0)+1);
+      p._uAt=Date.now(); // carimba a versão — evita corrida que faz a nota "voltar para Pendentes"
+      if(novoStatus==='emitida'&&ST.configNFe?.proxNum){ ST.configNFe.proxNum=String(parseInt(ST.configNFe.proxNum||0)+1); _cfgTouch('configNFe'); }
       save();
     }
     if(novoStatus==='emitida'){
@@ -16565,6 +16572,7 @@ function abrirModalNFeManual(pedidoId){
 }
 
 function salvarNFeManual(){
+  if(!_podeEditar('fiscal')){ toast('🔒 Sem permissão para registrar NFe.'); return; }
   const numero=document.getElementById('nfe-manual-numero').value.trim();
   const data=document.getElementById('nfe-manual-data').value;
   if(!numero){toast('⚠️ Informe o número da NFe');return;}
@@ -16581,6 +16589,7 @@ function salvarNFeManual(){
     danfeUrl:document.getElementById('nfe-manual-danfe').value.trim(),
     obsManual:document.getElementById('nfe-manual-obs').value.trim()
   };
+  p._uAt=Date.now(); // carimba a versão — evita corrida que faz a nota "voltar para Pendentes"
   save();
   fecharModal('modal-nfe-manual');
   toast('✅ NFe registrada manualmente!');
