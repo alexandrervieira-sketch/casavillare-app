@@ -1965,6 +1965,34 @@ textarea.inp{resize:vertical;min-height:68px;}
 </div>
 
 <!-- ══ MODAL CONTAS A PAGAR ══ -->
+<div class="modal-bg hidden" id="modal-cr-parc">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">Editar parcela a receber</div>
+        <div class="modal-sub" id="crp-sub"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal('modal-cr-parc')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fr"><label class="lbl">Descrição</label>
+        <input class="inp" id="crp-desc" placeholder="Ex: Entrada, 1ª parcela..."/></div>
+      <div class="fr r2">
+        <div><label class="lbl">Valor (R$)</label>
+          <input class="inp" id="crp-valor" type="text" inputmode="decimal" placeholder="0,00" oninput="_maskBRL(this)"/></div>
+        <div><label class="lbl">Vencimento</label>
+          <input class="inp" id="crp-venc" type="date"/></div>
+      </div>
+      <div class="fr"><label class="lbl">Forma de pagamento</label>
+        <select class="inp" id="crp-forma"></select></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">
+        <button class="btn btn-s" onclick="fecharModal('modal-cr-parc')">Cancelar</button>
+        <button class="btn btn-p" onclick="crSalvarParcela()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg hidden" id="modal-cp">
   <div class="modal" style="max-width:500px;">
     <div class="modal-hdr">
@@ -14076,6 +14104,39 @@ function crExportarCSV(){
   URL.revokeObjectURL(url);
   toast(`📥 ${parcelas.length} parcelas exportadas`);
 }
+// Editar uma parcela a receber (vencimento, valor, forma, descrição). Não toca em comissão/venda.
+let _crpLeadId=null, _crpCondId=null;
+function crEditarParcela(leadId, condId){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
+  const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(condId));
+  if(!c){ toast('Parcela não encontrada'); return; }
+  _crpLeadId=leadId; _crpCondId=condId;
+  document.getElementById('crp-sub').textContent=(l.nome||'')+(c.desc?' · '+c.desc:'');
+  document.getElementById('crp-desc').value=c.desc||'';
+  document.getElementById('crp-valor').value=_fmtInputBRL(c.valor);
+  document.getElementById('crp-venc').value=c.vencimento||'';
+  const f=(typeof PGTO_FORMAS!=='undefined'&&PGTO_FORMAS)?PGTO_FORMAS:{};
+  document.getElementById('crp-forma').innerHTML=Object.keys(f).map(k=>`<option value="${_esc(k)}">${(f[k].icon||'')+' '+_esc(f[k].label||k)}</option>`).join('');
+  document.getElementById('crp-forma').value=c.forma||Object.keys(f)[0]||'';
+  abrirModal('modal-cr-parc');
+}
+function crSalvarParcela(){
+  if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(_crpLeadId));
+  const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(_crpCondId));
+  if(!c){ toast('Parcela não encontrada'); return; }
+  const novoVenc=document.getElementById('crp-venc').value;
+  if(!novoVenc){ toast('Informe a data de vencimento'); return; }
+  const novoValor=_parseBRL(document.getElementById('crp-valor').value);
+  if(!(novoValor>0)){ toast('Informe um valor válido'); return; }
+  c.desc=document.getElementById('crp-desc').value.trim();
+  c.valor=novoValor;
+  c.vencimento=novoVenc;
+  c.forma=document.getElementById('crp-forma').value;
+  l._uAt=Date.now(); // carimba a versão (mesma proteção dos recebimentos)
+  save(); fecharModal('modal-cr-parc'); toast('✅ Parcela atualizada'); rFinCR();
+}
 function crReceberParcela(leadId, condId){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
@@ -14190,7 +14251,8 @@ function rFinCR(){
     <td>${isPago
       ?`<button class="btn btn-p btn-sm" onclick="crGerarRecibo('${p.leadId}','${p.id}')" title="Gerar recibo de pagamento">🧾 Recibo</button>
         <button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
-      :`<button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
+      :`<button class="btn btn-s btn-sm" onclick="crEditarParcela('${p.leadId}','${p.id}')" title="Editar valor/vencimento">✏️</button>
+        <button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
     </td></tr>`;
 
   // Label do período atual
