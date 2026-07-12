@@ -4240,13 +4240,38 @@ function rHomeChart(){
     label:'Pagamentos (R$)',data:dataPag,
     backgroundColor:'rgba(191,168,125,0.45)',borderColor:'#BFA87D',borderWidth:1.5,borderRadius:5,
   });
+  // Linha de MÉDIA das vendas (considera só os meses com venda > 0)
+  const _mesesCV=dataLeads.filter(v=>v>0);
+  const _mediaVendas=_mesesCV.length?_mesesCV.reduce((a,v)=>a+v,0)/_mesesCV.length:0;
+  if(_mediaVendas>0) datasets.push({
+    type:'line', label:'Média de vendas: '+fmt(_mediaVendas),
+    data:labels.map(()=>_mediaVendas),
+    borderColor:'#8B5CF6', borderWidth:2, borderDash:[6,4],
+    pointRadius:0, pointHoverRadius:0, fill:false, tension:0, order:0
+  });
   if(_chartVendasInst){
     _chartVendasInst.data.labels=labels;
     _chartVendasInst.data.datasets=datasets;
     _chartVendasInst.update();
   } else {
+    const _cvLabels={id:'cvDataLabels',afterDatasetsDraw(chart){
+      const ctx=chart.ctx;
+      chart.data.datasets.forEach((ds,i)=>{
+        if(ds.type==='line') return;                       // não rotula a linha de média
+        const meta=chart.getDatasetMeta(i); if(meta.hidden) return;
+        meta.data.forEach((bar,idx)=>{
+          const val=ds.data[idx]; if(!(val>0)) return;
+          ctx.save();
+          ctx.fillStyle='#5C554B'; ctx.font='700 10px Barlow, sans-serif';
+          ctx.textAlign='center'; ctx.textBaseline='bottom';
+          ctx.fillText('R$ '+Math.round(val).toLocaleString('pt-BR'), bar.x, bar.y-3);
+          ctx.restore();
+        });
+      });
+    }};
     _chartVendasInst=new Chart(canvas,{
       type:'bar',data:{labels,datasets},
+      plugins:[_cvLabels],
       options:{
         responsive:true,maintainAspectRatio:false,
         plugins:{
@@ -4255,7 +4280,7 @@ function rHomeChart(){
         },
         scales:{
           x:{grid:{display:false},ticks:{color:'#A5A198',font:{size:11}}},
-          y:{grid:{color:'#F0EDE8'},border:{dash:[3,3]},ticks:{color:'#A5A198',font:{size:11},callback:v=>v===0?'0':'R$'+Math.round(v/1000)+'k'}}
+          y:{grace:'8%',grid:{color:'#F0EDE8'},border:{dash:[3,3]},ticks:{color:'#A5A198',font:{size:11},callback:v=>v===0?'0':'R$'+Math.round(v/1000)+'k'}}
         }
       }
     });
