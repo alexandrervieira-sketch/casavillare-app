@@ -13147,6 +13147,15 @@ function salvarCadastro(){
       if(dupDoc && !confirm('⚠️ Já existe um cadastro deste tipo com o mesmo CPF/CNPJ ("'+(dupDoc.nome||'')+'").\n\nSalvar mesmo assim?')) return;
     }
   }
+  // Aviso de NOME duplicado em cliente NOVO (pega o caso sem CPF que escapa da checagem acima) — não bloqueia
+  if(idx<0 && tipo==='cliente'){
+    const _normNome=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+    const nomeN=_normNome(cad.nome);
+    if(nomeN){
+      const dupNome=(ST.cadastros||[]).find(c=>c.tipo==='cliente'&&_normNome(c.nome)===nomeN);
+      if(dupNome && !confirm('⚠️ Já existe um cliente com este nome ("'+(dupNome.nome||'')+'").\n\nPode ser a mesma pessoa cadastrada duas vezes. Cadastrar mesmo assim?')) return;
+    }
+  }
   if(idx>=0){
     // preserva dataCriacao e cadastradoPor originais na edição
     cad.dataCriacao   = ST.cadastros[idx].dataCriacao   || _hojeLocal();
