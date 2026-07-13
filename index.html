@@ -9250,10 +9250,29 @@ async function cfgSalvarColab(){
     const antigo=ST.equipe[_colabArea][_colabIdx].nome;
     const emailAntigo=(ST.equipe[_colabArea][_colabIdx].email||'').toLowerCase();
     ST.equipe[_colabArea][_colabIdx]={...ST.equipe[_colabArea][_colabIdx],nome,perfil,tel,email};
-    ST.comissoes.forEach(c=>{if(c.pessoa===antigo)c.pessoa=nome;});
-    ST.folhas.forEach(f=>{if(f.pessoa===antigo)f.pessoa=nome;});
-    (ST.eventos||[]).forEach(a=>{if(a.nome===antigo)a.nome=nome;});
-    if(ST.configs[antigo]&&antigo!==nome){ST.configs[nome]=ST.configs[antigo];delete ST.configs[antigo];}
+    if(antigo!==nome){
+      // RENOMEAÇÃO: migra TODAS as referências por nome (senão órfã meta/comissão/venda/lead/pedido/agenda).
+      // Carimba _uAt em cada coleção — senão o guard de sync reverte a migração entre máquinas.
+      (ST.comissoes||[]).forEach(c=>{if(c.pessoa===antigo){c.pessoa=nome;c._uAt=Date.now();}});
+      (ST.folhas||[]).forEach(f=>{if(f.pessoa===antigo){f.pessoa=nome;f._uAt=Date.now();}});
+      (ST.vendasCom||[]).forEach(v=>{if(v.pessoa===antigo){v.pessoa=nome;v._uAt=Date.now();}});
+      (ST.leads||[]).forEach(l=>{if(l.responsavel===antigo){l.responsavel=nome;l._uAt=Date.now();}});
+      (ST.pedidos||[]).forEach(p=>{let ch=false;
+        if(p.responsavel===antigo){p.responsavel=nome;ch=true;}
+        if(p.projetista===antigo){p.projetista=nome;ch=true;}
+        if(p.montador===antigo){p.montador=nome;ch=true;}
+        if(ch)p._uAt=Date.now();});
+      (ST.cadastros||[]).forEach(c=>{if(c.respVenda===antigo){c.respVenda=nome;c._uAt=Date.now();}});
+      (ST.ausencias||[]).forEach(a=>{if(a.pessoa===antigo){a.pessoa=nome;a._uAt=Date.now();}});
+      (ST.eventos||[]).forEach(e=>{if(e.resp===antigo){e.resp=nome;e._uAt=Date.now();}});
+      // Metas: renomeia a chave nos 5 sub-mapas (blob de _config → precisa de _cfgTouch)
+      for(const mk in (ST.metas||{})){ const mm=ST.metas[mk]; if(!mm) continue;
+        ['vendedores','atendVendedores','apresVendedores','fechVendedores','espVendedores'].forEach(sub=>{
+          if(mm[sub]&&mm[sub][antigo]!==undefined){ mm[sub][nome]=mm[sub][antigo]; delete mm[sub][antigo]; }});
+      }
+      _cfgTouch('metas');
+      if(ST.configs[antigo]){ST.configs[nome]=ST.configs[antigo];delete ST.configs[antigo];} // MOVE (preserva _cfgpriv)
+    }
     if(!ST.configs[nome]) ST.configs[nome]={};
     const c1=ST.configs[nome];
     if(nasc) c1.dataNasc=nasc; else delete c1.dataNasc;
