@@ -4238,9 +4238,9 @@ function rHomeChart(){
     label:'Pagamentos (R$)',data:dataPag,
     backgroundColor:'rgba(191,168,125,0.45)',borderColor:'#BFA87D',borderWidth:1.5,borderRadius:5,
   });
-  // Linha de MÉDIA das vendas (considera só os meses com venda > 0)
-  const _mesesCV=dataLeads.filter(v=>v>0);
-  const _mediaVendas=_mesesCV.length?_mesesCV.reduce((a,v)=>a+v,0)/_mesesCV.length:0;
+  // Linha de MÉDIA das vendas — divide pelos meses DECORRIDOS do ano (inclui meses sem venda)
+  const _mesesDecorridos=now.getMonth()+1; // Jan .. mês atual
+  const _mediaVendas=_mesesDecorridos>0?dataLeads.reduce((a,v)=>a+v,0)/_mesesDecorridos:0;
   if(_mediaVendas>0) datasets.push({
     type:'line', label:'Média de vendas: '+fmt(_mediaVendas),
     data:labels.map(()=>_mediaVendas),
@@ -8785,7 +8785,7 @@ function _podeEditar(k){
   if(ST.perfil==='gestor') return true;
   if(!_temPerm(k)) return false;
   const pe=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoesEd)||null;
-  return pe ? !!pe[k] : true;
+  return pe ? !!pe[k] : false; // fail-closed: sem mapa de permissão de edição → NÃO edita (gestor concede em Configurações → Equipe)
 }
 // Lê os seletores 0/1/2 da UI e devolve os dois mapas (acesso + edição)
 function _lerPermsUI(){
