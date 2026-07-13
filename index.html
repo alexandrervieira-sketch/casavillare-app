@@ -586,6 +586,12 @@ textarea.inp{resize:vertical;min-height:68px;}
   .ag-cal-dow{padding:6px 1px;font-size:9px;letter-spacing:0;}
   .ag-cal-day{min-height:48px;padding:2px 3px;}
   .ag-cal-day .ag-day-num{font-size:11px;}
+  /* Financeiro / Relatórios: tabelas largas rolam de lado, sem estourar a página */
+  #fin-content table, #rel-content table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  /* Pedido: linhas de 4 campos viram coluna única no celular */
+  .fr.r4{grid-template-columns:1fr;}
+  /* DRE: linhas com rótulo + valor não espremem */
+  .dre-row{padding:10px 14px;}
 }
 </style>
 </head>
