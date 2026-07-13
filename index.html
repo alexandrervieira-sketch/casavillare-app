@@ -4056,6 +4056,8 @@ function _calcAlertas(){
     base.forEach(l=>{
       if(l.proxContato&&l.proxContato<hoje)
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'atrasado',info:'Contato venceu '+_fmtDateBR(l.proxContato)});
+      else if(!l.proxContato&&['apresentacao','negociacao','fechamento'].includes(l.etapa))
+        out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'quente',info:'Em '+(CRM_ETAPAS.find(e=>e.id===l.etapa)?.label||l.etapa)+' sem próximo contato — não deixe esfriar'});
       else if(!l.proxContato&&(l.dataCriacao||'')<ago7)
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'parado',info:'Sem próximo contato agendado'});
     });
@@ -4092,7 +4094,28 @@ function _calcAlertas(){
       });
     });
   }
-  out.total=out.leads.length+out.pedidos.length+out.pagar.length+out.receber.length;
+  // 4) Meta em risco — ritmo de vendas abaixo do necessário no mês corrente
+  out.metas=[];
+  if(isG||area==='comercial'){
+    const _n=new Date();
+    const mesStr=`${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}`;
+    const diasNoMes=new Date(_n.getFullYear(),_n.getMonth()+1,0).getDate();
+    const diasRest=diasNoMes-_n.getDate();
+    const decorrido=_n.getDate()/diasNoMes; // fração do mês já passada
+    const mm=ST.metas[mesStr]||{};
+    const _chk=(nm,metaVal,label,resp)=>{
+      if(!(metaVal>0)||diasRest<2) return; // sem meta ou fim do mês → não alerta
+      const pctMeta=_vendasMes(mesStr,nm)/metaVal;
+      if((decorrido-pctMeta)>0.2) out.metas.push({label,resp,info:`${Math.round(pctMeta*100)}% da meta · ${diasRest} dias restantes · ritmo abaixo`});
+    };
+    if(isG){
+      _chk('loja', mm.loja||0, '🏪 Meta da loja','');
+      _equipeAtivaMes('comercial', mesStr).forEach(v=>_chk(v.nome, mm.vendedores?.[v.nome]||0, v.nome, v.nome));
+    } else if(area==='comercial'){
+      _chk(nome, mm.vendedores?.[nome]||0, 'Sua meta','');
+    }
+  }
+  out.total=out.leads.length+out.pedidos.length+out.pagar.length+out.receber.length+out.metas.length;
   return out;
 }
 
@@ -4122,7 +4145,8 @@ function rHomeAlertas(){
       ${htmlItens}${itens.length>6?`<div style="font-size:11px;color:#9CA3AF;padding:2px 4px;">+${itens.length-6} mais…</div>`:''}
     </div>`:'';
 
-  const leadsH=a.leads.slice(0,6).map(l=>linha(l.tipo==='atrasado'?'⏰':'💤',_esc2(l.nome),_esc2(l.info)+(ST.perfil==='gestor'&&l.resp?' · '+_esc2(l.resp):''),`abrirModalLead('${_sid(l.id)}')`,l.tipo==='atrasado')).join('');
+  const leadsH=a.leads.slice(0,6).map(l=>linha(l.tipo==='atrasado'?'⏰':l.tipo==='quente'?'🔥':'💤',_esc2(l.nome),_esc2(l.info)+(ST.perfil==='gestor'&&l.resp?' · '+_esc2(l.resp):''),`abrirModalLead('${_sid(l.id)}')`,l.tipo!=='parado')).join('');
+  const metasH=(a.metas||[]).slice(0,6).map(m=>linha('🎯',_esc2(m.label)+(ST.perfil==='gestor'&&m.resp?' · '+_esc2(m.resp):''),_esc2(m.info),`navTo('tab-metas')`,true)).join('');
   const pedsH =a.pedidos.slice(0,6).map(p=>linha('📦',_esc2(p.nome),_esc2(p.info),`abrirModalPedido('${_sid(p.id)}')`,true)).join('');
   const pagH  =a.pagar.slice(0,6).map(c=>linha('💸',_esc2(c.desc)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc),`abrirModalCP('${_sid(c.id)}')`,c.vencida)).join('');
   const recH  =a.receber.slice(0,6).map(c=>linha('💰',_esc2(c.cliente)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc)+' · '+_esc2(c.desc),`navTo('tab-fin');setTimeout(()=>finSubTab('cr'),120)`,c.vencida)).join('');
@@ -4133,6 +4157,7 @@ function rHomeAlertas(){
       <span style="font-size:15px;font-weight:800;color:#1F2937;">Central de Alertas</span>
       <span style="margin-left:6px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 9px;">${a.total}</span>
     </div>
+    ${bloco('🎯 Metas em risco','#9333EA',a.metas||[],metasH)}
     ${_temPerm('crm')?bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH):''}
     ${bloco('📦 Pedidos atrasados','#9A3412',a.pedidos,pedsH)}
     ${_temPerm('fin')?bloco('💸 Contas a pagar','#B91C1C',a.pagar,pagH):''}
