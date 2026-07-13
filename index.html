@@ -14787,9 +14787,10 @@ function _metBarCor(pct){
 function _atendMes(nome,mes){ return (ST.leads||[]).filter(l=>(l.dataCriacao||'').slice(0,7)===mes && l.responsavel===nome).length; }
 function _apresMes(nome,mes){ return (ST.leads||[]).filter(l=>{ if((l.dataCriacao||'').slice(0,7)!==mes) return false; if(l.responsavel!==nome) return false; return ['apresentacao','negociacao','fechamento'].includes(l.etapa)||l.status==='ganho'; }).length; }
 function _fechMes(nome,mes){ return (ST.leads||[]).filter(l=>{ if(l.status!=='ganho') return false; const dt=l.dataFechamento||l.dataCriacao||''; return dt.slice(0,7)===mes && l.responsavel===nome; }).length; }
-let _demVend='', _demMeses=6;
+let _demVend='', _demMeses=6, _demIncDeslig=false;
 function demSetVend(v){ _demVend=v; rRelDesempenho(); }
 function demSetMeses(n){ _demMeses=parseInt(n)||6; rRelDesempenho(); }
+function demToggleDeslig(v){ _demIncDeslig=!!v; rRelDesempenho(); }
 function _demDados(nome,nMeses){
   const now=new Date(), meses=[];
   for(let i=nMeses-1;i>=0;i--){ const dd=new Date(now.getFullYear(),now.getMonth()-i,1); meses.push(dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')); }
@@ -14820,7 +14821,7 @@ function rRelDesempenho(){
   const el=document.getElementById('rel-content'); if(!el) return;
   if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const nav=document.getElementById('rel-mes-nav'); if(nav) nav.style.display='none';
-  const vends=(ST.equipe.comercial||[]).filter(v=>!_estaDesligado(v.nome)).map(v=>v.nome); // esconde desligados (igual aos demais dropdowns)
+  const vends=(ST.equipe.comercial||[]).filter(v=>_demIncDeslig||!_estaDesligado(v.nome)).map(v=>v.nome); // esconde desligados por padrão; toggle os inclui (histórico)
   if(!vends.length){ el.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--gl);"><p>Nenhum vendedor ativo na equipe comercial.</p></div>'; return; }
   if(!_demVend||!vends.includes(_demVend)) _demVend=vends[0];
   const d=_demDados(_demVend,_demMeses), v=_demVeredito(d);
@@ -14835,8 +14836,9 @@ function rRelDesempenho(){
   el.innerHTML=`
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;">
       <div><label class="lbl">Colaborador</label>
-        <select class="inp" style="min-width:200px;" onchange="demSetVend(this.value)">${vends.map(n=>`<option value="${_esc(n)}"${n===_demVend?' selected':''}>${_esc(n)}</option>`).join('')}</select></div>
+        <select class="inp" style="min-width:200px;" onchange="demSetVend(this.value)">${vends.map(n=>`<option value="${_esc(n)}"${n===_demVend?' selected':''}>${_esc(n)}${_estaDesligado(n)?' 🚪 (desligado)':''}</option>`).join('')}</select></div>
       <div style="display:flex;gap:7px;">${btnP(3,'3 meses')}${btnP(6,'6 meses')}${btnP(12,'12 meses')}</div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gl);cursor:pointer;white-space:nowrap;"><input type="checkbox" ${_demIncDeslig?'checked':''} onchange="demToggleDeslig(this.checked)" style="cursor:pointer;width:15px;height:15px;"/> Incluir desligados</label>
       <button class="btn btn-p" style="margin-left:auto;" onclick="imprimirDesempenho()">🖨 Imprimir avaliação</button>
     </div>
     <div style="background:${v.bg};border:1.5px solid ${v.cor}44;border-radius:12px;padding:14px 18px;margin-bottom:18px;">
