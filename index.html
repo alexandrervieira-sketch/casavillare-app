@@ -870,6 +870,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         <button class="fin-sub-btn" id="fin-sub-analise" onclick="finSubTab('analise')">⚖️ Análise</button>
         <button class="fin-sub-btn" id="fin-sub-cr" onclick="finSubTab('cr')">💳 A Receber</button>
         <button class="fin-sub-btn" id="fin-sub-cp" onclick="finSubTab('cp')">📋 A Pagar</button>
+        <button class="fin-sub-btn" id="fin-sub-fluxo" onclick="finSubTab('fluxo')">📈 Fluxo de Caixa</button>
         <button class="fin-sub-btn" id="fin-sub-pag" onclick="finSubTab('pag')">👥 Folha</button>
       </div>
       <div id="fin-content"></div>
@@ -13476,7 +13477,7 @@ function calcDRE(mesAno){
 let _finSubAtivo='dre';
 function finSubTab(sub){
   _finSubAtivo=sub;
-  ['dre','analise','cr','cp','pag'].forEach(s=>{
+  ['dre','analise','cr','cp','fluxo','pag'].forEach(s=>{
     const btn=document.getElementById('fin-sub-'+s);
     if(btn) btn.classList.toggle('active',s===sub);
   });
@@ -13491,6 +13492,8 @@ function finSubTab(sub){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="pagNavMes(-1)">‹</button><span class="mes-label" id="pag-mes-label">—</span><button onclick="pagNavMes(1)">›</button></div><button class="btn btn-p" id="btn-nova-folha" onclick="abrirModalFolha(null)">+ Nova folha</button>`;
     } else if(sub==='cp'){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="cpNavMes(-1)">‹</button><span class="mes-label" id="cp-mes-label">—</span><button onclick="cpNavMes(1)">›</button></div><button class="btn btn-p" onclick="abrirModalCP(null)">+ Conta a Pagar</button>`;
+    } else if(sub==='fluxo'){
+      actEl.innerHTML='';
     } else {
       actEl.innerHTML=`<div class="mes-nav"><button onclick="crNavMes(-1)">‹</button><span class="mes-label" id="cr-mes-label">—</span><button onclick="crNavMes(1)">›</button></div>`;
     }
@@ -13499,7 +13502,73 @@ function finSubTab(sub){
   else if(sub==='analise')   rFinAnalise();
   else if(sub==='cr')        rFinCR();
   else if(sub==='cp')        rFinCP();
+  else if(sub==='fluxo')     rFinFluxo();
   else if(sub==='pag')       {document.getElementById('pag-mes-label').textContent=mesNomeStr(_pagMes,_pagAno);rPag();}
+}
+
+// ══════════════════════════════════════════════════════
+// FLUXO DE CAIXA (projeção — SOMENTE LEITURA)
+// Entradas = parcelas a receber pendentes (por vencimento).
+// Saídas = contas a pagar em aberto + recorrentes projetadas + folha dos ativos.
+// ══════════════════════════════════════════════════════
+let _fluxoMeses=6;
+function fluxoSetMeses(n){ _fluxoMeses=parseInt(n)||6; rFinFluxo(); }
+function fluxoSetSaldoIni(v){ if(!_podeEditar('fin')){ toast('🔒 Sem permissão.'); return; } ST.fluxoSaldoIni=_parseBRL(v); _cfgTouch('fluxoSaldoIni'); save(); rFinFluxo(); }
+function _fluxoAReceberMes(mes){ let t=0; (ST.leads||[]).forEach(l=>(l.condicoesPgto||[]).forEach(c=>{ if(!c.pago&&(c.vencimento||'').slice(0,7)===mes) t+=(c.valor||0); })); return t; }
+function _fluxoAPagarMes(mes){
+  const explicAll=(ST.contasPagar||[]).filter(e=>e.mesAno===mes);
+  const explicUnpaid=explicAll.filter(e=>!e.pago);
+  const ult=new Map();
+  (ST.contasPagar||[]).filter(e=>e.recorrencia==='mensal'&&e.mesAno<mes).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>ult.set(e.cat+'|'+(e.fornecedor||e.descricao||''),e));
+  const ek=new Set(explicAll.map(c=>c.cat+'|'+(c.fornecedor||c.descricao||'')));
+  const rec=[...ult.values()].filter(e=>!ek.has(e.cat+'|'+(e.fornecedor||e.descricao||'')));
+  return explicUnpaid.reduce((a,e)=>a+(e.valor||0),0)+rec.reduce((a,e)=>a+(e.valor||0),0);
+}
+function _fluxoFolhaMes(){ return todosFunc().filter(p=>!_estaDesligado(p.nome)).reduce((a,p)=>a+((ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0),0); }
+function rFinFluxo(){
+  const el=document.getElementById('fin-content'); if(!el) return;
+  if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
+  const now=new Date(), meses=[];
+  for(let i=0;i<_fluxoMeses;i++){ const d=new Date(now.getFullYear(),now.getMonth()+i,1); meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+  const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0;
+  let acum=saldoIni, pior={mes:meses[0],val:Infinity};
+  const linhas=meses.map(mes=>{
+    const ent=_fluxoAReceberMes(mes), cp=_fluxoAPagarMes(mes), sai=cp+folha, saldoMes=ent-sai;
+    acum+=saldoMes; if(acum<pior.val) pior={mes,val:acum};
+    return {mes,ent,cp,folha,saldoMes,acum};
+  });
+  const mesLbl=_demMesLbl, cor=v=>v>=0?'#166534':'#DC2626';
+  const btnP=(n,lbl)=>`<button onclick="fluxoSetMeses(${n})" style="padding:5px 12px;border-radius:20px;border:1.5px solid ${_fluxoMeses===n?'var(--p)':'var(--border)'};background:${_fluxoMeses===n?'var(--p)':'transparent'};color:${_fluxoMeses===n?'#fff':'var(--dark)'};font-size:12px;cursor:pointer;">${lbl}</button>`;
+  const alerta = pior.val<0
+    ? `<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:12px;padding:12px 16px;margin-bottom:16px;color:#B91C1C;font-weight:600;font-size:13px;">⚠️ Atenção: o caixa fica NEGATIVO (${fmt(pior.val)}) em ${mesLbl(pior.mes)}. Antecipe entradas ou adie saídas.</div>`
+    : `<div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:12px;padding:12px 16px;margin-bottom:16px;color:#166534;font-weight:600;font-size:13px;">✅ Caixa positivo em todo o período. Menor saldo: ${fmt(pior.val)} em ${mesLbl(pior.mes)}.</div>`;
+  el.innerHTML=`
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+      <div><label class="lbl">Saldo inicial em caixa (hoje)</label>
+        <input class="inp" style="max-width:180px;" type="text" inputmode="decimal" value="${_fmtInputBRL(saldoIni)}" onchange="fluxoSetSaldoIni(this.value)" oninput="_maskBRL(this)"/></div>
+      <div style="display:flex;gap:7px;">${btnP(3,'3 meses')}${btnP(6,'6 meses')}${btnP(12,'12 meses')}</div>
+    </div>
+    ${alerta}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#F5F3F0;">
+          ${['Mês','🟢 A Receber','🔴 Contas a Pagar','🔴 Folha (est.)','Saldo do mês','Saldo acumulado'].map((h,i)=>`<th style="padding:8px 10px;font-size:11px;color:var(--gl);text-transform:uppercase;text-align:${i===0?'left':'right'};">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${linhas.map(l=>`<tr>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600;">${mesLbl(l.mes)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#166534;">${fmt(l.ent)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#B45309;">${fmt(l.cp)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#B45309;">${fmt(l.folha)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:700;color:${cor(l.saldoMes)};">${fmt(l.saldoMes)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:800;color:${cor(l.acum)};">${fmt(l.acum)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div style="font-size:11px;color:var(--gl);margin-top:10px;line-height:1.6;">
+      <strong>Como é calculado:</strong> Entradas = parcelas a receber ainda não recebidas (pelo vencimento).
+      Saídas = contas a pagar em aberto + custos fixos recorrentes projetados + folha estimada dos colaboradores ativos (${fmt(folha)}/mês).
+      O acumulado parte do saldo inicial que você informar. Não inclui compras à fábrica ainda não lançadas.
+    </div>`;
 }
 
 // ══════════════════════════════════════════════════════
