@@ -13525,17 +13525,26 @@ function _fluxoAPagarMes(mes){
   return explicUnpaid.reduce((a,e)=>a+(e.valor||0),0)+rec.reduce((a,e)=>a+(e.valor||0),0);
 }
 function _fluxoFolhaMes(){ return todosFunc().filter(p=>!_estaDesligado(p.nome)).reduce((a,p)=>a+((ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0),0); }
+function _fluxoFabricaMes(mes, primeiroMes){
+  return (ST.pedidos||[]).reduce((t,p)=>{
+    const vf=p.valorFabrica||0;
+    if(vf<=0 || _bipartidoPed(p)>0 || p.comprovante) return t; // sem custo, financiado (bipartido paga via financeira) ou já pago à fábrica
+    let m=(p.datePgFab||p.prevProd||p.data||'').slice(0,7)||primeiroMes;
+    if(m<primeiroMes) m=primeiroMes; // vencido/sem data → cai no mês atual (é uma saída que já deveria ter saído)
+    return t+(m===mes?vf:0);
+  },0);
+}
 function rFinFluxo(){
   const el=document.getElementById('fin-content'); if(!el) return;
   if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const now=new Date(), meses=[];
   for(let i=0;i<_fluxoMeses;i++){ const d=new Date(now.getFullYear(),now.getMonth()+i,1); meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
-  const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0;
+  const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0, primeiroMes=meses[0];
   let acum=saldoIni, pior={mes:meses[0],val:Infinity};
   const linhas=meses.map(mes=>{
-    const ent=_fluxoAReceberMes(mes), cp=_fluxoAPagarMes(mes), sai=cp+folha, saldoMes=ent-sai;
+    const ent=_fluxoAReceberMes(mes), cp=_fluxoAPagarMes(mes), fab=_fluxoFabricaMes(mes,primeiroMes), sai=cp+folha+fab, saldoMes=ent-sai;
     acum+=saldoMes; if(acum<pior.val) pior={mes,val:acum};
-    return {mes,ent,cp,folha,saldoMes,acum};
+    return {mes,ent,cp,folha,fab,saldoMes,acum};
   });
   const mesLbl=_demMesLbl, cor=v=>v>=0?'#166534':'#DC2626';
   const btnP=(n,lbl)=>`<button onclick="fluxoSetMeses(${n})" style="padding:5px 12px;border-radius:20px;border:1.5px solid ${_fluxoMeses===n?'var(--p)':'var(--border)'};background:${_fluxoMeses===n?'var(--p)':'transparent'};color:${_fluxoMeses===n?'#fff':'var(--dark)'};font-size:12px;cursor:pointer;">${lbl}</button>`;
@@ -13552,13 +13561,14 @@ function rFinFluxo(){
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
       <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr style="background:#F5F3F0;">
-          ${['Mês','🟢 A Receber','🔴 Contas a Pagar','🔴 Folha (est.)','Saldo do mês','Saldo acumulado'].map((h,i)=>`<th style="padding:8px 10px;font-size:11px;color:var(--gl);text-transform:uppercase;text-align:${i===0?'left':'right'};">${h}</th>`).join('')}
+          ${['Mês','🟢 A Receber','🔴 Contas a Pagar','🔴 Folha (est.)','🔴 Fábrica','Saldo do mês','Saldo acumulado'].map((h,i)=>`<th style="padding:8px 10px;font-size:11px;color:var(--gl);text-transform:uppercase;text-align:${i===0?'left':'right'};">${h}</th>`).join('')}
         </tr></thead>
         <tbody>${linhas.map(l=>`<tr>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600;">${mesLbl(l.mes)}</td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#166534;">${fmt(l.ent)}</td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#B45309;">${fmt(l.cp)}</td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#B45309;">${fmt(l.folha)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#B45309;">${fmt(l.fab)}</td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:700;color:${cor(l.saldoMes)};">${fmt(l.saldoMes)}</td>
           <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:800;color:${cor(l.acum)};">${fmt(l.acum)}</td>
         </tr>`).join('')}</tbody>
@@ -13566,8 +13576,8 @@ function rFinFluxo(){
     </div>
     <div style="font-size:11px;color:var(--gl);margin-top:10px;line-height:1.6;">
       <strong>Como é calculado:</strong> Entradas = parcelas a receber ainda não recebidas (pelo vencimento).
-      Saídas = contas a pagar em aberto + custos fixos recorrentes projetados + folha estimada dos colaboradores ativos (${fmt(folha)}/mês).
-      O acumulado parte do saldo inicial que você informar. Não inclui compras à fábrica ainda não lançadas.
+      Saídas = contas a pagar em aberto + custos fixos recorrentes projetados + folha estimada dos ativos (${fmt(folha)}/mês) + custo de fábrica dos pedidos ainda não pagos (pela data prevista; atrasados caem no mês atual; financiados/bipartido ficam de fora, pois a financeira paga a fábrica).
+      O acumulado parte do saldo inicial que você informar.
     </div>`;
 }
 
