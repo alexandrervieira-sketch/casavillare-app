@@ -14820,8 +14820,8 @@ function rRelDesempenho(){
   const el=document.getElementById('rel-content'); if(!el) return;
   if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const nav=document.getElementById('rel-mes-nav'); if(nav) nav.style.display='none';
-  const vends=(ST.equipe.comercial||[]).map(v=>v.nome);
-  if(!vends.length){ el.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--gl);"><p>Nenhum vendedor na equipe comercial.</p></div>'; return; }
+  const vends=(ST.equipe.comercial||[]).filter(v=>!_estaDesligado(v.nome)).map(v=>v.nome); // esconde desligados (igual aos demais dropdowns)
+  if(!vends.length){ el.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--gl);"><p>Nenhum vendedor ativo na equipe comercial.</p></div>'; return; }
   if(!_demVend||!vends.includes(_demVend)) _demVend=vends[0];
   const d=_demDados(_demVend,_demMeses), v=_demVeredito(d);
   const cel=(r,mt,p,money)=>{ const cor=p==null?'#9CA3AF':_metBarCor(p);
