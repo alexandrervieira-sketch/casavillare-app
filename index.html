@@ -1474,23 +1474,23 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div><label class="lbl">Cargo formal</label>
           <input class="inp" id="colab-cargo" placeholder="Ex: Vendedora, Projetista, Montador"/></div>
         <div><label class="lbl">Departamento</label>
-          <select class="inp" id="colab-dept">
-            <option value="">— Selecione —</option>
-            <option value="comercial">Comercial</option>
-            <option value="obras">Obras</option>
-            <option value="gestor">Gestão</option>
-            <option value="financeiro">Financeiro</option>
-            <option value="rh">Recursos Humanos (RH)</option>
-            <option value="marketing">Marketing</option>
-            <option value="social_midia">Social Media</option>
-            <option value="contabilidade">Contabilidade</option>
-            <option value="juridico">Jurídico</option>
-            <option value="ti">TI / Tecnologia</option>
-            <option value="administrativo">Administrativo</option>
-            <option value="logistica">Logística</option>
-            <option value="mentoria">Mentoria</option>
-            <option value="consultoria">Consultoria</option>
-          </select></div>
+          <input class="inp" id="colab-dept" list="colab-dept-list" placeholder="Escolha uma opção ou digite um departamento"/>
+          <datalist id="colab-dept-list">
+            <option value="Comercial"></option>
+            <option value="Obras"></option>
+            <option value="Gestão"></option>
+            <option value="Financeiro"></option>
+            <option value="Recursos Humanos (RH)"></option>
+            <option value="Marketing"></option>
+            <option value="Social Media"></option>
+            <option value="Contabilidade"></option>
+            <option value="Jurídico"></option>
+            <option value="TI / Tecnologia"></option>
+            <option value="Administrativo"></option>
+            <option value="Logística"></option>
+            <option value="Mentoria"></option>
+            <option value="Consultoria"></option>
+          </datalist></div>
       </div>
       <div class="fr"><label class="lbl">Endereço</label>
         <input class="inp" id="colab-end" placeholder="Rua, número, bairro, cidade"/></div>
