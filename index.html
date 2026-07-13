@@ -895,6 +895,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         <button class="fin-sub-btn"        id="rel-sub-conversao"  onclick="relSubTab('conversao')">🔄 Funil de Conversão</button>
         <button class="fin-sub-btn"        id="rel-sub-perda"      onclick="relSubTab('perda')">🔴 Análise de Perdas</button>
         <button class="fin-sub-btn"        id="rel-sub-rentab"     onclick="relSubTab('rentab')">💹 Rentabilidade</button>
+        <button class="fin-sub-btn"        id="rel-sub-desempenho" onclick="relSubTab('desempenho')">📈 Desempenho</button>
       </div>
       <div id="rel-content"></div>
     </div>
@@ -5869,7 +5870,7 @@ let _relSubAtivo='resumo';
 
 function relSubTab(sub){
   _relSubAtivo=sub;
-  ['resumo','conversao','perda','rentab'].forEach(k=>{
+  ['resumo','conversao','perda','rentab','desempenho'].forEach(k=>{
     const btn=document.getElementById('rel-sub-'+k);
     if(btn) btn.classList.toggle('active', k===sub);
   });
@@ -5878,6 +5879,7 @@ function relSubTab(sub){
   if(sub==='resumo')      rRelResumo();
   else if(sub==='perda')   rRelAnalisePerda();
   else if(sub==='rentab')  rRelRentabilidade();
+  else if(sub==='desempenho') rRelDesempenho();
   else rRelConversao();
 }
 
@@ -14776,6 +14778,135 @@ function _metBarCor(pct){
   if(pct>=70)  return '#BFA87D';
   if(pct>=40)  return '#F59E0B';
   return '#EF4444';
+}
+
+// ══════════════════════════════════════════════════════
+// RELATÓRIO DE DESEMPENHO DO COLABORADOR (avaliação de metas — SOMENTE LEITURA)
+// Reusa a MESMA lógica das metas (fonte única). Não grava nada.
+// ══════════════════════════════════════════════════════
+function _atendMes(nome,mes){ return (ST.leads||[]).filter(l=>(l.dataCriacao||'').slice(0,7)===mes && l.responsavel===nome).length; }
+function _apresMes(nome,mes){ return (ST.leads||[]).filter(l=>{ if((l.dataCriacao||'').slice(0,7)!==mes) return false; if(l.responsavel!==nome) return false; return ['apresentacao','negociacao','fechamento'].includes(l.etapa)||l.status==='ganho'; }).length; }
+function _fechMes(nome,mes){ return (ST.leads||[]).filter(l=>{ if(l.status!=='ganho') return false; const dt=l.dataFechamento||l.dataCriacao||''; return dt.slice(0,7)===mes && l.responsavel===nome; }).length; }
+let _demVend='', _demMeses=6;
+function demSetVend(v){ _demVend=v; rRelDesempenho(); }
+function demSetMeses(n){ _demMeses=parseInt(n)||6; rRelDesempenho(); }
+function _demDados(nome,nMeses){
+  const now=new Date(), meses=[];
+  for(let i=nMeses-1;i>=0;i--){ const dd=new Date(now.getFullYear(),now.getMonth()-i,1); meses.push(dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')); }
+  const pct=(r,m)=>m>0?Math.round(r/m*100):null;
+  const linhas=meses.map(mes=>{ const mm=ST.metas[mes]||{};
+    const venR=_vendasMes(mes,nome), venM=mm.vendedores?.[nome]||0;
+    const atR=_atendMes(nome,mes), atM=(mm.atendVendedores?.[nome]||0)*4;
+    const apR=_apresMes(nome,mes), apM=(mm.apresVendedores?.[nome]||0)*4;
+    const feR=_fechMes(nome,mes),  feM=(mm.fechVendedores?.[nome]||0)*4;
+    return {mes,venR,venM,venP:pct(venR,venM),atR,atM,atP:pct(atR,atM),apR,apM,apP:pct(apR,apM),feR,feM,feP:pct(feR,feM)};
+  });
+  const sum=k=>linhas.reduce((a,l)=>a+(l[k]||0),0);
+  const tot={venR:sum('venR'),venM:sum('venM'),atR:sum('atR'),atM:sum('atM'),apR:sum('apR'),apM:sum('apM'),feR:sum('feR'),feM:sum('feM')};
+  tot.venP=pct(tot.venR,tot.venM); tot.atP=pct(tot.atR,tot.atM); tot.apP=pct(tot.apR,tot.apM); tot.feP=pct(tot.feR,tot.feM);
+  const comMetaV=linhas.filter(l=>l.venM>0), batidosV=comMetaV.filter(l=>l.venP>=100).length;
+  return {nome,nMeses,meses,linhas,tot,comMetaV:comMetaV.length,batidosV};
+}
+function _demVeredito(d){
+  const p=d.tot.venP;
+  if(p==null) return {txt:'Sem metas de venda definidas no período — defina as metas em 🏆 Metas para avaliar.',cor:'#6B7280',bg:'#F3F4F6'};
+  if(p>=100) return {txt:`🟢 Excelente — atingiu a meta de vendas no período (${p}%). Bateu a meta mensal em ${d.batidosV} de ${d.comMetaV} ${d.comMetaV===1?'mês':'meses'}.`,cor:'#166534',bg:'#F0FDF4'};
+  if(p>=80)  return {txt:`🟡 Bom desempenho — próximo da meta (${p}%). Bateu em ${d.batidosV}/${d.comMetaV} meses.`,cor:'#B45309',bg:'#FFFBEB'};
+  if(p>=50)  return {txt:`🟠 Abaixo do esperado (${p}% da meta). Bateu em ${d.batidosV}/${d.comMetaV} meses. Recomenda-se plano de melhoria.`,cor:'#C2410C',bg:'#FFF7ED'};
+  return {txt:`🔴 Muito abaixo da meta (${p}%). Bateu em ${d.batidosV}/${d.comMetaV} meses. Atenção — reavaliar continuidade.`,cor:'#B91C1C',bg:'#FEF2F2'};
+}
+function _demMesLbl(mes){ const p=String(mes).split('-'); return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][(parseInt(p[1])||1)-1]+'/'+p[0].slice(2); }
+function rRelDesempenho(){
+  const el=document.getElementById('rel-content'); if(!el) return;
+  if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
+  const nav=document.getElementById('rel-mes-nav'); if(nav) nav.style.display='none';
+  const vends=(ST.equipe.comercial||[]).map(v=>v.nome);
+  if(!vends.length){ el.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--gl);"><p>Nenhum vendedor na equipe comercial.</p></div>'; return; }
+  if(!_demVend||!vends.includes(_demVend)) _demVend=vends[0];
+  const d=_demDados(_demVend,_demMeses), v=_demVeredito(d);
+  const cel=(r,mt,p,money)=>{ const cor=p==null?'#9CA3AF':_metBarCor(p);
+    return `<td style="text-align:center;padding:7px 8px;border-bottom:1px solid var(--border);"><div style="font-weight:700;color:${cor};font-size:13px;">${money?fmt(r):r}</div><div style="font-size:10px;color:#9CA3AF;">${mt>0?'/ '+(money?fmt(mt):mt)+' · '+p+'%':'sem meta'}</div></td>`; };
+  const kpi=(titulo,icon,r,mt,p,money)=>{ const cor=p==null?'#6B7280':_metBarCor(p);
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+      <div style="font-size:11px;color:var(--gl);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">${icon} ${titulo}</div>
+      <div style="font-size:20px;font-weight:800;color:${cor};margin-top:3px;">${money?fmt(r):r}</div>
+      <div style="font-size:11px;color:#6B7280;">meta ${mt>0?(money?fmt(mt):mt):'—'}${p!=null?' · <strong style="color:'+cor+'">'+p+'%</strong>':''}</div></div>`; };
+  const btnP=(n,lbl)=>`<button onclick="demSetMeses(${n})" style="padding:5px 12px;border-radius:20px;border:1.5px solid ${_demMeses===n?'var(--p)':'var(--border)'};background:${_demMeses===n?'var(--p)':'transparent'};color:${_demMeses===n?'#fff':'var(--dark)'};font-size:12px;cursor:pointer;">${lbl}</button>`;
+  el.innerHTML=`
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;">
+      <div><label class="lbl">Colaborador</label>
+        <select class="inp" style="min-width:200px;" onchange="demSetVend(this.value)">${vends.map(n=>`<option value="${_esc(n)}"${n===_demVend?' selected':''}>${_esc(n)}</option>`).join('')}</select></div>
+      <div style="display:flex;gap:7px;">${btnP(3,'3 meses')}${btnP(6,'6 meses')}${btnP(12,'12 meses')}</div>
+      <button class="btn btn-p" style="margin-left:auto;" onclick="imprimirDesempenho()">🖨 Imprimir avaliação</button>
+    </div>
+    <div style="background:${v.bg};border:1.5px solid ${v.cor}44;border-radius:12px;padding:14px 18px;margin-bottom:18px;">
+      <div style="font-size:11px;font-weight:700;color:${v.cor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">📋 Avaliação — ${_esc(_demVend)} · últimos ${_demMeses} meses</div>
+      <div style="font-size:14px;color:${v.cor};font-weight:600;">${v.txt}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;">
+      ${kpi('Vendas','💰',d.tot.venR,d.tot.venM,d.tot.venP,true)}
+      ${kpi('Atendimentos','🤝',d.tot.atR,d.tot.atM,d.tot.atP,false)}
+      ${kpi('Apresentações','📊',d.tot.apR,d.tot.apM,d.tot.apP,false)}
+      ${kpi('Fechamentos','🏆',d.tot.feR,d.tot.feM,d.tot.feP,false)}
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid var(--border);">📈 Desempenho mês a mês</div>
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#F5F3F0;">
+          <th style="text-align:left;padding:8px 10px;font-size:11px;color:var(--gl);text-transform:uppercase;">Mês</th>
+          <th style="text-align:center;padding:8px;font-size:11px;color:var(--gl);text-transform:uppercase;">💰 Vendas</th>
+          <th style="text-align:center;padding:8px;font-size:11px;color:var(--gl);text-transform:uppercase;">🤝 Atend.</th>
+          <th style="text-align:center;padding:8px;font-size:11px;color:var(--gl);text-transform:uppercase;">📊 Apres.</th>
+          <th style="text-align:center;padding:8px;font-size:11px;color:var(--gl);text-transform:uppercase;">🏆 Fech.</th>
+        </tr></thead>
+        <tbody>${d.linhas.map(l=>`<tr>
+          <td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:600;">${_demMesLbl(l.mes)}</td>
+          ${cel(l.venR,l.venM,l.venP,true)}${cel(l.atR,l.atM,l.atP,false)}${cel(l.apR,l.apM,l.apP,false)}${cel(l.feR,l.feM,l.feP,false)}
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div style="font-size:11px;color:var(--gl);margin-top:10px;">As metas de atendimentos/apresentações/fechamentos são semanais; aqui aparecem ×4 (mês). Vendas = valor ao cliente dos leads ganhos no mês.</div>`;
+}
+function imprimirDesempenho(){
+  if(!_demVend){ toast('Selecione um colaborador'); return; }
+  const d=_demDados(_demVend,_demMeses), v=_demVeredito(d);
+  const emp=ST.empresa||{}, nomeEmp=emp.nome||'Casa Villare Ambientes Planejados';
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const pT=p=>p==null?'—':p+'%';
+  const linha=l=>`<tr><td>${_demMesLbl(l.mes)}</td>
+    <td>${fmt(l.venR)} / ${l.venM>0?fmt(l.venM):'—'} <b>(${pT(l.venP)})</b></td>
+    <td>${l.atR} / ${l.atM||'—'} (${pT(l.atP)})</td>
+    <td>${l.apR} / ${l.apM||'—'} (${pT(l.apP)})</td>
+    <td>${l.feR} / ${l.feM||'—'} (${pT(l.feP)})</td></tr>`;
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Avaliacao_${_esc(String(_demVend).replace(/[^A-Za-z0-9_.-]+/g,'_'))}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;color:#000;}
+  .page{width:210mm;padding:14mm;margin:0 auto;} h1{font-size:18px;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;} th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;font-size:11px;} th{background:#f0f0f0;}
+  .verd{padding:10px 14px;border-radius:8px;margin:12px 0;font-weight:600;background:${v.bg};color:${v.cor};border:1px solid ${v.cor}55;}
+  .toolbar{position:fixed;top:0;left:0;right:0;background:#1a1a2e;padding:8px 20px;display:flex;justify-content:space-between;align-items:center;}
+  .toolbar button{padding:7px 16px;border:none;border-radius:6px;font-weight:600;cursor:pointer;background:#e0e0e0;}
+  body.tb{padding-top:48px;}@media print{.toolbar{display:none!important}body.tb{padding-top:0}}</style></head>
+  <body class="tb"><div class="toolbar"><span style="color:#fff;font-weight:600;">🖨 Avaliação — ${_esc(_demVend)}</span><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
+  <div class="page">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;">
+      <div><h1>Relatório de Desempenho de Metas</h1><div style="font-size:11px;color:#555;">${_esc(nomeEmp)}</div></div>
+      <div style="text-align:right;font-size:11px;"><b>${_esc(_demVend)}</b><br>Últimos ${_demMeses} meses<br>Emitido em ${hoje}</div>
+    </div>
+    <div class="verd">${v.txt}</div>
+    <table><thead><tr><th>Mês</th><th>Vendas (real / meta)</th><th>Atendimentos</th><th>Apresentações</th><th>Fechamentos</th></tr></thead>
+    <tbody>${d.linhas.map(linha).join('')}
+      <tr style="font-weight:bold;background:#f7f7f7;"><td>TOTAL</td>
+        <td>${fmt(d.tot.venR)} / ${d.tot.venM>0?fmt(d.tot.venM):'—'} (${pT(d.tot.venP)})</td>
+        <td>${d.tot.atR} / ${d.tot.atM||'—'} (${pT(d.tot.atP)})</td>
+        <td>${d.tot.apR} / ${d.tot.apM||'—'} (${pT(d.tot.apP)})</td>
+        <td>${d.tot.feR} / ${d.tot.feM||'—'} (${pT(d.tot.feP)})</td></tr></tbody></table>
+    <div style="margin-top:12px;font-size:10px;color:#666;">Metas de atendimentos/apresentações/fechamentos são semanais, exibidas ×4 (mês). Vendas = valor ao cliente dos leads ganhos.</div>
+    <div style="margin-top:44px;display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;font-size:11px;">Gestor</div>
+      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;font-size:11px;">${_esc(_demVend)}</div>
+    </div>
+  </div></body></html>`;
+  const w=window.open('','_blank','width=900,height=760'); if(w){w.document.write(html);w.document.close();} else toast('❌ Popup bloqueado — permita pop-ups');
 }
 
 function rMetas(){
