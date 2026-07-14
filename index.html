@@ -9147,7 +9147,9 @@ function cfgEditSalario(nome){
   const sal=prompt('Salário base (R$):',cfg.salarioBase||'');if(sal===null)return;
   const adiant=prompt('Adiantamento (R$):',cfg.adiantamento||'');if(adiant===null)return;
   if(!ST.configs) ST.configs={};
-  ST.configs[nome]={salarioBase:_parseBRL(sal),adiantamento:_parseBRL(adiant)};
+  if(!ST.configs[nome]) ST.configs[nome]={};
+  ST.configs[nome].salarioBase=_parseBRL(sal);      // MERGE — não reatribuir (preserva perfil/permissões/CPF/situação)
+  ST.configs[nome].adiantamento=_parseBRL(adiant);
   _cfgTouch('configs'); save();rConfig();toast('Salário atualizado!');
 }
 // Estado do modal de colaborador
