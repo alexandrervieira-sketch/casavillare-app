@@ -4463,7 +4463,7 @@ function rHomeMetas(){
     const pct=meta>0?Math.min(Math.round(ven/meta*100),999):0;
     const cor=_metBarCor(pct);
     return `<div class="home-meta-card">
-      <div class="home-meta-nome">${nome}</div>
+      <div class="home-meta-nome">${_esc(nome)}</div>
       <div class="home-meta-vals">
         <span class="home-meta-ven">${fmt(ven)}</span>
         <span class="home-meta-goal">${meta>0?'de '+fmt(meta):'sem meta'}</span>
@@ -7466,6 +7466,8 @@ function _cascataProjeto(p){
   const custoOutros=((p&&p.outrosCustos)||[]).reduce((a,c)=>a+(c.valor||0),0);
   const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros};
   const monta=(comProj,comMont,comSup)=>{
+    // Arredonda cada comissão a centavos (como comVend) — evita drift de fração no lucro/margem vs. as fichas.
+    comProj=_round2(comProj); comMont=_round2(comMont); comSup=_round2(comSup);
     const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+comMont+comSup;
     const lucro=liquido-custoTotal;
     return {...base,comProj,comMont,comSup,custoTotal,lucro,margem:liquido>0?lucro/liquido*100:0};
@@ -7695,7 +7697,8 @@ function abrirAdiantMont(pedidoId, valorTotal, totalAdiant){
     valor,
     mesAno: _mesLocal(),
     obs: `Adiantamento — ${clienteNome}`,
-    criadoEm: new Date().toISOString()
+    criadoEm: new Date().toISOString(),
+    _uAt: Date.now()
   });
   save();
   toast(`Adiantamento de ${fmt(valor)} registrado ✅`);
@@ -10379,7 +10382,7 @@ function salvarLead(){
     const jaTemPedido=ST.pedidos.some(p=>String(p.leadId)===String(lead.id));
     if(!jaTemPedido){
       ST.pedidos.push({
-        id:_newId(),
+        id:_newId(), _uAt:Date.now(),
         clienteNome:lead.nome, cliente:lead.nome,
         clienteCadId:'', nContrato:'',
         responsavel:lead.responsavel||'',
@@ -13338,7 +13341,7 @@ function salvarCadastro(){
       pe._uAt=Date.now();
     } else {
       ST.pedidos.push({
-        id:_newId(),
+        id:_newId(), _uAt:Date.now(),
         ...pedData,
         fornecedor:'', data:_hojeLocal(),
         prevProd:'', prevEntrega:'', prevMontagem:'',
@@ -15142,7 +15145,7 @@ function rMetas(){
     const icon=iconeFunc((ST.equipe.comercial||[]).find(v=>v.nome===nome)?.perfil||'vendedor');
     return `
     <div class="meta-card">
-      <div class="meta-card-nome">${icon} ${nome}</div>
+      <div class="meta-card-nome">${icon} ${_esc(nome)}</div>
       <div class="meta-card-ven">${fmt(ven)}</div>
       <div class="meta-card-meta">${meta>0?'Meta: '+fmt(meta):'Meta não definida'}</div>
       <div class="meta-bar-wrap"><div class="meta-bar" style="width:${pct}%;background:${cor};"></div></div>
