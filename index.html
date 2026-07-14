@@ -8383,7 +8383,7 @@ function rConfig(){
         <div class="cfg-block-hdr"><h3>🖼️ Logo da Empresa</h3></div>
         <div class="cfg-row" style="gap:18px;align-items:center;">
           <div style="width:160px;height:80px;border:1.5px dashed #C8BFB5;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#F8F5F0;flex-shrink:0;">
-            ${ST.logoBase64?`<img src="${ST.logoBase64}" style="max-width:100%;max-height:100%;object-fit:contain;">`:'<span style="font-size:11px;color:#9CA3AF;text-align:center;padding:8px;">Nenhuma logo<br>carregada</span>'}
+            ${_logoDataUri()?`<img src="${_logoDataUri()}" style="max-width:100%;max-height:100%;object-fit:contain;">`:'<span style="font-size:11px;color:#9CA3AF;text-align:center;padding:8px;">Nenhuma logo<br>carregada</span>'}
           </div>
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:500;margin-bottom:6px;">Logo usada no contrato e orçamento</div>
@@ -8600,8 +8600,8 @@ function rConfig(){
         <div class="cfg-block-hdr"><h3>✅ Configuração atual</h3></div>
         <div class="cfg-row">
           <div>
-            <div class="cfg-name">📧 ${fab.email}</div>
-            <div class="cfg-info">${fab.nome||'Fábrica'} ${fab.contato?' · '+fab.contato:''}</div>
+            <div class="cfg-name">📧 ${_esc(fab.email)}</div>
+            <div class="cfg-info">${_esc(fab.nome||'Fábrica')} ${fab.contato?' · '+_esc(fab.contato):''}</div>
           </div>
           <span class="badge b-ok">Pronto para envio</span>
         </div>
@@ -8945,12 +8945,15 @@ function cfgSalvarOrcValidade(){
   ST.orcValidade=v; _cfgTouch('orcValidade'); save(); toast('✅ Validade salva: '+v+' dias');
 }
 // ── Helpers: logo e dados da empresa nos documentos ──
+// Valida o logo como data-URI de imagem antes de usar em src (bloqueia XSS via `logoBase64` plantado no _config).
+function _logoDataUri(){ const u=String(ST.logoBase64||''); return /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i.test(u)?u:''; }
 function _docLogoHtml(){
-  if(ST.logoBase64)
-    return `<img src="${ST.logoBase64}" style="max-width:120px;max-height:56px;object-fit:contain;">`;
+  const logo=_logoDataUri();
+  if(logo)
+    return `<img src="${logo}" style="max-width:120px;max-height:56px;object-fit:contain;">`;
   const emp=ST.empresa||{};
   const nome=(emp.nome||'Casa Villare').split(' ');
-  return `<div class="logo-text">${nome[0]}<br>${nome.slice(1).join(' ')||''}<span style="font-size:9px;letter-spacing:.5px;">AMBIENTES PLANEJADOS</span></div>`;
+  return `<div class="logo-text">${_esc(nome[0])}<br>${_esc(nome.slice(1).join(' ')||'')}<span style="font-size:9px;letter-spacing:.5px;">AMBIENTES PLANEJADOS</span></div>`;
 }
 function _docEmpInfoHtml(){
   const emp=ST.empresa||{};
@@ -8960,10 +8963,10 @@ function _docEmpInfoHtml(){
   const cidade=emp.cidade||'Valinhos — SP';
   const tel =emp.tel||'';
   const site=emp.site||'';
-  let info=`<strong>${nome.toUpperCase()}</strong><br>CNPJ: ${cnpj}`;
-  if(end) info+=` • ${end}`;
-  if(tel)  info+=`<br>${tel}`;
-  if(site) info+=` · ${site}`;
+  let info=`<strong>${_esc(nome.toUpperCase())}</strong><br>CNPJ: ${_esc(cnpj)}`;
+  if(end) info+=` • ${_esc(end)}`;
+  if(tel)  info+=`<br>${_esc(tel)}`;
+  if(site) info+=` · ${_esc(site)}`;
   return info;
 }
 // ── Configurações: Empresa ──
@@ -13545,7 +13548,7 @@ function finSubTab(sub){
 let _fluxoMeses=6;
 function fluxoSetMeses(n){ _fluxoMeses=parseInt(n)||6; rFinFluxo(); }
 function fluxoSetSaldoIni(v){ if(!_podeEditar('fin')){ toast('🔒 Sem permissão.'); return; } ST.fluxoSaldoIni=_parseBRL(v); _cfgTouch('fluxoSaldoIni'); save(); rFinFluxo(); }
-function _fluxoAReceberMes(mes){ let t=0; (ST.leads||[]).forEach(l=>(l.condicoesPgto||[]).forEach(c=>{ if(!c.pago&&(c.vencimento||'').slice(0,7)===mes) t+=(c.valor||0); })); return t; }
+function _fluxoAReceberMes(mes){ let t=0; (ST.leads||[]).filter(l=>l.status==='ganho').forEach(l=>(l.condicoesPgto||[]).forEach(c=>{ if(!c.pago&&(c.vencimento||'').slice(0,7)===mes) t+=(c.valor||0); })); return t; }
 function _fluxoAPagarMes(mes){
   const explicAll=(ST.contasPagar||[]).filter(e=>e.mesAno===mes);
   const explicUnpaid=explicAll.filter(e=>!e.pago);
@@ -14216,6 +14219,7 @@ function crExportarCSV(){
   const todasParcelas=[];
   const _csvSeenKeys=new Set();
   (ST.leads||[]).forEach(l=>{
+    if(l.status!=='ganho') return; // só venda fechada gera recebível (lead perdido/em aberto não conta)
     if(!l.condicoesPgto||!l.condicoesPgto.length) return;
     l.condicoesPgto.forEach(c=>{
       const key=String(l.id)+'|'+String(c.id||c.vencimento||c.desc||'');
@@ -14352,6 +14356,7 @@ function rFinCR(){
   const todasParcelas=[];
   const _crSeenKeys=new Set();
   (ST.leads||[]).forEach(l=>{
+    if(l.status!=='ganho') return; // só venda fechada gera recebível (lead perdido/em aberto não conta)
     if(!l.condicoesPgto||!l.condicoesPgto.length) return;
     l.condicoesPgto.forEach(c=>{
       const key=String(l.id)+'|'+String(c.id||c.vencimento||c.desc||'');
@@ -16212,7 +16217,7 @@ async function nfeCartaCorrecao(pedidoId){
     const d=await r.json().catch(()=>({}));
     if(d.ok&&!d.error&&!(d.erros&&d.erros.length)){
       if(!Array.isArray(p.nfe.cartasCorrecao)) p.nfe.cartasCorrecao=[];
-      p.nfe.cartasCorrecao.push({texto:c, em:new Date().toISOString()}); save();
+      p.nfe.cartasCorrecao.push({texto:c, em:new Date().toISOString()}); p._uAt=Date.now(); save();
       toast('✅ Carta de correção registrada!');
       if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),200);
     } else {
@@ -16237,7 +16242,7 @@ async function nfeCancelar(pedidoId){
     const r=await fetch(NFE_PROXY_URL+'/cancelar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,justificativa:j})});
     const d=await r.json().catch(()=>({}));
     if(d.ok&&(d.status==='cancelado'||d.status==='processando_cancelamento')){
-      p.nfe.status='cancelada'; p.nfe.justificativaCancel=j; p.nfe.canceladaEm=new Date().toISOString(); save();
+      p.nfe.status='cancelada'; p.nfe.justificativaCancel=j; p.nfe.canceladaEm=new Date().toISOString(); p._uAt=Date.now(); save();
       toast('✅ NFe cancelada!');
       if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),200);
       const sb=document.getElementById('nfe-status-box'); if(sb){ sb.style.display=''; sb.innerHTML='<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:14px 16px;font-size:13px;color:#991B1B;">🚫 <strong>NFe cancelada.</strong><br>Justificativa: '+_esc(j)+'</div>'; }
