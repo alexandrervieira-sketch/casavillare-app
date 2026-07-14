@@ -5481,48 +5481,59 @@ const _tipoEv={
 function _syncAgendaLead(lead, prevLead){
   if(!ST.eventos) ST.eventos=[];
   const lid=String(lead.id);
+  const fechado=lead.status==='ganho'||lead.status==='perdido'; // venda fechada/perdida: sem follow-up nem apresentação na agenda
 
   // ── Próximo Contato ──
   const evC=ST.eventos.find(e=>e.leadId===lid&&e.agTipo==='contato');
-  if(lead.proxContato){
+  if(lead.proxContato && !fechado){
     _tombClear('eventos','agc_'+lid); // re-agendou → limpa marca de exclusão anterior (id é determinístico)
     if(evC){
       evC.data=lead.proxContato;
       evC.titulo=`📞 Contato: ${lead.nome}`;
       evC.cliente=lead.nome;
       evC.resp=lead.responsavel||'';
+      evC._uAt=Date.now();
     } else {
       ST.eventos.push({id:'agc_'+lid,agTipo:'contato',autoGerado:true,leadId:lid,
         data:lead.proxContato,tipo:'contato',
         titulo:`📞 Contato: ${lead.nome}`,
         cliente:lead.nome,resp:lead.responsavel||'',
-        obs:'Gerado pelo CRM — Próximo Contato'});
+        obs:'Gerado pelo CRM — Próximo Contato',_uAt:Date.now()});
     }
   } else if(evC){
-    _tombAdd('eventos','agc_'+lid); // desmarcou o contato → propaga a remoção (some na nuvem e nas outras máquinas)
+    // desmarcou o contato OU o lead foi ganho/perdido → propaga a remoção (some na nuvem e nas outras máquinas)
+    _tombAdd('eventos','agc_'+lid);
     ST.eventos=ST.eventos.filter(e=>!(e.leadId===lid&&e.agTipo==='contato'));
   }
 
   // ── Apresentação ──
   const evA=ST.eventos.find(e=>e.leadId===lid&&e.agTipo==='apres');
-  const entrouApres=lead.etapa==='apresentacao'&&prevLead?.etapa!=='apresentacao';
-  const saiuApres=lead.etapa!=='apresentacao'&&prevLead?.etapa==='apresentacao';
-  if(entrouApres&&!evA){
-    _tombClear('eventos','aga_'+lid); // recriou apresentação → limpa marca anterior
-    const dataEv=lead.proxContato||_hojeLocal();
-    ST.eventos.push({id:'aga_'+lid,agTipo:'apres',autoGerado:true,leadId:lid,
-      data:dataEv,tipo:'apres',
-      titulo:`📊 Apresentação: ${lead.nome}`,
-      cliente:lead.nome,resp:lead.responsavel||'',
-      obs:'Gerado pelo CRM — Lead avançou para Apresentação'});
-    setTimeout(()=>toast('📅 Apresentação criada na Agenda!'),400);
-  } else if(saiuApres&&evA){
-    _tombAdd('eventos','aga_'+lid); // saiu da etapa Apresentação → remove o evento (antes ficava fantasma na agenda)
-    ST.eventos=ST.eventos.filter(e=>!(e.leadId===lid&&e.agTipo==='apres'));
-  } else if(evA){
-    evA.titulo=`📊 Apresentação: ${lead.nome}`;
-    evA.cliente=lead.nome;
-    evA.resp=lead.responsavel||'';
+  if(fechado){
+    if(evA){ // lead fechado não mantém apresentação pendente na agenda
+      _tombAdd('eventos','aga_'+lid);
+      ST.eventos=ST.eventos.filter(e=>!(e.leadId===lid&&e.agTipo==='apres'));
+    }
+  } else {
+    const entrouApres=lead.etapa==='apresentacao'&&prevLead?.etapa!=='apresentacao';
+    const saiuApres=lead.etapa!=='apresentacao'&&prevLead?.etapa==='apresentacao';
+    if(entrouApres&&!evA){
+      _tombClear('eventos','aga_'+lid); // recriou apresentação → limpa marca anterior
+      const dataEv=lead.proxContato||_hojeLocal();
+      ST.eventos.push({id:'aga_'+lid,agTipo:'apres',autoGerado:true,leadId:lid,
+        data:dataEv,tipo:'apres',
+        titulo:`📊 Apresentação: ${lead.nome}`,
+        cliente:lead.nome,resp:lead.responsavel||'',
+        obs:'Gerado pelo CRM — Lead avançou para Apresentação',_uAt:Date.now()});
+      setTimeout(()=>toast('📅 Apresentação criada na Agenda!'),400);
+    } else if(saiuApres&&evA){
+      _tombAdd('eventos','aga_'+lid); // saiu da etapa Apresentação → remove o evento (antes ficava fantasma na agenda)
+      ST.eventos=ST.eventos.filter(e=>!(e.leadId===lid&&e.agTipo==='apres'));
+    } else if(evA){
+      evA.titulo=`📊 Apresentação: ${lead.nome}`;
+      evA.cliente=lead.nome;
+      evA.resp=lead.responsavel||'';
+      evA._uAt=Date.now();
+    }
   }
 }
 
@@ -11663,10 +11674,18 @@ function rPedidos(){
   _rPedPipe(ped,hoje,statsHtml);
 }
 
+// Dias ÚTEIS (seg–sex) decorridos entre duas datas 'YYYY-MM-DD' (não conta o dia inicial, conta o final).
+function _diasUteis(deISO, ateISO){
+  const d=new Date(String(deISO).slice(0,10)+'T12:00'), fim=new Date(String(ateISO).slice(0,10)+'T12:00');
+  if(isNaN(d)||isNaN(fim)||!(d<fim)) return 0;
+  let n=0; d.setDate(d.getDate()+1);
+  while(d<=fim){ const wd=d.getDay(); if(wd!==0&&wd!==6) n++; d.setDate(d.getDate()+1); }
+  return n;
+}
+// PED_PRAZOS é SLA em dias ÚTEIS — o decorrido também precisa ser em dias úteis (senão fim de semana dispara atraso cedo).
 function _diasNaEtapa(p, hoje){
   const ref=p.statusChangedAt||p.data||hoje;
-  const ms=new Date(hoje+'T12:00')-new Date(ref+'T12:00');
-  return Math.max(0,Math.floor(ms/(1000*60*60*24)));
+  return _diasUteis(ref, hoje);
 }
 
 function _rPedPipe(ped,hoje,statsHtml){
@@ -13285,6 +13304,7 @@ function salvarCadastro(){
       ST.leads[lIdx].status='ganho';
       ST.leads[lIdx].dataFechamento=_hojeLocal();
       ST.leads[lIdx]._uAt=Date.now(); // carimba a versão do lead ao marcar como ganho (evita reversão silenciosa)
+      _syncAgendaLead(ST.leads[lIdx], ST.leads[lIdx]); // limpa contato/apresentação pendentes da agenda (venda fechada)
     }
   }
 
@@ -16156,6 +16176,7 @@ async function nfeArquivarDocs(p){
       }
     }
     p.nfe.arquivadoEm=new Date().toISOString();
+    p._uAt=Date.now(); // carimba a versão: sob edição concorrente, o guard de sync não reverte as URLs arquivadas
     save();
     if(typeof rFiscal==='function') setTimeout(()=>rFiscal(),200);
     console.info('[CVP] NFe arquivada no Storage:',chave);
