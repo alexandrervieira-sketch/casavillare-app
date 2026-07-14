@@ -14,6 +14,8 @@
 // 1) No worker.mjs:
 //    - cole `verifyFirebaseIdToken` e `assertAuth` abaixo (no topo do módulo);
 //    - troque CORS Allow-Origin '*' pelo origin do app (ver CORS_ORIGIN abaixo);
+//    - INCLUA 'Authorization' no Allow-Headers, senão o preflight bloqueia o cliente:
+//        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 //    - no início do fetch(), DEPOIS do OPTIONS e do health check GET '/', chame:
 //         const auth = await assertAuth(req, env);
 //         if (!auth.ok) return json({ error: auth.error }, auth.status);
