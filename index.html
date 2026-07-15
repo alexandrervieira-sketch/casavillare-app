@@ -5927,7 +5927,7 @@ function relSubTab(sub){
 }
 
 function rRel(){
-  if(ST.perfil!=='gestor'){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPerm('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   relSubTab(_relSubAtivo||'resumo');
 }
 
@@ -6191,7 +6191,7 @@ function rRelCustosFabrica(tgt){
 }
 
 function rRelResumo(){
-  if(ST.perfil!=='gestor'){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPerm('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const mesAno=mesAnoStr(_relMes,_relAno);
   document.getElementById('rel-mes-label').textContent=mesNomeStr(_relMes,_relAno);
   const fs=ST.folhas.filter(f=>f.mesAno===mesAno);
@@ -13595,7 +13595,7 @@ function _fluxoFabricaMes(mes, primeiroMes){
 }
 function rFinFluxo(){
   const el=document.getElementById('fin-content'); if(!el) return;
-  if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
+  if(!_temPerm('fin')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const now=new Date(), meses=[];
   for(let i=0;i<_fluxoMeses;i++){ const d=new Date(now.getFullYear(),now.getMonth()+i,1); meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0, primeiroMes=meses[0];
@@ -13946,7 +13946,7 @@ function excluirCP(){
   save(); fecharModal('modal-cp'); toast('Excluída'); rFinCP();
 }
 function rFinCP(){
-  if(ST.perfil!=='gestor'){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPerm('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const mesStr=`${_cpAno}-${String(_cpMes+1).padStart(2,'0')}`;
   const lbl=document.getElementById('cp-mes-label');
   if(lbl) lbl.textContent=mesNomeStr(_cpMes,_cpAno);
@@ -14373,7 +14373,7 @@ function crFiltroLimpar(){
   rFinCR();
 }
 function rFinCR(){
-  if(ST.perfil!=='gestor'){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPerm('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const fmtL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const hoje=_hojeLocal();
 
@@ -14546,7 +14546,7 @@ function rFinCR(){
 }
 
 function rFinanceiro(){
-  if(ST.perfil!=='gestor'){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPerm('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const _finLblEl=document.getElementById('fin-mes-label-v');
   if(_finLblEl) _finLblEl.textContent=mesNomeStr(_finMes,_finAno);
   const mesAno=mesAnoStr(_finMes,_finAno);
@@ -15003,7 +15003,7 @@ function imprimirRanking(){
 }
 function rRelDesempenho(){
   const el=document.getElementById('rel-content'); if(!el) return;
-  if(ST.perfil!=='gestor'){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
+  if(!_temPerm('rel')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const nav=document.getElementById('rel-mes-nav'); if(nav) nav.style.display='none';
   const vends=(ST.equipe.comercial||[]).filter(v=>_demIncDeslig||!_estaDesligado(v.nome)).map(v=>v.nome); // esconde desligados por padrão; toggle os inclui (histórico)
   if(!vends.length){ el.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--gl);"><p>Nenhum vendedor ativo na equipe comercial.</p></div>'; return; }
