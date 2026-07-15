@@ -3,29 +3,34 @@ rules_version = '2';
 // ─────────────────────────────────────────────────────────────────────────────
 // Casa Villare — ERP interno · Regras de segurança do Firestore
 //
-// BASELINE: nada é público. Só membros AUTENTICADOS (Firebase Auth) leem/escrevem.
+// BASELINE: nada é público. Só membros AUTENTICADOS com e-mail do DOMÍNIO
+// CORPORATIVO (@casavillare.com.br) leem/escrevem. (C1, 14/07/2026: antes bastava
+// `request.auth != null` — como o auto-cadastro Email/Senha é aberto, qualquer um
+// da internet podia criar conta e ler/gravar leads, cadastros (CPF), pedidos.
+// A restrição de domínio era só no cliente. Agora é imposta no servidor.)
 //
-// P0-4 FASE 1 (permissões por perfil no servidor):
-//   - O perfil vem do custom claim `request.auth.token.perfil` (carimbado via Admin).
-//   - Coleções financeiras (dre, folhas, comissoes, vendasCom): leitura E escrita
-//     para gestor OU financeiro. As demais (leads, pedidos, agenda, cadastros, _config…)
-//     seguem para qualquer autenticado.
-//   - _audit: leitura SÓ gestor; create por qualquer autenticado (o app registra);
-//     update/delete NUNCA (trilha inviolável).
+// Perfil vem do custom claim `request.auth.token.perfil` (carimbado via _set_claims.js).
+//   - Financeiras (dre, folhas, comissoes, vendasCom): leitura E escrita gestor OU financeiro.
+//   - _config/configs e _config/equipe: escrita só gestor. _cfgpriv (salários): leitura
+//     gestor/financeiro, escrita só gestor. _audit: leitura só gestor, sem update/delete.
 //
-// Obs.: regra ÚNICA por coleção (sem match permissivo concorrente) — no Firestore,
-// se QUALQUER match concede, o acesso é concedido; então o genérico já embute a
-// restrição, em vez de um match restritivo "por cima".
-//
-// FASE 2 (futura): mover salários/tabelas (_config/configs, _config/configsCom)
-// para coleção própria gestor-only; exclusão só-gestor; _audit à prova de forja.
+// (OPCIONAL, mais forte) exigir e-mail verificado: descomente a linha email_verified
+// em corporativo(). ANTES, confirme no Console › Auth que as contas têm email_verified=true.
 // ─────────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Só e-mail corporativo. `matches` faz full-match; ^...$ reforça; (?i) case-insensitive.
+    function corporativo() {
+      return request.auth != null
+        && request.auth.uid != null
+        && request.auth.token.email != null
+        // && request.auth.token.email_verified == true   // (opcional, ver cabeçalho)
+        && request.auth.token.email.matches('(?i)^[^@]+@casavillare[.]com[.]br$');
+    }
     function autenticado() {
-      return request.auth != null && request.auth.uid != null;
+      return corporativo();
     }
     function isGestor() {
       return autenticado() && request.auth.token.perfil == 'gestor';
@@ -33,7 +38,6 @@ service cloud.firestore {
     function isFinanceiro() {
       return autenticado() && request.auth.token.perfil == 'financeiro';
     }
-    // Quem pode ler/escrever as coleções financeiras: gestor OU financeiro
     function podeFinanceiro() {
       return isGestor() || isFinanceiro();
     }
@@ -48,28 +52,19 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ── Config: leitura p/ qualquer autenticado (o app precisa de equipe/permissões).
-    //    Escrita: qualquer autenticado, EXCETO os docs 'configs' (perfil, permissões,
-    //    salários) e 'equipe' (papéis), que são SÓ GESTOR. Fecha a escalada de
-    //    privilégio (não-gestor reescrevendo o próprio perfil pelo DevTools).
-    //    Os demais docs de _config (_tomb, tabelaCartao, tabelaFinanciamento,
-    //    bipartido…) continuam abertos p/ o sync de todos funcionar.
-    //    (O cliente não empurra configs/equipe quando não é gestor — ver _fsConfigDocs.)
+    // ── Config: leitura p/ qualquer autenticado; escrita só gestor p/ configs/equipe ──
     match /_config/{doc} {
       allow read:  if autenticado();
       allow write: if autenticado() && ( (doc != 'configs' && doc != 'equipe') || isGestor() );
     }
 
-    // ── Dados sensíveis do colaborador (salário, adiantamento, CPF/RG): leitura
-    //    só gestor+financeiro; escrita só gestor. Coleção PRÓPRIA (não em _config)
-    //    porque uma consulta de coleção é negada por inteiro se um doc dela for
-    //    ilegível — o que travaria o _config de todos. (E1) ──
+    // ── Dados sensíveis (salário/CPF): leitura gestor+financeiro; escrita só gestor ──
     match /_cfgpriv/{doc} {
       allow read:  if podeFinanceiro();
       allow write: if isGestor();
     }
 
-    // ── Demais coleções: financeiras só gestor/financeiro; resto, autenticado ──
+    // ── Demais coleções: financeiras só gestor/financeiro; resto, corporativo ──
     match /{collection}/{doc} {
       allow read:  if collection != '_audit' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
       allow write: if collection != '_audit' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
