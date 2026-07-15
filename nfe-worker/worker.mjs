@@ -18,10 +18,72 @@
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+}
+
+// ── C2: Autenticação (14/07/2026) ───────────────────────────────────────────
+// Só chamadas com um Firebase ID token VÁLIDO do projeto e e-mail corporativo
+// passam. Antes, qualquer um na internet podia emitir/cancelar NFe. O token é
+// verificado por assinatura (RS256) contra as chaves públicas do Firebase.
+// FB_PROJECT é o projectId do Firebase (público, não é segredo).
+const FB_PROJECT = 'sistema-casa-villare';
+
+let _jwksCache = { keys: null, exp: 0 };
+async function _getFirebaseKeys() {
+  const now = Date.now();
+  if (_jwksCache.keys && now < _jwksCache.exp) return _jwksCache.keys;
+  const res = await fetch('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com');
+  const data = await res.json();
+  const map = {};
+  for (const k of (data.keys || [])) map[k.kid] = k;
+  let ttl = 3600;
+  const m = (res.headers.get('cache-control') || '').match(/max-age=(\d+)/);
+  if (m) ttl = parseInt(m[1], 10);
+  _jwksCache = { keys: map, exp: now + Math.max(60, ttl) * 1000 };
+  return map;
+}
+function _b64urlBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function _b64urlJson(s) { return JSON.parse(new TextDecoder().decode(_b64urlBytes(s))); }
+
+async function verifyFirebaseIdToken(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3) throw new Error('token malformado');
+  const header = _b64urlJson(parts[0]), payload = _b64urlJson(parts[1]);
+  if (header.alg !== 'RS256') throw new Error('alg inválido');
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.aud !== FB_PROJECT) throw new Error('aud inválido');
+  if (payload.iss !== 'https://securetoken.google.com/' + FB_PROJECT) throw new Error('iss inválido');
+  if (!payload.sub) throw new Error('sub ausente');
+  if (typeof payload.exp !== 'number' || payload.exp <= now) throw new Error('token expirado');
+  if (typeof payload.iat !== 'number' || payload.iat > now + 300) throw new Error('iat futuro');
+  const keys = await _getFirebaseKeys();
+  const jwk = keys[header.kid];
+  if (!jwk) throw new Error('kid desconhecido');
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, _b64urlBytes(parts[2]), new TextEncoder().encode(parts[0] + '.' + parts[1]));
+  if (!ok) throw new Error('assinatura inválida');
+  return payload;
+}
+// Exige Bearer válido + e-mail do domínio corporativo. { ok, status?, error? }
+async function assertAuth(req) {
+  const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
+  if (!m) return { ok: false, status: 401, error: 'Sem token' };
+  try {
+    const c = await verifyFirebaseIdToken(m[1]);
+    if (!/^[^@]+@casavillare\.com\.br$/i.test(String(c.email || ''))) return { ok: false, status: 403, error: 'E-mail não corporativo' };
+    return { ok: true, uid: c.sub, email: c.email, perfil: c.perfil };
+  } catch (e) {
+    return { ok: false, status: 401, error: 'Token inválido: ' + ((e && e.message) || e) };
+  }
 }
 
 // ── Provedor: Focus NFe ─────────────────────────────────────────────────────
@@ -133,6 +195,10 @@ export default {
     if (req.method === 'GET' && url.pathname === '/') {
       return json({ ok: true, service: 'emitirNota', provider: 'focus', ts: Date.now() });
     }
+
+    // C2: todas as rotas (menos o health check acima) exigem Firebase ID token corporativo válido.
+    const auth = await assertAuth(req);
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
 
     try {
       if (req.method === 'POST' && url.pathname === '/emitir') {

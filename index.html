@@ -16140,6 +16140,15 @@ function nfeAtualizarCFOP(){
 
 // Camada fiscal provider-agnóstica (emitirNota). Trocar de provedor/host = trocar só esta URL.
 const NFE_PROXY_URL='https://cv-nfe.alexandre-rvieira.workers.dev';
+// C2: chamada autenticada ao worker de NFe — injeta o Firebase ID token do usuário logado.
+// O worker verifica a assinatura + domínio corporativo. Health check GET '/' fica público.
+async function _nfeFetch(path, opts={}){
+  const u=(typeof firebase!=='undefined'&&firebase.auth)?firebase.auth().currentUser:null;
+  const token=u?await u.getIdToken():'';
+  const headers={...(opts.headers||{})};
+  if(token) headers['Authorization']='Bearer '+token;
+  return fetch(NFE_PROXY_URL+path,{...opts,headers});
+}
 // Mapeia o status do provedor para o status interno do pedido
 function _nfeMapStatus(s){
   return ({autorizado:'emitida',cancelado:'cancelada',erro_autorizacao:'rejeitada',denegado:'rejeitada',processando_autorizacao:'processing'})[s]||'';
@@ -16163,7 +16172,7 @@ async function nfeArquivarDocs(p){
   const chave=String(p.nfe.chaveAcesso||p.nfe.ref||'nota').replace(/[^0-9A-Za-z_-]/g,'');
   try{
     if(!p.nfe.xmlArquivado){
-      const xr=await fetch(NFE_PROXY_URL+'/arquivo?tipo=xml&ref='+encodeURIComponent(ref)+'&ambiente='+amb);
+      const xr=await _nfeFetch('/arquivo?tipo=xml&ref='+encodeURIComponent(ref)+'&ambiente='+amb);
       if(xr.ok){
         const xmlText=await xr.text();
         const xref=_fbStorage.ref('nfe/'+amb+'/'+chave+'.xml');
@@ -16172,7 +16181,7 @@ async function nfeArquivarDocs(p){
       }
     }
     if(!p.nfe.danfeArquivado){
-      const dr=await fetch(NFE_PROXY_URL+'/arquivo?tipo=danfe&ref='+encodeURIComponent(ref)+'&ambiente='+amb);
+      const dr=await _nfeFetch('/arquivo?tipo=danfe&ref='+encodeURIComponent(ref)+'&ambiente='+amb);
       if(dr.ok){
         const blob=await dr.blob();
         const dref=_fbStorage.ref('nfe/'+amb+'/'+chave+'.pdf');
@@ -16216,7 +16225,7 @@ async function nfeEnviarEmail(){
   if(!emails.length){ toast('Informe ao menos um e-mail válido'); return; }
   toast('📨 Enviando…');
   try{
-    const r=await fetch(NFE_PROXY_URL+'/email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,emails})});
+    const r=await _nfeFetch('/email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,emails})});
     const d=await r.json().catch(()=>({}));
     if(d.ok){
       p.nfe.emailEnviadoPara=emails.join(', '); p.nfe.emailEnviadoEm=new Date().toISOString(); save();
@@ -16239,7 +16248,7 @@ async function nfeCartaCorrecao(pedidoId){
   if(!confirm(`Registrar Carta de Correção na NFe nº ${p.nfe.numero||''}?\n\n"${c}"`)) return;
   toast('Registrando carta de correção na SEFAZ…');
   try{
-    const r=await fetch(NFE_PROXY_URL+'/carta-correcao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,correcao:c})});
+    const r=await _nfeFetch('/carta-correcao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,correcao:c})});
     const d=await r.json().catch(()=>({}));
     if(d.ok&&!d.error&&!(d.erros&&d.erros.length)){
       if(!Array.isArray(p.nfe.cartasCorrecao)) p.nfe.cartasCorrecao=[];
@@ -16265,7 +16274,7 @@ async function nfeCancelar(pedidoId){
   if(!confirm(`⚠️ CANCELAR a NFe nº ${p.nfe.numero||''} — ${p.clienteNome||'cliente'}?\n\nÉ uma operação FISCAL DEFINITIVA na SEFAZ (só vale dentro do prazo legal, normalmente 24h).\n\nJustificativa:\n"${j}"\n\nConfirmar cancelamento?`)) return;
   toast('Cancelando na SEFAZ…');
   try{
-    const r=await fetch(NFE_PROXY_URL+'/cancelar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,justificativa:j})});
+    const r=await _nfeFetch('/cancelar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:p.nfe.ambiente||'homologacao',ref:p.nfe.ref,justificativa:j})});
     const d=await r.json().catch(()=>({}));
     if(d.ok&&(d.status==='cancelado'||d.status==='processando_cancelamento')){
       p.nfe.status='cancelada'; p.nfe.justificativaCancel=j; p.nfe.canceladaEm=new Date().toISOString(); p._uAt=Date.now(); save();
@@ -16284,7 +16293,7 @@ async function nfeConsultarStatusUI(){
   if(!p?.nfe?.ref){ toast('Sem referência pra consultar'); return; }
   const amb=p.nfe.ambiente||'homologacao';
   try{
-    const resp=await fetch(NFE_PROXY_URL+'/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
+    const resp=await _nfeFetch('/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
     const data=await resp.json().catch(()=>({}));
     const novo=_nfeMapStatus(data.status)||p.nfe.status;
     p.nfe.status=novo; p._uAt=Date.now();
@@ -16331,7 +16340,7 @@ async function nfeConsultarStatus(pedidoId){
   const amb=p.nfe.ambiente||'homologacao';
   toast('🔄 Consultando status...');
   try{
-    const resp=await fetch(NFE_PROXY_URL+'/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
+    const resp=await _nfeFetch('/status?ref='+encodeURIComponent(p.nfe.ref)+'&ambiente='+amb);
     const data=await resp.json().catch(()=>({}));
     if(data.error){toast('Erro: '+data.error);return;}
     const novo=_nfeMapStatus(data.status)||p.nfe.status;
@@ -16619,7 +16628,7 @@ async function nfeEmitir(){
   const ref='cv'+String(_nfePedidoId||'')+'_'+Date.now();
 
   try{
-    const resp=await fetch(NFE_PROXY_URL+'/emitir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:amb,ref,nota})});
+    const resp=await _nfeFetch('/emitir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:amb,ref,nota})});
     const data=await resp.json().catch(()=>({}));
     const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
     const erroProvedor = data.error || (data.erros&&data.erros.length) || (data.http&&data.http>=400&&!data.autorizado&&data.status!=='processando_autorizacao');
