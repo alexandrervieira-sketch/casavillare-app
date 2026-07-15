@@ -1,12 +1,33 @@
 rules_version = '2';
 
-// Casa Villare — Storage (anexos dos leads: fotos, PDFs, projetos)
-// Só membros da equipe AUTENTICADOS (Firebase Auth) leem/gravam. Limite de 30 MB por arquivo.
+// Casa Villare — Storage (anexos dos leads: fotos, PDFs, projetos, XML/DANFE fiscais)
+//
+// C1/M1 (14/07/2026): exige e-mail do domínio corporativo (fecha o auto-cadastro
+// externo, igual ao Firestore) e escopa os arquivos FISCAIS (XML/DANFE, com CPF/
+// endereço/valores dos clientes) — gravados por `nfeArquivarDocs` em
+// `nfe/<ambiente>/<chave>.xml|.pdf` — a leitura/escrita só de gestor/financeiro.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function corporativo() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.matches('(?i)^[^@]+@casavillare[.]com[.]br$');
+    }
+    function podeFinanceiro() {
+      return corporativo() && (request.auth.token.perfil == 'gestor' || request.auth.token.perfil == 'financeiro');
+    }
+
+    // Arquivos fiscais (XML/DANFE): só gestor/financeiro (PII do cliente na nota).
+    match /nfe/{allPaths=**} {
+      allow read:  if podeFinanceiro();
+      allow write: if podeFinanceiro() && request.resource.size < 30 * 1024 * 1024;
+    }
+
+    // Demais anexos: qualquer membro corporativo.
     match /{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 30 * 1024 * 1024;
+      allow read:  if corporativo();
+      allow write: if corporativo() && request.resource.size < 30 * 1024 * 1024;
     }
   }
 }
