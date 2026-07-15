@@ -16159,7 +16159,24 @@ function nfeRefazerTeste(pedidoId){
   if(!p||!p.nfe) return;
   if(p.nfe.ambiente!=='homologacao'){ toast('Disponível apenas em homologação'); return; }
   if(!confirm('Refazer teste: limpar a nota de HOMOLOGAÇÃO deste pedido para emitir de novo?\n(Não afeta nada fiscal — é nota de teste.)')) return;
-  delete p.nfe; save(); toast('🧪 Pronto — voltou para Pendentes'); fiscalSubTab('pendentes');
+  delete p.nfe; p._uAt=Date.now(); save(); toast('🧪 Pronto — voltou para Pendentes'); fiscalSubTab('pendentes');
+}
+// Reabre uma nota CANCELADA (produção): arquiva o registro no histórico e devolve o pedido
+// para Fiscal › Pendentes, pronto para emitir uma NOVA nota de verdade. O cancelamento na
+// SEFAZ continua valendo — isto é só o controle interno do pedido.
+function nfeReabrirParaPendentes(pedidoId){
+  if(!_podeEditar('fiscal')){ toast('🔒 Sem permissão para reabrir NFe.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedidoId));
+  if(!p||!p.nfe) return;
+  if(p.nfe.status!=='cancelada'){ toast('Só notas CANCELADAS podem voltar para Pendentes.'); return; }
+  if(!confirm(`Voltar o pedido de ${p.clienteNome||'cliente'} para Fiscal › Pendentes, para emitir uma NOVA nota?\n\nA nota cancelada nº ${p.nfe.numero||''} fica guardada no histórico do pedido (o cancelamento na SEFAZ continua valendo).`)) return;
+  if(!Array.isArray(p.nfeHist)) p.nfeHist=[];
+  p.nfeHist.push(p.nfe);   // preserva o registro da nota cancelada
+  delete p.nfe;
+  p._uAt=Date.now();       // carimba a versão — evita que o guard de sync reverta a mudança
+  save();
+  toast('↩️ Pedido voltou para Pendentes — pronto para reemitir.');
+  fiscalSubTab('pendentes');
 }
 // Consulta status e atualiza o MODAL aberto (botão manual + auto-polling após emitir)
 // Arquiva o XML (documento legal — guarda de 5 anos) e o DANFE no Firebase Storage.
@@ -16895,6 +16912,7 @@ function rFiscalEmitidas(){
               :''}
             ${st==='emitida'?`<button onclick="nfeCartaCorrecao('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">📝 CC-e</button>`:''}
             ${st==='emitida'?`<button onclick="nfeCancelar('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;color:#991B1B;border-color:#FCA5A5;">🚫 Cancelar</button>`:''}
+            ${st==='cancelada'?`<button onclick="nfeReabrirParaPendentes('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;border-color:#A78B6D;color:#A78B6D;" title="Arquiva a nota cancelada e devolve o pedido para Pendentes, pronto para emitir uma nova nota">↩️ Reabrir p/ emitir</button>`:''}
             <button onclick="abrirModalNFeManual('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;">✏️ Editar</button>
             ${p.nfe.ambiente==='homologacao'?`<button onclick="nfeRefazerTeste('${_sid(p.id)}')" class="btn btn-s" style="font-size:11px;padding:5px 12px;border-color:#A78B6D;color:#A78B6D;" title="Limpa a nota de teste e devolve para Pendentes">🧪 Refazer teste</button>`:''}
           </div>
