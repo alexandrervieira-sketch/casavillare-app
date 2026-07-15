@@ -5320,7 +5320,7 @@ function pfTogglePago(){
 }
 
 function salvarFolha(){
-  if(ST.perfil!=='gestor'){toast('Apenas gestores podem salvar folhas');return;}
+  if(ST.perfil!=='gestor'&&ST.perfil!=='financeiro'){toast('Apenas gestor/financeiro podem salvar folhas');return;} // servidor já libera `folhas` p/ gestor+financeiro
   const pessoa=document.getElementById('pf-pessoa').value;
   const mesAno=document.getElementById('pf-mesref').value;
   if(!pessoa||!mesAno){toast('Preencha colaborador e mês');return;}
