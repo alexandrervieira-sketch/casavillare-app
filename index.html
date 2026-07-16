@@ -2279,12 +2279,22 @@ textarea.inp{resize:vertical;min-height:68px;}
     </div>
     <div class="modal-body">
 
+      <input type="hidden" id="pd-tipo" value="venda"/>
+      <div style="margin-bottom:12px;">
+        <label class="lbl">Tipo de pedido</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="pd-tipo-venda" onclick="pdSetTipo('venda')" class="btn btn-p btn-sm" style="flex:1;">🛒 Venda</button>
+          <button type="button" id="pd-tipo-showroom" onclick="pdSetTipo('showroom')" class="btn btn-s btn-sm" style="flex:1;">🏛️ Showroom / Investimento</button>
+        </div>
+        <div id="pd-showroom-aviso" style="display:none;margin-top:8px;font-size:12px;color:#7C3AED;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:8px 10px;">🏛️ Investimento interno — não gera comissão, não conta na meta fábrica e não emite NFe. O custo entra como investimento no DRE do mês.</div>
+      </div>
+
       <div class="form-sec">Cliente & Contrato</div>
       <select id="pd-cliente-sel" style="display:none;"></select>
       <div class="fr r2">
-        <div><label class="lbl">Nome do cliente *</label>
+        <div><label class="lbl" id="pd-cliente-lbl">Nome do cliente *</label>
           <input class="inp" id="pd-cliente-txt" placeholder="Nome do cliente"/></div>
-        <div><label class="lbl">Nº Contrato</label>
+        <div id="pd-contrato-wrap"><label class="lbl">Nº Contrato</label>
           <input class="inp" id="pd-ncontrato" readonly placeholder="Auto" style="background:#f5f4f1;"/></div>
       </div>
       <div class="fr r3">
@@ -5938,7 +5948,7 @@ function rRelCustosFabrica(tgt){
   const el=document.getElementById(tgt||'rel-content'); // reutilizável (Relatórios e aba Fábrica)
   if(!el) return;
 
-  const todosped=ST.pedidos||[];
+  const todosped=(ST.pedidos||[]).filter(p=>!_pedShowroom(p)); // showroom/investimento fora do custo-fábrica (não tem venda p/ o ratio)
   const peds=todosped.filter(p=>_custoFabPed(p)>0);
   const pedsAt=todosped.filter(p=>p.atErroTipo==='nosso'&&(p.atCusto||0)>0);
 
@@ -7327,6 +7337,9 @@ function _bipartidoPed(p){
 }
 // Custo de fábrica EFETIVO de um pedido = custo lançado à mão OU, na ausência, o
 // bipartido (40% do financiado). FONTE ÚNICA usada por Rentabilidade, DRE e Custos Fábrica.
+// Pedido de SHOWROOM / investimento interno: não é venda — fora da meta fábrica, do CPV,
+// da comissão e do fiscal; o custo entra como INVESTIMENTO no mês. Ver tipoPedido.
+function _pedShowroom(p){ return !!(p&&p.tipoPedido==='showroom'); }
 function _custoFabPed(p){
   const manual=(p&&p.valorFabrica)||0;
   return manual>0?manual:_bipartidoPed(p);
@@ -7363,6 +7376,7 @@ function _pedValorVendaCRM(p){
   return p.valor||0;
 }
 function _pedidoValorBase(pedido){
+  if(_pedShowroom(pedido)) return 0; // showroom/investimento não é venda → sem base de comissão (zera vend/proj/mont/sup)
   let valorBase=pedido.valor||0;
   if(pedido.leadId){
     const l=(ST.leads||[]).find(x=>String(x.id)===String(pedido.leadId));
@@ -8927,6 +8941,7 @@ const _FAB_ETAPAS_PAGAS=['pg_fab','pedido','producao','expedicao','agendamento',
 function _totalFabricaMes(mes){
   return (ST.pedidos||[])
     .filter(p=>{
+      if(_pedShowroom(p)) return false;    // showroom/investimento não conta na meta fábrica
       if(!p.valorFabrica) return false;
       if(_bipartidoPed(p)>0) return false; // financiado → conta no bipartido (evita dupla contagem na Meta) — item C
       if(!_FAB_ETAPAS_PAGAS.includes(p.status)) return false;
@@ -11760,8 +11775,8 @@ function _rPedPipe(ped,hoje,statsHtml){
 
       return `<div class="ped-card" onclick="abrirModalPedido('${_sid(p.id)}')">
         <div class="ped-card-acc" style="background:${accCor};"></div>
-        <div class="ped-card-nome" title="${nome}">${nome}</div>
-        <div class="ped-card-desc" title="${_esc(p.descricao||'')}">${_esc(p.descricao||'Sem descrição')}</div>
+        <div class="ped-card-nome" title="${nome}">${_pedShowroom(p)?'🏛️ ':''}${nome}</div>
+        <div class="ped-card-desc" title="${_esc(p.descricao||'')}">${_pedShowroom(p)?'<span style="color:#7C3AED;font-weight:600;">Showroom/Investimento · </span>':''}${_esc(p.descricao||'Sem descrição')}</div>
         ${prazoHtml}
         <div class="ped-card-foot">
           <span class="ped-card-val" title="Valor venda (ao cliente)">${_pedValorVendaCRM(p)?fmt(_pedValorVendaCRM(p)):'—'}</span>
@@ -12490,6 +12505,18 @@ function pdAtEnviarEmail(){
   toast(`📧 Abrindo e-mail AT para ${fab.email}`);
 }
 
+// Alterna Venda × Showroom/Investimento no modal do pedido (esconde contrato, ajusta rótulo e aviso).
+function pdSetTipo(t){
+  const tipo=t==='showroom'?'showroom':'venda';
+  const el=document.getElementById('pd-tipo'); if(el) el.value=tipo;
+  const bV=document.getElementById('pd-tipo-venda'), bS=document.getElementById('pd-tipo-showroom');
+  if(bV) bV.className='btn '+(tipo==='venda'?'btn-p':'btn-s')+' btn-sm';
+  if(bS) bS.className='btn '+(tipo==='showroom'?'btn-p':'btn-s')+' btn-sm';
+  const show=(tipo==='showroom');
+  const cw=document.getElementById('pd-contrato-wrap'); if(cw) cw.style.display=show?'none':'';
+  const cl=document.getElementById('pd-cliente-lbl'); if(cl) cl.textContent=show?'Identificação (ex.: Showroom Loja) *':'Nome do cliente *';
+  const av=document.getElementById('pd-showroom-aviso'); if(av) av.style.display=show?'':'none';
+}
 function abrirModalPedido(id){
   _pdId=id||null;
   _pdBaseUAt=id?(((ST.pedidos||[]).find(x=>String(x.id)===String(id))||{})._uAt||0):0; // base p/ detectar conflito ao salvar
@@ -12541,6 +12568,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-cliente-sel').value    =p.clienteCadId||'';
     document.getElementById('pd-cliente-txt').value    =p.clienteNome||p.cliente||'';
     document.getElementById('pd-ncontrato').value      =p.nContrato||'';
+    pdSetTipo(p.tipoPedido||'venda');
     document.getElementById('pd-resp').value           =p.responsavel||'';
     document.getElementById('pd-projetista').value     =p.projetista||'';
     document.getElementById('pd-montador').value       =p.montador||'';
@@ -12603,6 +12631,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-cliente-sel').value='';
     document.getElementById('pd-cliente-txt').value='';
     document.getElementById('pd-ncontrato').value='';
+    pdSetTipo('venda');
     document.getElementById('pd-resp').value='';
     document.getElementById('pd-projetista').value='';
     document.getElementById('pd-montador').value='';
@@ -12631,9 +12660,10 @@ function salvarPedido(){
   const txt=document.getElementById('pd-cliente-txt').value.trim();
   const cadCliente=(ST.cadastros||[]).find(c=>String(c.id)===String(cid));
   const clienteNome=txt||(cadCliente?.nome)||'';
-  if(!clienteNome){toast('Informe o nome do cliente');return;}
+  const _tipoPed=document.getElementById('pd-tipo')?.value==='showroom'?'showroom':'venda';
+  if(!clienteNome){toast(_tipoPed==='showroom'?'Informe a identificação do pedido':'Informe o nome do cliente');return;}
   const respVal=document.getElementById('pd-resp').value;
-  if(!respVal){toast('Selecione o responsável pelo pedido');return;}
+  if(!respVal && _tipoPed!=='showroom'){toast('Selecione o responsável pelo pedido');return;} // showroom interno dispensa responsável de obra
   const isEdit=!!_pdId;
   // ⚠️ Detecção de conflito: o pedido foi alterado por outra pessoa enquanto este modal estava aberto?
   const _prevPed=_pdId?(ST.pedidos||[]).find(p=>String(p.id)===String(_pdId)):null;
@@ -12642,6 +12672,7 @@ function salvarPedido(){
   }
   const pedido={
     id:           _pdId||_newId(), _uAt:Date.now(),
+    tipoPedido:   _tipoPed,
     clienteCadId: cid||'',
     clienteNome,
     cliente:      clienteNome,
@@ -13487,6 +13518,7 @@ function calcDRE(mesAno){
   // Auto = fábrica + fornecedores + outros custos, na competência da VENDA (fechamento do lead), alinhado à receita.
   const cpvManual   =soma('cpv');
   const cpvPedidos  =(ST.pedidos||[]).reduce((a,p)=>{
+    if(_pedShowroom(p)) return a;   // showroom não é CPV (não tem venda) — entra como Investimento abaixo
     const _l=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
     const ref=_l?.dataFechamento||_l?.dataCriacao||p.data||'';
     if(!String(ref).startsWith(mesAno)) return a;
@@ -13496,6 +13528,14 @@ function calcDRE(mesAno){
             +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0);
   },0);
   const cpv         =cpvManual+cpvPedidos;
+  // Investimento showroom/interno do mês (compras que NÃO são venda): reduz o resultado como investimento.
+  const investShowroom=(ST.pedidos||[]).reduce((a,p)=>{
+    if(!_pedShowroom(p)) return a;
+    if(!String(p.data||'').startsWith(mesAno)) return a;
+    return a+_custoFabPed(p)
+            +(p.fornecedoresAdicionais||[]).reduce((s,f)=>s+(f.valor||0),0)
+            +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0);
+  },0);
 
   // Custos Fixos (novos + legado)
   const cfAluguel   =soma('cf_aluguel')   +soma('desp_aluguel');
@@ -13522,7 +13562,7 @@ function calcDRE(mesAno){
   const recLiq     =recBruta-ded;
   const lucroBruto =recLiq-cpv;
   const totalDesp  =despPessoal+totalCF+totalCV;
-  const resultado  =lucroBruto-totalDesp;
+  const resultado  =lucroBruto-totalDesp-investShowroom;
   const margemBruta=recLiq>0?lucroBruto/recLiq*100:0;
   const margemOp   =recLiq>0?resultado/recLiq*100:0;
 
@@ -13530,6 +13570,7 @@ function calcDRE(mesAno){
           despPessoal,despPessoalOp,despPrestadores,
           cfAluguel,cfEnergia,cfAgua,cfInternet,cfSistema,cfDiarista,cfHigiene,cfManutencao,cfOutras,totalCF,
           cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,totalCV,
+          investShowroom,
           totalDesp,resultado,margemBruta,margemOp};
 }
 
@@ -14653,6 +14694,13 @@ function rFinanceiro(){
       <span class="dre-lbl ttl">Total Despesas</span>
       <div class="dre-right"><span class="dre-val fail" style="font-weight:700;">${fmt(d.totalDesp)}</span></div>
     </div>
+
+    ${d.investShowroom>0?`
+    <div class="dre-sec-hdr"><span>Investimentos</span></div>
+    <div class="dre-row dre-indent">
+      <span class="dre-lbl sm">🏛️ Showroom / compras internas</span>
+      <div class="dre-right"><span class="dre-auto-tag">AUTO</span><span class="dre-val fail">${fmt(d.investShowroom)}</span></div>
+    </div>`:''}
 
     <div class="dre-row dre-resultado">
       <span class="dre-lbl ttl white">(=) RESULTADO OPERACIONAL</span>
@@ -16792,6 +16840,7 @@ function rFiscalPendentes(){
   // Critério = CRM: toda VENDA FECHADA (lead ganho, ou pedido manual) ainda SEM nota.
   // NÃO depende do estágio de produção — a nota sai na venda, não no fim da montagem.
   const todos=(ST.pedidos||[]).filter(p=>{
+    if(_pedShowroom(p)) return false;                             // showroom/investimento não emite NFe
     if(p.nfe&&p.nfe.status!=='rejeitada') return false;            // já tem nota emitida/em processamento
     const l=p.leadId?(ST.leads||[]).find(x=>String(x.id)===String(p.leadId)):null;
     return !l || l.status==='ganho';                               // venda fechada (ganho) ou pedido manual
