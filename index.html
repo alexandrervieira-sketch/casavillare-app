@@ -14,6 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -2929,6 +2930,8 @@ function initFirebase(){
     if(_FB_CONFIG.apiKey==='SUBSTITUIR'){console.info('[CVP] Firebase: config não preenchida — modo offline.');return;}
     if(typeof firebase==='undefined'){console.warn('[CVP] Firebase SDK não carregado.');return;}
     const app=firebase.apps.length?firebase.app():firebase.initializeApp(_FB_CONFIG);
+    // App Check (reCAPTCHA v3) — atesta que a requisição vem do app real. Ativar ANTES dos demais serviços.
+    try{ if(firebase.appCheck) firebase.appCheck().activate('6LdDzlwtAAAAAIJSc6jLrh9qfzCu5ICfAQ0VrogS', true); }catch(e){ console.warn('[CVP] App Check não ativado:',e&&e.message); }
     _fbDb=firebase.firestore(app);
     try{ if(firebase.storage) _fbStorage=firebase.storage(app); }catch(e){ console.warn('[CVP] Storage não inicializado:',e&&e.message); }
     _fbReady=true;
