@@ -898,7 +898,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         </div>
       </div>
       <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
-        <button class="fin-sub-btn active" id="rel-sub-resumo"       onclick="relSubTab('resumo')">📊 Resumo Mensal</button>
+        <button class="fin-sub-btn active" id="rel-sub-resumo"       onclick="relSubTab('resumo')">🛒 Vendas</button>
         <button class="fin-sub-btn"        id="rel-sub-conversao"  onclick="relSubTab('conversao')">🔄 Funil de Conversão</button>
         <button class="fin-sub-btn"        id="rel-sub-perda"      onclick="relSubTab('perda')">🔴 Análise de Perdas</button>
         <button class="fin-sub-btn"        id="rel-sub-rentab"     onclick="relSubTab('rentab')">💹 Rentabilidade</button>
@@ -5928,7 +5928,7 @@ function relSubTab(sub){
     if(btn) btn.classList.toggle('active', k===sub);
   });
   const nav=document.getElementById('rel-mes-nav');
-  if(nav) nav.style.display=sub==='resumo'?'':'none';
+  if(nav) nav.style.display='none'; // Vendas tem filtro de período próprio; demais abas não usam o nav de mês
   if(sub==='resumo')      rRelResumo();
   else if(sub==='perda')   rRelAnalisePerda();
   else if(sub==='rentab')  rRelRentabilidade();
@@ -6200,264 +6200,80 @@ function rRelCustosFabrica(tgt){
   }
 }
 
+let _vendasFiltro='mes_atual';
+function _vendasAplicarFiltro(k){ _vendasFiltro=k; rRelResumo(); }
+// Aba "Vendas": contratos vendidos, valor vendido e evolução — por período (mês/trimestre/12 meses).
 function rRelResumo(){
   if(!_temPerm('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
-  const mesAno=mesAnoStr(_relMes,_relAno);
-  document.getElementById('rel-mes-label').textContent=mesNomeStr(_relMes,_relAno);
-  const fs=ST.folhas.filter(f=>f.mesAno===mesAno);
-  const tPago=fs.filter(f=>f.status==='pago').reduce((a,f)=>a+liquidoFolha(f),0)
-             +fs.filter(f=>f.status==='parcial').reduce((a,f)=>a+(f.valorPago||0),0);
-  const tPend=fs.filter(f=>f.status==='pendente').reduce((a,f)=>a+liquidoFolha(f),0)
-             +fs.filter(f=>f.status==='parcial').reduce((a,f)=>a+(liquidoFolha(f)-(f.valorPago||0)),0);
-  const tTotal=tPago+tPend;
-
-  const folhasRows=fs.length
-    ?fs.map(f=>{
-        const liq=liquidoFolha(f);
-        const bdg=f.status==='pago'?'b-ok':f.status==='parcial'?'b-warn':'b-wait';
-        const stxt=f.status==='pago'?'Pago':f.status==='parcial'?'Parcial':'Pendente';
-        return `<tr><td class="td-bold">${iconeFunc(infoFunc(f.pessoa).perfil)} ${f.pessoa}</td><td style="color:var(--gl);font-size:12px;">${f.tipo}</td><td>${fmt(f.salarioBase||0)}</td><td class="td-gold">${fmt(liq)}</td><td><span class="badge ${bdg}">${stxt}</span></td></tr>`;
-      }).join('')
-    :'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma folha neste mês.</td></tr>';
-
-  const coms=(ST.comissoes||[]).filter(c=>c.mesAno===mesAno);
-  const comsRows=coms.length
-    ?coms.map(c=>`<tr><td class="td-bold">${_esc(c.pessoa)}</td><td>${_esc(c.descricao)}</td><td style="color:var(--gl);">${c.data}</td><td class="td-gold">${fmt(c.valor)}</td></tr>`).join('')
-    :'<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma comissão neste mês.</td></tr>';
-
-  const agMes=(ST.eventos||[]).filter(e=>(e.data||'').substring(0,7)===mesAno);
-
-  // ── Custo de Pessoal detalhado ──
-  const _areasPrest=['outros'];
-  const fsOp   =fs.filter(f=>!_areasPrest.includes(infoFunc(f.pessoa).area));
-  const fsPrest=fs.filter(f=> _areasPrest.includes(infoFunc(f.pessoa).area));
-  const tOp    =fsOp.reduce((a,f)=>a+liquidoFolha(f),0);
-  const tPrest =fsPrest.reduce((a,f)=>a+liquidoFolha(f),0);
-  // Membros cadastrados sem folha lançada no mês
-  const _nomesComFolha=new Set(fs.map(f=>f.pessoa));
-  const _todasAreas=['gestor','comercial','obras'];
-  const semFolhaOp=todosFunc().filter(p=>
-    !_nomesComFolha.has(p.nome) &&
-    _todasAreas.includes(infoFunc(p.nome).area) &&
-    (p.salarioBase||0)>0
-  );
-  const semFolhaPrest=(ST.equipe.outros||[]).filter(p=>
-    !_nomesComFolha.has(p.nome) && (p.salarioBase||0)>0
-  );
-  const tOpProj   =semFolhaOp.reduce((a,p)=>a+(p.salarioBase||0),0);
-  const tPrestProj=semFolhaPrest.reduce((a,p)=>a+(p.salarioBase||0),0);
-
-  // Histórico 6 meses custo pessoal
-  const hist6=[];
-  for(let i=5;i>=0;i--){
-    let m=_relMes-i,y=_relAno;
-    if(m<0){m+=12;y--;}
-    const ma=mesAnoStr(m,y);
-    const fsH=(ST.folhas||[]).filter(f=>f.mesAno===ma);
-    const opH =fsH.filter(f=>!_areasPrest.includes(infoFunc(f.pessoa).area)).reduce((a,f)=>a+liquidoFolha(f),0);
-    const prH =fsH.filter(f=> _areasPrest.includes(infoFunc(f.pessoa).area)).reduce((a,f)=>a+liquidoFolha(f),0);
-    hist6.push({label:['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m],op:opH,prest:prH,total:opH+prH});
-  }
-  const maxHist=Math.max(...hist6.map(h=>h.total),1);
-
+  const per=_convGetPeriodo(_vendasFiltro);
+  const de=per.de, ate=per.ate;
+  const fechados=(ST.leads||[]).filter(l=>{ if(l.status!=='ganho') return false; const r=l.dataFechamento||l.dataCriacao||''; return r>=de&&r<=ate; });
+  const nContratos=fechados.length;
+  const valorVendido=fechados.reduce((s,l)=>s+_leadValorVenda(l),0);
+  const ticket=nContratos>0?valorVendido/nContratos:0;
+  // Evolução — últimos 12 meses (por fechamento)
+  const _hoje=new Date(); const MES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const meses=[];
+  for(let i=11;i>=0;i--){ const d=new Date(_hoje.getFullYear(),_hoje.getMonth()-i,1); meses.push({ma:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:MES[d.getMonth()]}); }
+  const evol=meses.map(m=>{ const ls=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||l.dataCriacao||'').slice(0,7)===m.ma); return {label:m.label,n:ls.length,valor:ls.reduce((s,l)=>s+_leadValorVenda(l),0)}; });
+  const maxVal=Math.max(...evol.map(e=>e.valor),1);
+  const porV={}; fechados.forEach(l=>{const v=l.responsavel||l.pessoa||'—'; if(!porV[v])porV[v]={n:0,valor:0}; porV[v].n++; porV[v].valor+=_leadValorVenda(l);});
+  const vendRows=Object.entries(porV).sort((a,b)=>b[1].valor-a[1].valor);
+  const FILTROS=[['mes_atual','Mês atual'],['mes_passado','Mês passado'],['trim_atual','Trimestre'],['ult_12','Últ. 12 meses'],['ano_atual','Ano']];
+  const btns=FILTROS.map(([k,l])=>`<button class="btn ${_vendasFiltro===k?'btn-p':'btn-s'} btn-sm" onclick="_vendasAplicarFiltro('${k}')" style="font-size:11px;">${l}</button>`).join('');
+  const fmtBRL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   document.getElementById('rel-content').innerHTML=`
-    <!-- ── KPIs Custo de Pessoal ── -->
-    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">💼 Custo de Pessoal — ${mesNomeStr(_relMes,_relAno)}</div>
-    <div class="stats-grid" style="margin-bottom:0;">
-      <div class="stat-card" style="border-left:4px solid var(--p);">
-        <div class="sc-label">Total Pessoal</div>
-        <div class="sc-val">${fmt(tTotal)}</div>
-        <div style="font-size:11px;color:var(--gl);margin-top:4px;">${fs.length} colaborador(es)</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #3B82F6;">
-        <div class="sc-label">👥 Equipe Operacional</div>
-        <div class="sc-val" style="color:#1D4ED8;">${fmt(tOp+tOpProj)}</div>
-        <div style="font-size:11px;color:var(--gl);margin-top:4px;">${fsOp.length} lançado(s)${semFolhaOp.length?` · <span style="color:#F59E0B;">${semFolhaOp.length} a lançar</span>`:''}</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #8B5CF6;">
-        <div class="sc-label">🤝 Prestadores de Serviço</div>
-        <div class="sc-val" style="color:#6D28D9;">${fmt(tPrest+tPrestProj)}</div>
-        <div style="font-size:11px;color:var(--gl);margin-top:4px;">${fsPrest.length} lançado(s)${semFolhaPrest.length?` · <span style="color:#F59E0B;">${semFolhaPrest.length} a lançar</span>`:''}</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #16A34A;">
-        <div class="sc-label">✅ Pago no mês</div>
-        <div class="sc-val ok">${fmt(tPago)}</div>
-      </div>
-      <div class="stat-card" style="border-left:4px solid #F59E0B;">
-        <div class="sc-label">⏳ Pendente</div>
-        <div class="sc-val warn">${fmt(tPend)}</div>
-      </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${btns}</div>
+    <div style="font-size:12px;color:var(--gl);margin-bottom:14px;">Período: <strong>${per.label}</strong></div>
+    <div class="stats-grid" style="margin-bottom:18px;">
+      <div class="stat-card" style="border-left:4px solid var(--p);"><div class="sc-label">🧾 Contratos vendidos</div><div class="sc-val">${nContratos}</div></div>
+      <div class="stat-card" style="border-left:4px solid #16A34A;"><div class="sc-label">💰 Valor vendido</div><div class="sc-val ok" style="font-size:19px;">${fmtBRL(valorVendido)}</div></div>
+      <div class="stat-card" style="border-left:4px solid #3B82F6;"><div class="sc-label">🎯 Ticket médio</div><div class="sc-val" style="color:#1D4ED8;">${fmtBRL(ticket)}</div></div>
     </div>
-
-    <!-- ── Histórico 6 meses ── -->
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin:14px 0;">
-      <div style="font-size:11px;font-weight:700;color:var(--gl);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">Evolução — últimos 6 meses</div>
-      <div style="display:flex;align-items:flex-end;gap:8px;height:80px;">
-        ${hist6.map(h=>`
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
-            <div style="width:100%;display:flex;flex-direction:column;gap:1px;height:60px;justify-content:flex-end;">
-              <div style="width:100%;background:#3B82F6;height:${h.op?Math.max(4,h.op/maxHist*44):0}px;border-radius:3px 3px 0 0;" title="Operacional: ${fmt(h.op)}"></div>
-              <div style="width:100%;background:#8B5CF6;height:${h.prest?Math.max(4,h.prest/maxHist*44):0}px;" title="Prestadores: ${fmt(h.prest)}"></div>
-            </div>
-            <div style="font-size:10px;color:var(--gl);">${h.label}</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:18px;">
+      <div style="font-size:11px;font-weight:700;color:var(--gl);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">📈 Evolução — últimos 12 meses (valor vendido)</div>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:130px;">
+        ${evol.map(e=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;" title="${e.label}: ${fmtBRL(e.valor)} · ${e.n} contrato(s)">
+            <div style="font-size:9px;color:var(--gl);white-space:nowrap;">${e.valor>0?(e.valor>=1000?Math.round(e.valor/1000)+'k':Math.round(e.valor)):''}</div>
+            <div style="width:100%;background:linear-gradient(180deg,#C8A97E,#A9773F);height:${e.valor?Math.max(3,e.valor/maxVal*90):0}px;border-radius:4px 4px 0 0;"></div>
+            <div style="font-size:10px;color:var(--gl);">${e.label}</div>
           </div>`).join('')}
       </div>
-      <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--gl);">
-        <span>🟦 Operacional</span><span>🟪 Prestadores</span>
-      </div>
     </div>
-
-    <!-- ── Detalhamento por pessoa ── -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-      <!-- Equipe Operacional -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-        <div style="background:#EFF6FF;padding:10px 16px;border-bottom:1px solid #BFDBFE;">
-          <div style="font-size:12px;font-weight:700;color:#1D4ED8;">👥 Equipe Operacional</div>
-          <div style="font-size:11px;color:#3B82F6;">${fmt(tOp)} total</div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:#F8FAFF;">
-            <th style="padding:6px 12px;text-align:left;font-size:10px;color:var(--gl);font-weight:600;">Colaborador</th>
-            <th style="padding:6px 12px;text-align:left;font-size:10px;color:var(--gl);font-weight:600;">Perfil</th>
-            <th style="padding:6px 12px;text-align:right;font-size:10px;color:var(--gl);font-weight:600;">Valor</th>
-            <th style="padding:6px 12px;text-align:center;font-size:10px;color:var(--gl);font-weight:600;">Status</th>
-          </tr></thead>
-          <tbody>
-            ${fsOp.map(f=>{
-              const liq=liquidoFolha(f);
-              const info=infoFunc(f.pessoa);
-              const bdg=f.status==='pago'?'b-ok':f.status==='parcial'?'b-warn':'b-wait';
-              const stxt=f.status==='pago'?'Pago':f.status==='parcial'?'Parcial':'Pend.';
-              return`<tr style="border-top:1px solid var(--border);">
-                <td style="padding:7px 12px;font-weight:600;">${iconeFunc(info.perfil)} ${f.pessoa}</td>
-                <td style="padding:7px 12px;color:var(--gl);font-size:11px;">${info.perfil}</td>
-                <td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--p);">${fmt(liq)}</td>
-                <td style="padding:7px 12px;text-align:center;"><span class="badge ${bdg}" style="font-size:10px;">${stxt}</span></td>
-              </tr>`;}).join('')}
-            ${semFolhaOp.map(p=>{
-              const info=infoFunc(p.nome);
-              return`<tr style="border-top:1px solid var(--border);opacity:0.7;">
-                <td style="padding:7px 12px;font-weight:600;">${iconeFunc(info.perfil)} ${_esc(p.nome)}</td>
-                <td style="padding:7px 12px;color:var(--gl);font-size:11px;">${info.perfil}</td>
-                <td style="padding:7px 12px;text-align:right;font-weight:600;color:#9CA3AF;">${fmt(p.salarioBase||0)}</td>
-                <td style="padding:7px 12px;text-align:center;"><span class="badge" style="font-size:10px;background:#FEF3C7;color:#92400E;">📋 A lançar</span></td>
-              </tr>`;}).join('')}
-            ${!fsOp.length&&!semFolhaOp.length?'<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--gl);font-size:11px;">Nenhuma folha lançada</td></tr>':''}
-          </tbody>
-        </table>
-      </div>
-      <!-- Prestadores -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-        <div style="background:#F5F3FF;padding:10px 16px;border-bottom:1px solid #DDD6FE;">
-          <div style="font-size:12px;font-weight:700;color:#6D28D9;">🤝 Prestadores de Serviço</div>
-          <div style="font-size:11px;color:#8B5CF6;">${fmt(tPrest)} total</div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:#FAF9FF;">
-            <th style="padding:6px 12px;text-align:left;font-size:10px;color:var(--gl);font-weight:600;">Colaborador</th>
-            <th style="padding:6px 12px;text-align:left;font-size:10px;color:var(--gl);font-weight:600;">Perfil</th>
-            <th style="padding:6px 12px;text-align:right;font-size:10px;color:var(--gl);font-weight:600;">Valor</th>
-            <th style="padding:6px 12px;text-align:center;font-size:10px;color:var(--gl);font-weight:600;">Status</th>
-          </tr></thead>
-          <tbody>
-            ${fsPrest.map(f=>{
-              const liq=liquidoFolha(f);
-              const info=infoFunc(f.pessoa);
-              const bdg=f.status==='pago'?'b-ok':f.status==='parcial'?'b-warn':'b-wait';
-              const stxt=f.status==='pago'?'Pago':f.status==='parcial'?'Parcial':'Pend.';
-              return`<tr style="border-top:1px solid var(--border);">
-                <td style="padding:7px 12px;font-weight:600;">${iconeFunc(info.perfil)} ${f.pessoa}</td>
-                <td style="padding:7px 12px;color:var(--gl);font-size:11px;">${info.perfil}</td>
-                <td style="padding:7px 12px;text-align:right;font-weight:600;color:#6D28D9;">${fmt(liq)}</td>
-                <td style="padding:7px 12px;text-align:center;"><span class="badge ${bdg}" style="font-size:10px;">${stxt}</span></td>
-              </tr>`;}).join('')}
-            ${semFolhaPrest.map(p=>{
-              const info=infoFunc(p.nome);
-              return`<tr style="border-top:1px solid var(--border);opacity:0.7;">
-                <td style="padding:7px 12px;font-weight:600;">${iconeFunc(info.perfil)} ${_esc(p.nome)}</td>
-                <td style="padding:7px 12px;color:var(--gl);font-size:11px;">${info.perfil}</td>
-                <td style="padding:7px 12px;text-align:right;font-weight:600;color:#9CA3AF;">${fmt(p.salarioBase||0)}</td>
-                <td style="padding:7px 12px;text-align:center;"><span class="badge" style="font-size:10px;background:#FEF3C7;color:#92400E;">📋 A lançar</span></td>
-              </tr>`;}).join('')}
-            ${!fsPrest.length&&!semFolhaPrest.length?'<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--gl);font-size:11px;">Nenhuma folha lançada</td></tr>':''}
-          </tbody>
-        </table>
-      </div>
+    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Por vendedor — ${per.label}</div>
+    <div class="tbl-wrap" style="margin-bottom:18px;">
+      <table><thead><tr><th>Vendedor(a)</th><th style="text-align:center;">Contratos</th><th style="text-align:right;">Valor vendido</th><th style="text-align:right;">Ticket médio</th></tr></thead>
+      <tbody>${vendRows.length?vendRows.map(([v,d])=>`<tr><td class="td-bold">${_esc(v)}</td><td style="text-align:center;">${d.n}</td><td class="td-gold" style="text-align:right;">${fmtBRL(d.valor)}</td><td style="text-align:right;color:var(--gl);">${fmtBRL(d.n?d.valor/d.n:0)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda no período.</td></tr>'}</tbody></table>
     </div>
-
-    <div class="stats-grid">
-      <div class="stat-card"><div class="sc-label">Total folhas</div><div class="sc-val">${fmt(tTotal)}</div></div>
-      <div class="stat-card"><div class="sc-label">Pago</div><div class="sc-val ok">${fmt(tPago)}</div></div>
-      <div class="stat-card"><div class="sc-label">Pendente</div><div class="sc-val warn">${fmt(tPend)}</div></div>
-      <div class="stat-card"><div class="sc-label">Eventos no mês</div><div class="sc-val">${agMes.length}</div></div>
-    </div>
-    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">CRM — Pipeline do Mês</div>
-    <div class="stats-grid" style="margin-bottom:20px;">${(()=>{
-      const leadsM=(ST.leads||[]).filter(l=>(l.dataCriacao||'').startsWith(mesAno));
-      const ganhos=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
-      const perdidos=(ST.leads||[]).filter(l=>l.status==='perdido'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
-      const totalVendido=ganhos.reduce((a,l)=>a+_leadValorVenda(l),0);
-      const txConv=leadsM.length>0?Math.round(ganhos.length/leadsM.length*100):0;
-      return`<div class="stat-card"><div class="sc-label">Leads entrados</div><div class="sc-val">${leadsM.length}</div></div>
-             <div class="stat-card"><div class="sc-label">Vendas fechadas</div><div class="sc-val ok">${ganhos.length}</div></div>
-             <div class="stat-card"><div class="sc-label">Perdidos</div><div class="sc-val warn">${perdidos.length}</div></div>
-             <div class="stat-card"><div class="sc-label">Taxa conversão</div><div class="sc-val">${txConv}%</div></div>
-             <div class="stat-card"><div class="sc-label">Valor vendido</div><div class="sc-val" style="font-size:15px;">${fmt(totalVendido)}</div></div>`;
-    })()}</div>
-    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Folhas de Pagamento</div>
+    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Contratos fechados — ${per.label}</div>
     <div class="tbl-wrap">
-      <table><thead><tr><th>Colaborador</th><th>Área</th><th>Salário base</th><th>A pagar</th><th>Status</th></tr></thead>
-      <tbody>${folhasRows}</tbody></table>
-    </div>
-    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Comissões — Equipe Comercial</div>
-    <div class="tbl-wrap">
-      <table><thead><tr><th>Vendedora</th><th>Cliente</th><th>Venda</th><th>Desconto</th><th>Pts</th><th>Com%</th><th>Comissão</th></tr></thead>
-      <tbody>${(()=>{
-        const leadsG=(ST.leads||[]).filter(l=>l.status==='ganho'&&(l.dataFechamento||(l.dataCriacao||'')).startsWith(mesAno));
-        const vendasM=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno);
-        const todas=[
-          ...leadsG.map(l=>{const d=l.desconto||0;const{pontos,pct}=_calcComVendaPontos(_descEfetivoComissao(l));const vl=_aplicarMargemErro(_valorLiquidoVenda(l));return{pessoa:l.responsavel,cliente:l.nome,valorBruto:l.valor,desconto:d,pontos,comissaoPct:pct,valorCom:_round2(vl*(pct/100))};}),
-          ...vendasM.map(v=>({pessoa:v.pessoa,cliente:v.cliente,valorBruto:v.valorBruto,desconto:v.desconto,pontos:v.pontos,comissaoPct:v.comissaoPct,valorCom:v.valorCom}))
-        ];
-        if(!todas.length) return`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gl);">Nenhuma venda comercial neste mês.</td></tr>`;
-        return todas.map(v=>`<tr><td class="td-bold">${_esc(v.pessoa||'—')}</td><td>${_esc(v.cliente||'—')}</td><td>${fmt(_vendaComExib(v))}</td><td>${_pctVenda(v.desconto)}%</td><td>${(v.pontos||0).toFixed(2).replace('.',',')}</td><td style="color:var(--ok);font-weight:600;">${(v.comissaoPct||0).toFixed(1).replace('.',',')}%</td><td class="td-gold">${fmt(v.valorCom)}</td></tr>`).join('');
-      })()}</tbody></table>
-    </div>
-    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Comissões — Equipe de Obras</div>
-    <div class="tbl-wrap">
-      <table><thead><tr><th>Colaborador</th><th>Descrição</th><th>Data</th><th>Valor</th></tr></thead>
-      <tbody>${comsRows}</tbody></table>
-    </div>
-    ${agMes.length?`
-    <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Eventos do Mês</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Tipo</th><th>Título</th><th>Responsável</th><th>Cliente</th></tr></thead><tbody>
-    ${agMes.sort((a,b)=>a.data.localeCompare(b.data)).map(e=>{const tp=_tipoEv[e.tipo]||_tipoEv.outro;return`<tr><td>${new Date(e.data+'T12:00').toLocaleDateString('pt-BR')}</td><td style="color:var(--gl);">${e.horaIni||'—'}</td><td>${tp.icon} ${tp.label}</td><td class="td-bold">${_esc(e.titulo)}</td><td>${_esc(e.resp||'—')}</td><td>${_esc(e.cliente||'—')}</td></tr>`;}).join('')}
-    </tbody></table></div>`:''}
-    <div class="meta-section-title" style="margin-top:24px;">📍 Origem dos Leads — ${mesNomeStr(_relMes,_relAno)}</div>
-    <div class="orig-wrap">
-      <div class="orig-chart-box"><canvas id="chart-origem" height="220"></canvas></div>
-      <div class="orig-table-box" id="orig-table"></div>
+      <table><thead><tr><th>Cliente</th><th>Nº Contrato</th><th>Data</th><th>Vendedor(a)</th><th style="text-align:right;">Valor</th></tr></thead>
+      <tbody>${fechados.length?fechados.slice().sort((a,b)=>(b.dataFechamento||b.dataCriacao||'').localeCompare(a.dataFechamento||a.dataCriacao||'')).map(l=>{
+        const cad=(ST.cadastros||[]).find(c=>c.leadId===String(l.id)&&c.tipo==='cliente');
+        const nc=cad?.numContrato||''; const dt=(l.dataFechamento||l.dataCriacao||'');
+        return `<tr><td class="td-bold">${_esc(l.nome||'—')}</td><td style="color:var(--gl);">${_esc(nc)||'—'}</td><td style="color:var(--gl);">${dt?dt.split('-').reverse().join('/'):'—'}</td><td>${_esc(l.responsavel||'—')}</td><td class="td-gold" style="text-align:right;">${fmtBRL(_leadValorVenda(l))}</td></tr>`;
+      }).join(''):'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gl);">Nenhum contrato fechado no período.</td></tr>'}</tbody></table>
     </div>`;
-  rRelOrigemChart(mesAno);
 }
 
-function rRelOrigemChart(mesAno){
-  // ── Agrupa leads e vendas por origem no mês ──
+function rRelOrigemChart(de,ate){
+  // ── Agrupa leads e vendas por origem no PERÍODO (de..ate) ──
   const origens=Object.keys(ORIG_LABEL);
   const oLeads={}, oVendas={}, oValor={};
   origens.forEach(o=>{oLeads[o]=0;oVendas[o]=0;oValor[o]=0;});
 
   (ST.leads||[]).forEach(l=>{
-    // leads criados no mês
+    // leads criados no período
     const refC=l.dataCriacao;
-    if(refC&&refC.slice(0,7)===mesAno){
+    if(refC&&refC>=de&&refC<=ate){
       const o=origens.includes(l.origem)?l.origem:'outro';
       oLeads[o]++;
     }
-    // vendas fechadas no mês
+    // vendas fechadas no período
     if(l.status==='ganho'){
       const refF=l.dataFechamento||l.dataCriacao;
-      if(refF&&refF.slice(0,7)===mesAno){
+      if(refF&&refF>=de&&refF<=ate){
         const o=origens.includes(l.origem)?l.origem:'outro';
         oVendas[o]++;
         const cad=(ST.cadastros||[]).find(c=>c.leadId===String(l.id)&&c.tipo==='cliente');
@@ -6592,12 +6408,13 @@ function _convAplicarFiltro(k){
   rRelConversao();
 }
 
-function _convGetPeriodo(){
+function _convGetPeriodo(filtro){
+  const f=filtro||_convFiltro; // sem argumento → usa o filtro do Funil; a aba Vendas passa o seu (_vendasFiltro)
   const hoje=new Date();
   const y=hoje.getFullYear(), m=hoje.getMonth(), d=hoje.getDate();
   const pad=n=>String(n).padStart(2,'0');
   const iso=(Y,M,D)=>`${Y}-${pad(M+1)}-${pad(D)}`;
-  switch(_convFiltro){
+  switch(f){
     case 'mes_atual':
       return {de:iso(y,m,1), ate:iso(y,m,new Date(y,m+1,0).getDate()), label:'Mês atual'};
     case 'mes_passado':{
@@ -7143,7 +6960,13 @@ function rRelConversao(){
           </tr>`).join('')}
         </tbody>
       </table></div>
-    </div>`:''}`;
+    </div>`:''}
+    <div class="meta-section-title" style="margin-top:24px;">📍 Origem dos Leads — ${per.label}</div>
+    <div class="orig-wrap">
+      <div class="orig-chart-box"><canvas id="chart-origem" height="220"></canvas></div>
+      <div class="orig-table-box" id="orig-table"></div>
+    </div>`;
+  rRelOrigemChart(_convDe, _convAte);
 }
 
 // ══════════════════════════════════════════════════════
