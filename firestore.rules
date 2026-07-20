@@ -26,7 +26,7 @@ service cloud.firestore {
       return request.auth != null
         && request.auth.uid != null
         && request.auth.token.email != null
-        // && request.auth.token.email_verified == true   // (opcional, ver cabeçalho)
+        && request.auth.token.email_verified == true   // fecha o bypass: conta com e-mail corporativo forjado não é verificável
         && request.auth.token.email.matches('(?i)^[^@]+@casavillare[.]com[.]br$');
     }
     function autenticado() {

@@ -2977,6 +2977,9 @@ async function _fbAuthCriar(email,pass){
   if(typeof firebase==='undefined'||!firebase.auth){return 'offline';}
   try{
     await firebase.auth().createUserWithEmailAndPassword(email,pass);
+    // Envia o link de verificação — o acesso exige e-mail verificado (fecha o bypass de e-mail forjado).
+    try{ if(firebase.auth().currentUser) await firebase.auth().currentUser.sendEmailVerification(); }
+    catch(e){ console.warn('[CVP] sendEmailVerification falhou:',e&&e.message); }
     console.info('[CVP] Firebase Auth: conta criada (1º acesso) —',email);
     return 'ok';
   }catch(err){
@@ -3821,17 +3824,13 @@ async function criarPrimeiraSenha(){
   if(st==='offline') return mostrarErro('Sem conexão com o servidor. Tente novamente.');
   if(st!=='ok')      return mostrarErro('Não foi possível criar agora. Tente novamente.');
 
-  // createUser já autenticou a sessão. Carrega a nuvem (inclui a equipe) e entra.
-  toast('Senha criada! Entrando...');
-  try{ const meta=await _fsMeta(); if(meta&&meta.seeded) await _fsLoadAll(); }
-  catch(err){ console.warn('[CVP] load no 1º acesso falhou:',err&&err.message); }
-  const pessoa=todosFunc().find(p=>_emailDePessoa(p)===email); // equipe da NUVEM
-  if(!pessoa){
-    await _fbAuthLogout();
-    return mostrarErro('Conta criada, mas você ainda não está na Equipe. Peça ao gestor para te adicionar em Configurações → Equipe e faça o login.');
-  }
-  const info=infoFunc(pessoa.nome);
-  entrar(pessoa.nome, pessoa.perfil, info.area);
+  // Conta criada. O acesso agora EXIGE e-mail VERIFICADO (segurança) — o link já foi enviado
+  // em _fbAuthCriar. Não entra direto (a nuvem bloquearia até verificar): desloga e orienta.
+  // Depois de clicar no link do e-mail, a pessoa faz o login normal.
+  await _fbAuthLogout();
+  erro.style.display=''; erro.style.color='#166534';
+  erro.textContent='✅ Senha criada! Enviamos um link de verificação para '+email+'. Abra seu e-mail, clique no link e depois faça o login normal. (Confira também a caixa de spam.)';
+  return;
 }
 
 function _emailDePessoa(p){

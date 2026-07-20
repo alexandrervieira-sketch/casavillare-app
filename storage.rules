@@ -12,6 +12,7 @@ service firebase.storage {
     function corporativo() {
       return request.auth != null
         && request.auth.token.email != null
+        && request.auth.token.email_verified == true   // fecha o bypass: e-mail corporativo forjado não é verificável
         && request.auth.token.email.matches('(?i)^[^@]+@casavillare[.]com[.]br$');
     }
     function podeFinanceiro() {
