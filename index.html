@@ -798,7 +798,7 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div class="pg-hdr">
         <h2>Pedidos</h2>
         <div class="pg-actions">
-          <button class="btn btn-p" id="btn-novo-pedido" onclick="abrirModalPedido(null)">+ Novo pedido</button>
+          <button class="btn btn-p" id="btn-novo-pedido" onclick="abrirModalPedido(null)" title="Pedido manual = Showroom/investimento interno. Venda de verdade entra pelo CRM.">🏛️ Novo Showroom</button>
         </div>
       </div>
       <div id="ped-content"></div>
@@ -2283,10 +2283,7 @@ textarea.inp{resize:vertical;min-height:68px;}
       <input type="hidden" id="pd-tipo" value="venda"/>
       <div style="margin-bottom:12px;">
         <label class="lbl">Tipo de pedido</label>
-        <div style="display:flex;gap:8px;">
-          <button type="button" id="pd-tipo-venda" onclick="pdSetTipo('venda')" class="btn btn-p btn-sm" style="flex:1;">🛒 Venda</button>
-          <button type="button" id="pd-tipo-showroom" onclick="pdSetTipo('showroom')" class="btn btn-s btn-sm" style="flex:1;">🏛️ Showroom / Investimento</button>
-        </div>
+        <div id="pd-tipo-label" style="font-weight:600;font-size:14px;padding:8px 12px;border-radius:8px;background:var(--card);border:1px solid var(--border);"></div>
         <div id="pd-showroom-aviso" style="display:none;margin-top:8px;font-size:12px;color:#7C3AED;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:8px 10px;">🏛️ Investimento interno — não gera comissão, não conta na meta fábrica e não emite NFe. O custo entra como investimento no DRE do mês.</div>
       </div>
 
@@ -12335,10 +12332,9 @@ function pdAtEnviarEmail(){
 function pdSetTipo(t){
   const tipo=t==='showroom'?'showroom':'venda';
   const el=document.getElementById('pd-tipo'); if(el) el.value=tipo;
-  const bV=document.getElementById('pd-tipo-venda'), bS=document.getElementById('pd-tipo-showroom');
-  if(bV) bV.className='btn '+(tipo==='venda'?'btn-p':'btn-s')+' btn-sm';
-  if(bS) bS.className='btn '+(tipo==='showroom'?'btn-p':'btn-s')+' btn-sm';
   const show=(tipo==='showroom');
+  const lb=document.getElementById('pd-tipo-label');
+  if(lb){ lb.textContent=show?'🏛️ Showroom / Investimento interno':'🛒 Venda (originada no CRM)'; lb.style.color=show?'#7C3AED':'var(--dark)'; }
   const cw=document.getElementById('pd-contrato-wrap'); if(cw) cw.style.display=show?'none':'';
   const cl=document.getElementById('pd-cliente-lbl'); if(cl) cl.textContent=show?'Identificação (ex.: Showroom Loja) *':'Nome do cliente *';
   const av=document.getElementById('pd-showroom-aviso'); if(av) av.style.display=show?'':'none';
@@ -12452,12 +12448,12 @@ function abrirModalPedido(id){
     pdAtTipoChange();
     pdOnStatusChange();
   } else {
-    document.getElementById('pd-titulo').textContent='Novo Pedido';
-    document.getElementById('pd-sub').textContent='';
+    document.getElementById('pd-titulo').textContent='🏛️ Novo Showroom / Investimento';
+    document.getElementById('pd-sub').textContent='Compra interna — venda de verdade entra pelo CRM';
     document.getElementById('pd-cliente-sel').value='';
     document.getElementById('pd-cliente-txt').value='';
     document.getElementById('pd-ncontrato').value='';
-    pdSetTipo('venda');
+    pdSetTipo('showroom'); // criação manual é sempre showroom; venda só via CRM (lead→ganho→pedido)
     document.getElementById('pd-resp').value='';
     document.getElementById('pd-projetista').value='';
     document.getElementById('pd-montador').value='';
