@@ -79,6 +79,7 @@ async function assertAuth(req) {
   if (!m) return { ok: false, status: 401, error: 'Sem token' };
   try {
     const c = await verifyFirebaseIdToken(m[1]);
+    if (c.email_verified !== true) return { ok: false, status: 403, error: 'E-mail não verificado' }; // casa com as regras Firestore
     if (!/^[^@]+@casavillare\.com\.br$/i.test(String(c.email || ''))) return { ok: false, status: 403, error: 'E-mail não corporativo' };
     return { ok: true, uid: c.sub, email: c.email, perfil: c.perfil };
   } catch (e) {
@@ -199,6 +200,8 @@ export default {
     // C2: todas as rotas (menos o health check acima) exigem Firebase ID token corporativo válido.
     const auth = await assertAuth(req);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
+    // Operações fiscais (emitir/cancelar/consultar/arquivar/email) só p/ gestor ou financeiro — espelha as regras.
+    if (auth.perfil !== 'gestor' && auth.perfil !== 'financeiro') return json({ error: 'Perfil sem permissão fiscal' }, 403);
 
     try {
       if (req.method === 'POST' && url.pathname === '/emitir') {
