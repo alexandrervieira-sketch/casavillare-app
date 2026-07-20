@@ -890,13 +890,6 @@ textarea.inp{resize:vertical;min-height:68px;}
     <div class="panel" id="tab-rel">
       <div class="pg-hdr">
         <h2>Relatórios</h2>
-        <div class="pg-actions" id="rel-mes-nav">
-          <div class="mes-nav">
-            <button onclick="relNavMes(-1)">‹</button>
-            <span class="mes-label" id="rel-mes-label">—</span>
-            <button onclick="relNavMes(1)">›</button>
-          </div>
-        </div>
       </div>
       <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
         <button class="fin-sub-btn active" id="rel-sub-resumo"       onclick="relSubTab('resumo')">🛒 Vendas</button>
@@ -4176,8 +4169,8 @@ function rHomeAlertas(){
     ${bloco('🎯 Metas em risco','#9333EA',a.metas||[],metasH)}
     ${_temPerm('crm')?bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH):''}
     ${bloco('📦 Pedidos atrasados','#9A3412',a.pedidos,pedsH)}
-    ${_temPerm('fin')?bloco('💸 Contas a pagar','#B91C1C',a.pagar,pagH):''}
-    ${_temPerm('fin')?bloco('💰 A receber','#166534',a.receber,recH):''}
+    ${_temPermFC('fin')?bloco('💸 Contas a pagar','#B91C1C',a.pagar,pagH):''}
+    ${_temPermFC('fin')?bloco('💰 A receber','#166534',a.receber,recH):''}
   </div>`;
 }
 
@@ -5916,8 +5909,6 @@ function evAbrirGcal(){
 // ══════════════════════════════════════════════════════
 // RELATÓRIOS
 // ══════════════════════════════════════════════════════
-let _relMes=new Date().getMonth(), _relAno=new Date().getFullYear();
-function relNavMes(d){_relMes+=d;if(_relMes<0){_relMes=11;_relAno--;}if(_relMes>11){_relMes=0;_relAno++;}rRel();}
 
 let _relSubAtivo='resumo';
 
@@ -5937,7 +5928,7 @@ function relSubTab(sub){
 }
 
 function rRel(){
-  if(!_temPerm('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPermFC('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   relSubTab(_relSubAtivo||'resumo');
 }
 
@@ -6204,7 +6195,7 @@ let _vendasFiltro='mes_atual';
 function _vendasAplicarFiltro(k){ _vendasFiltro=k; rRelResumo(); }
 // Aba "Vendas": contratos vendidos, valor vendido e evolução — por período (mês/trimestre/12 meses).
 function rRelResumo(){
-  if(!_temPerm('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPermFC('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const per=_convGetPeriodo(_vendasFiltro);
   const de=per.de, ate=per.ate;
   const fechados=(ST.leads||[]).filter(l=>{ if(l.status!=='ganho') return false; const r=l.dataFechamento||l.dataCriacao||''; return r>=de&&r<=ate; });
@@ -8658,6 +8649,13 @@ function _temPerm(k){
   if(ST.perfil==='gestor') return true;
   const pm=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoes)||null;
   return pm ? !!pm[k] : true;
+}
+// FAIL-CLOSED: gestor sempre; senão exige permissão EXPLÍCITA no mapa (sem mapa → NEGA).
+// Usar em CONTEÚDO sensível (Financeiro/Relatórios) — o _temPerm é permissivo p/ retrocompat e não serve de trava.
+function _temPermFC(k){
+  if(ST.perfil==='gestor') return true;
+  const pm=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoes)||null;
+  return !!(pm&&pm[k]);
 }
 // Pode EDITAR o módulo (não só ver). Sem mapa de edição salvo → edita (retrocompat). Gestor sempre.
 function _podeEditar(k){
@@ -12547,6 +12545,7 @@ function salvarPedido(){
     // Preservar a NFe emitida — editar o pedido ou mudar de etapa NÃO pode apagar a nota
     // (senão o pedido "ressuscita" em Fiscal › Pendentes). O formulário não gerencia esse campo.
     if(prev.nfe!==undefined) pedido.nfe = prev.nfe;
+    if(prev.nfeHist!==undefined) pedido.nfeHist = prev.nfeHist; // preserva o histórico de notas canceladas (reabrir p/ emitir)
     _pedBackfillMarcos(pedido); // carimba todos os marcos já atingidos (inclusive se a etapa foi pulada)
     ST.pedidos[idx]=pedido;
   } else {
@@ -13458,7 +13457,7 @@ function _fluxoFabricaMes(mes, primeiroMes){
 }
 function rFinFluxo(){
   const el=document.getElementById('fin-content'); if(!el) return;
-  if(!_temPerm('fin')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
+  if(!_temPermFC('fin')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const now=new Date(), meses=[];
   for(let i=0;i<_fluxoMeses;i++){ const d=new Date(now.getFullYear(),now.getMonth()+i,1); meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0, primeiroMes=meses[0];
@@ -13809,7 +13808,7 @@ function excluirCP(){
   save(); fecharModal('modal-cp'); toast('Excluída'); rFinCP();
 }
 function rFinCP(){
-  if(!_temPerm('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPermFC('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const mesStr=`${_cpAno}-${String(_cpMes+1).padStart(2,'0')}`;
   const lbl=document.getElementById('cp-mes-label');
   if(lbl) lbl.textContent=mesNomeStr(_cpMes,_cpAno);
@@ -14236,7 +14235,7 @@ function crFiltroLimpar(){
   rFinCR();
 }
 function rFinCR(){
-  if(!_temPerm('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPermFC('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const fmtL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const hoje=_hojeLocal();
 
@@ -14409,7 +14408,7 @@ function rFinCR(){
 }
 
 function rFinanceiro(){
-  if(!_temPerm('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
+  if(!_temPermFC('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const _finLblEl=document.getElementById('fin-mes-label-v');
   if(_finLblEl) _finLblEl.textContent=mesNomeStr(_finMes,_finAno);
   const mesAno=mesAnoStr(_finMes,_finAno);
@@ -14873,7 +14872,7 @@ function imprimirRanking(){
 }
 function rRelDesempenho(){
   const el=document.getElementById('rel-content'); if(!el) return;
-  if(!_temPerm('rel')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
+  if(!_temPermFC('rel')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const nav=document.getElementById('rel-mes-nav'); if(nav) nav.style.display='none';
   const vends=(ST.equipe.comercial||[]).filter(v=>_demIncDeslig||!_estaDesligado(v.nome)).map(v=>v.nome); // esconde desligados por padrão; toggle os inclui (histórico)
   if(!vends.length){ el.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--gl);"><p>Nenhum vendedor ativo na equipe comercial.</p></div>'; return; }
