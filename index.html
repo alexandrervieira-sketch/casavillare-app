@@ -6252,6 +6252,13 @@ function rRelResumo(){
           const lines=segs.map(seg=>{ let s=seg; if(seg.length===1){ const xy=seg[0].split(','); s=[(+xy[0]-3)+','+xy[1],(+xy[0]+3)+','+xy[1]]; } return `<polyline fill="none" stroke="#B91C1C" stroke-width="1.6" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" points="${s.join(' ')}"/>`; }).join('');
           return `<svg style="position:absolute;left:0;bottom:0;width:100%;height:130px;pointer-events:none;overflow:visible;" viewBox="0 0 ${N*10} 130" preserveAspectRatio="none">${lines}</svg>`;
         })()}
+        ${evol.map((e,i)=>{ // número da meta de cada mês, junto da linha
+          if(!(e.meta>0)) return '';
+          const metaH=e.meta/maxVal*130;
+          const bottom=metaH<=112?(metaH+3):(metaH-14); // acima da linha; se muito no topo, joga pra baixo
+          const left=(i+0.5)/evol.length*100;
+          return `<div style="position:absolute;bottom:${bottom}px;left:${left}%;transform:translateX(-50%);font-size:9.5px;font-weight:700;color:#B91C1C;white-space:nowrap;pointer-events:none;background:var(--card);padding:0 2px;border-radius:2px;">${e.meta>=1000?Math.round(e.meta/1000)+'k':Math.round(e.meta)}</div>`;
+        }).join('')}
       </div>
       <div style="display:flex;margin-top:6px;">
         ${evol.map(e=>`<div style="flex:1;text-align:center;font-size:11.5px;font-weight:600;color:var(--mid);">${e.label}</div>`).join('')}
