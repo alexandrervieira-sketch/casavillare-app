@@ -13,8 +13,10 @@
 //   FB_SA    → JSON da service account do Firebase (para gravar no Firestore)
 //
 // Rotas:
-//   GET  /        → health check (público)
-//   POST /lead    → cria o lead (exige Bearer API_KEY)
+//   GET  /              → health check (público)
+//   POST /lead          → cria o lead (exige Bearer API_KEY)
+//   POST /admin/aprovar → aprova acesso de um funcionário (exige ID token de GESTOR)
+//   POST /admin/senha   → define/reseta a senha de um funcionário (exige ID token de GESTOR)
 // ──────────────────────────────────────────────────────────────────────────
 
 const CORS = {
@@ -39,7 +41,8 @@ async function getToken(sa) {
   const now = Math.floor(Date.now() / 1000);
   if (_tokCache.tok && now < _tokCache.exp - 60) return _tokCache.tok;
   const header = _b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claim = _b64url(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/datastore', aud: sa.token_uri, iat: now, exp: now + 3600 }));
+  // cloud-platform cobre Firestore (datastore) E Identity Toolkit (gerência de contas p/ os endpoints /admin).
+  const claim = _b64url(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: sa.token_uri, iat: now, exp: now + 3600 }));
   const unsigned = header + '.' + claim;
   const key = await _importKey(sa.private_key);
   const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned)));
@@ -51,6 +54,92 @@ async function getToken(sa) {
   return j.access_token;
 }
 function fsBase(sa) { return 'https://firestore.googleapis.com/v1/projects/' + sa.project_id + '/databases/(default)/documents'; }
+
+// ── Verificação do ID token do GESTOR (para os endpoints /admin) ────────────────
+// Só um gestor logado, com e-mail corporativo verificado, pode aprovar acesso ou
+// definir senha de outra pessoa. O token é verificado por assinatura (RS256) contra
+// as chaves públicas do Firebase — igual ao worker de NFe.
+const FB_PROJECT = 'sistema-casa-villare';
+let _jwks = { keys: null, exp: 0 };
+async function _fbKeys() {
+  const now = Date.now();
+  if (_jwks.keys && now < _jwks.exp) return _jwks.keys;
+  const res = await fetch('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com');
+  const data = await res.json();
+  const map = {}; for (const k of (data.keys || [])) map[k.kid] = k;
+  let ttl = 3600; const m = (res.headers.get('cache-control') || '').match(/max-age=(\d+)/); if (m) ttl = parseInt(m[1], 10);
+  _jwks = { keys: map, exp: now + Math.max(60, ttl) * 1000 };
+  return map;
+}
+function _jbytes(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const bin = atob(s), out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+function _jjson(s) { return JSON.parse(new TextDecoder().decode(_jbytes(s))); }
+async function verifyIdToken(token) {
+  const p = String(token || '').split('.');
+  if (p.length !== 3) throw new Error('token malformado');
+  const header = _jjson(p[0]), payload = _jjson(p[1]);
+  if (header.alg !== 'RS256') throw new Error('alg inválido');
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.aud !== FB_PROJECT) throw new Error('aud inválido');
+  if (payload.iss !== 'https://securetoken.google.com/' + FB_PROJECT) throw new Error('iss inválido');
+  if (!payload.sub) throw new Error('sub ausente');
+  if (typeof payload.exp !== 'number' || payload.exp <= now) throw new Error('token expirado');
+  if (typeof payload.iat !== 'number' || payload.iat > now + 300) throw new Error('iat futuro');
+  const keys = await _fbKeys(); const jwk = keys[header.kid];
+  if (!jwk) throw new Error('kid desconhecido');
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, _jbytes(p[2]), new TextEncoder().encode(p[0] + '.' + p[1]));
+  if (!ok) throw new Error('assinatura inválida');
+  return payload;
+}
+// Exige um gestor logado, corporativo e verificado. Devolve { ok, status?, error?, email? }.
+async function assertGestor(req) {
+  const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
+  if (!m) return { ok: false, status: 401, error: 'Sem token' };
+  let c; try { c = await verifyIdToken(m[1]); } catch (e) { return { ok: false, status: 401, error: 'Token inválido: ' + ((e && e.message) || e) }; }
+  if (c.email_verified !== true) return { ok: false, status: 403, error: 'E-mail não verificado' };
+  if (!/^[^@]+@casavillare\.com\.br$/i.test(String(c.email || ''))) return { ok: false, status: 403, error: 'E-mail não corporativo' };
+  if (c.perfil !== 'gestor') return { ok: false, status: 403, error: 'Apenas o gestor pode gerenciar contas' };
+  return { ok: true, email: c.email };
+}
+
+// ── Gerência de contas via Identity Toolkit (Admin) ────────────────────────────
+async function itLookup(sa, token, email) {
+  const r = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + sa.project_id + '/accounts:lookup',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) });
+  const j = await r.json();
+  return (j.users && j.users[0]) || null;
+}
+async function itUpdate(sa, token, fields) {
+  const r = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + sa.project_id + '/accounts:update',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
+  if (!r.ok) throw new Error('accounts:update HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  return r.json();
+}
+// Trata os endpoints de gerência de conta (aprovar acesso / definir senha).
+async function tratarAdmin(req, env, acao) {
+  const g = await assertGestor(req);
+  if (!g.ok) return json({ error: g.error }, g.status);
+  let b; try { b = await req.json(); } catch (e) { return json({ error: 'JSON inválido' }, 400); }
+  const email = _txt(b.email).toLowerCase();
+  if (!/^[^@]+@casavillare\.com\.br$/i.test(email)) return json({ error: 'E-mail corporativo inválido' }, 400);
+  let sa; try { sa = typeof env.FB_SA === 'string' ? JSON.parse(env.FB_SA) : env.FB_SA; } catch (e) { return json({ error: 'FB_SA inválido' }, 500); }
+  try {
+    const token = await getToken(sa);
+    const u = await itLookup(sa, token, email);
+    if (!u) return json({ error: 'Conta não encontrada. O funcionário precisa abrir o app e criar o acesso uma vez primeiro.' }, 404);
+    if (acao === 'aprovar') {
+      await itUpdate(sa, token, { localId: u.localId, emailVerified: true });
+      return json({ ok: true, email, msg: 'Acesso aprovado' });
+    }
+    // acao === 'senha'
+    const senha = _txt(b.senha);
+    if (senha.length < 6) return json({ error: 'A senha precisa ter ao menos 6 caracteres' }, 400);
+    await itUpdate(sa, token, { localId: u.localId, password: senha, emailVerified: true });
+    return json({ ok: true, email, msg: 'Senha definida' });
+  } catch (e) {
+    return json({ error: String((e && e.message) || e) }, 500);
+  }
+}
 
 // ── Rodízio: lê _config/leadRodizio, incrementa o idx atômico e devolve o próximo vendedor ──
 async function proximoVendedor(sa, token) {
@@ -112,6 +201,9 @@ export default {
     if (req.method === 'GET' && url.pathname === '/') {
       return json({ ok: true, service: 'cv-leads', ts: Date.now() });
     }
+    // Gerência de contas (só gestor logado): aprovar acesso e definir/resetar senha.
+    if (req.method === 'POST' && url.pathname === '/admin/aprovar') return tratarAdmin(req, env, 'aprovar');
+    if (req.method === 'POST' && url.pathname === '/admin/senha') return tratarAdmin(req, env, 'senha');
     if (req.method !== 'POST' || url.pathname !== '/lead') return json({ error: 'rota não encontrada' }, 404);
 
     // Auth: Bearer contra uma ou várias chaves; resolve o CANAL (qual IA enviou).

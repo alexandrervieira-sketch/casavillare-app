@@ -8257,8 +8257,10 @@ function rConfig(){
             ${emailOk?'✅ '+emailReal:'⚠️ '+emailReal+' (derivado do nome — salve o cadastro para fixar)'}
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="cfgResetarSenhaUsuario('${_jsq(emailReal)}','${_jsq(p.nome.split(' ')[0])}')" title="Envia e-mail de redefinição de senha">✉️ Resetar senha</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+          ${ST.perfil==='gestor'?`
+          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="cfgAprovarAcesso('${_jsq(emailReal)}','${_jsq(p.nome.split(' ')[0])}')" title="Libera este funcionário a entrar (não depende de e-mail)">✅ Aprovar acesso</button>
+          <button class="btn btn-p btn-sm" style="font-size:11px;" onclick="cfgDefinirSenha('${_jsq(emailReal)}','${_jsq(p.nome.split(' ')[0])}')" title="Você mesmo cria/reseta a senha desta pessoa">🔑 Definir senha</button>`:''}
         </div>
       </div>`;
     }).join('');
@@ -8270,7 +8272,7 @@ function rConfig(){
         </div>
         <div style="padding:0 22px 8px;">
           <div style="font-size:12px;color:var(--gl);margin-bottom:12px;">
-            Todos os usuários usam o e-mail abaixo para login. Senha padrão: <strong>villare</strong>
+            Cada pessoa entra com o e-mail abaixo. Se um funcionário novo não conseguir entrar, clique <strong>✅ Aprovar acesso</strong>. Para criar ou trocar a senha de alguém, clique <strong>🔑 Definir senha</strong> — você mesmo define, sem depender de e-mail.
           </div>
           ${credRows||'<div style="color:var(--gl);font-size:13px;">Nenhum colaborador cadastrado.</div>'}
         </div>
@@ -16077,6 +16079,35 @@ async function _nfeFetch(path, opts={}){
   const headers={...(opts.headers||{})};
   if(token) headers['Authorization']='Bearer '+token;
   return fetch(NFE_PROXY_URL+path,{...opts,headers});
+}
+// ── Gerência de contas (worker cv-leads): aprovar acesso / definir senha ──────────
+// Como os logins da equipe NÃO são caixas de e-mail reais, o gestor gerencia as
+// contas por aqui: o worker verifica que quem chama é um GESTOR logado e usa o
+// Admin do Firebase para liberar o acesso ou trocar a senha. Nenhum e-mail é enviado.
+const LEADS_URL='https://cv-leads.alexandre-rvieira.workers.dev';
+async function _leadsFetch(path, body){
+  const u=(typeof firebase!=='undefined'&&firebase.auth)?firebase.auth().currentUser:null;
+  const token=u?await u.getIdToken():'';
+  const r=await fetch(LEADS_URL+path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(body||{})});
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+async function cfgAprovarAcesso(email, nome){
+  if(ST.perfil!=='gestor'){ toast('Apenas o gestor pode aprovar acesso'); return; }
+  if(!confirm('Aprovar o acesso de '+nome+'?\n\nDepois disso '+nome+' já consegue entrar no sistema com o e-mail e a senha dele.')) return;
+  toast('Aprovando...');
+  try{ await _leadsFetch('/admin/aprovar',{email}); toast('✅ Acesso de '+nome+' aprovado!'); }
+  catch(e){ toast('❌ '+(e.message||e)); }
+}
+async function cfgDefinirSenha(email, nome){
+  if(ST.perfil!=='gestor'){ toast('Apenas o gestor pode definir senha'); return; }
+  const senha=prompt('Definir/resetar a senha de '+nome+'.\n\nDigite a nova senha (mín. 6 caracteres). Anote e passe para '+nome+' — ele poderá trocá-la depois em "Trocar minha senha".');
+  if(senha===null) return;
+  if(String(senha).length<6){ toast('A senha precisa ter ao menos 6 caracteres'); return; }
+  toast('Definindo senha...');
+  try{ await _leadsFetch('/admin/senha',{email,senha:String(senha)}); alert('✅ Senha de '+nome+' definida!\n\nPasse para '+nome+':\nE-mail: '+email+'\nSenha: '+senha+'\n\nEle pode trocar depois em "🔑 Trocar minha senha".'); }
+  catch(e){ toast('❌ '+(e.message||e)); }
 }
 // Mapeia o status do provedor para o status interno do pedido
 function _nfeMapStatus(s){
