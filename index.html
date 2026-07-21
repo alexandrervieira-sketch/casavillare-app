@@ -14109,62 +14109,48 @@ function rBipartido(tgt){
   const fmt2=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtD=v=>{if(!v)return'—';const[a,m,d]=(v+'T12:00').split('T')[0].split('-');return d+'/'+m+'/'+a;};
 
-  // Coleta todos os leads ganhos com financiamento no mês
-  const leadsGanhos=(ST.leads||[]).filter(l=>
+  const _MESAB=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesLab=ma=>{ if(!ma||ma.length<7) return '—'; const p=ma.split('-'); return _MESAB[(+p[1])-1]+'/'+p[0].slice(2); };
+  const mkRegs=leads=>{ const rs=[]; leads.forEach(l=>{ (l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').forEach(c=>{ rs.push({l,c,valorFin:c.valor||0,valorBip:_bipartidoCond(c),mesRef:(l.dataFechamento||l.dataCriacao||'').slice(0,7)}); }); }); return rs; };
+
+  // ── Mês selecionado ──
+  const leadsMes=(ST.leads||[]).filter(l=>
     l.status==='ganho' &&
     (l.dataFechamento||(l.dataCriacao||'')).slice(0,7)===mesStr &&
     l.condicoesPgto?.some(c=>c.forma==='financiamento')
   );
+  const regMes=mkRegs(leadsMes);
+  const totFinMes=regMes.reduce((a,r)=>a+r.valorFin,0);
+  const totBipMes=regMes.reduce((a,r)=>a+r.valorBip,0);
 
-  if(!leadsGanhos.length){
-    document.getElementById(_tgt).innerHTML=`
-      <div style="text-align:center;padding:60px 20px;color:var(--gl);">
-        <div style="font-size:40px;margin-bottom:12px;">🏭</div>
-        <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Nenhum financiamento em ${mesNomeStr(_bipMes,_bipAno)}</div>
-        <div style="font-size:12px;">Vendas com financiamento aparecerão aqui automaticamente.</div>
-      </div>`;
-    return;
-  }
+  // ── Acumulado (todos os meses) ──
+  const regTodos=mkRegs((ST.leads||[]).filter(l=>l.status==='ganho'&&l.condicoesPgto?.some(c=>c.forma==='financiamento')))
+    .sort((a,b)=>(b.l.dataFechamento||b.l.dataCriacao||'').localeCompare(a.l.dataFechamento||a.l.dataCriacao||''));
+  const totFinAcum=regTodos.reduce((a,r)=>a+r.valorFin,0);
+  const totBipAcum=regTodos.reduce((a,r)=>a+r.valorBip,0);
 
-  // Monta registros
-  const registros=[];
-  leadsGanhos.forEach(l=>{
-    (l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').forEach(c=>{
-      registros.push({l,c,valorFin:c.valor||0,valorBip:_bipartidoCond(c)}); // 40% do financiado líquido
-    });
-  });
-
-  // Totalizadores
-  const totFin=registros.reduce((a,r)=>a+r.valorFin,0);
-  const totBip=registros.reduce((a,r)=>a+r.valorBip,0);
-
-  document.getElementById(_tgt).innerHTML=`
-    <!-- KPIs -->
+  // Bloco do MÊS (KPIs + tabela, ou aviso curto se vazio)
+  const blocoMes = regMes.length ? `
     <div class="stats-grid" style="margin-bottom:20px;">
       <div class="stat-card">
         <div class="sc-label">Total Financiado</div>
-        <div class="sc-val">R$ ${fmt2(totFin)}</div>
-        <div style="font-size:11px;color:var(--gl);margin-top:4px;">${registros.length} parcela(s)</div>
+        <div class="sc-val">R$ ${fmt2(totFinMes)}</div>
+        <div style="font-size:11px;color:var(--gl);margin-top:4px;">${regMes.length} parcela(s) · ${mesNomeStr(_bipMes,_bipAno)}</div>
       </div>
       <div class="stat-card" style="border-left:4px solid #C8A97A;">
         <div class="sc-label">Total Bipartido (40%)</div>
-        <div class="sc-val" style="color:var(--p);">R$ ${fmt2(totBip)}</div>
+        <div class="sc-val" style="color:var(--p);">R$ ${fmt2(totBipMes)}</div>
         <div style="font-size:11px;color:var(--gl);margin-top:4px;">40% do financiado líquido → fábrica</div>
       </div>
     </div>
-
-    <!-- Tabela -->
     <div class="tbl-wrap"><table>
       <thead><tr>
-        <th>Cliente</th>
-        <th>Responsável</th>
-        <th>Descrição</th>
-        <th>Vencimento</th>
+        <th>Cliente</th><th>Responsável</th><th>Descrição</th><th>Vencimento</th>
         <th style="text-align:right;">Valor Financiado</th>
         <th style="text-align:right;color:#C8A97A;">Bipartido 40%</th>
       </tr></thead>
       <tbody>
-        ${registros.map(r=>`<tr>
+        ${regMes.map(r=>`<tr>
           <td class="td-bold">${_esc(r.l.nome)}</td>
           <td style="color:var(--gl);">${_esc(r.l.responsavel||'—')}</td>
           <td style="font-size:12px;">${_esc(r.c.desc||'Financiamento')}${r.c.parcelas>1?' · '+r.c.parcelas+'x':''}</td>
@@ -14173,8 +14159,55 @@ function rBipartido(tgt){
           <td style="text-align:right;font-weight:700;color:var(--p);">R$ ${fmt2(r.valorBip)}</td>
         </tr>`).join('')}
       </tbody>
-    </table></div>
+    </table></div>`
+    : `<div style="text-align:center;padding:34px 20px;color:var(--gl);border:1px dashed var(--border);border-radius:12px;margin-bottom:20px;">
+        <div style="font-size:30px;margin-bottom:8px;">🏭</div>
+        <div style="font-size:13px;font-weight:600;">Nenhum financiamento em ${mesNomeStr(_bipMes,_bipAno)}</div>
+        <div style="font-size:12px;margin-top:2px;">Veja o acumulado de todos os meses abaixo. 👇</div>
+      </div>`;
 
+  // Bloco ACUMULADO (todos os meses) — só some se nunca houve financiamento
+  const blocoAcum = regTodos.length ? `
+    <div style="border-top:2px solid var(--border);margin-top:8px;padding-top:20px;">
+      <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:600;color:var(--dark);margin-bottom:14px;">📊 Acumulado — todos os meses</div>
+      <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card" style="border-left:4px solid #64748B;">
+          <div class="sc-label">Financiado (acumulado)</div>
+          <div class="sc-val">R$ ${fmt2(totFinAcum)}</div>
+          <div style="font-size:11px;color:var(--gl);margin-top:4px;">${regTodos.length} venda(s) com bipartido</div>
+        </div>
+        <div class="stat-card" style="border-left:4px solid #16A34A;">
+          <div class="sc-label">Total à Fábrica (Bipartido 40%)</div>
+          <div class="sc-val" style="color:#16A34A;">R$ ${fmt2(totBipAcum)}</div>
+          <div style="font-size:11px;color:var(--gl);margin-top:4px;">soma de tudo que a financeira enviou/enviará à fábrica</div>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Mês</th><th>Cliente</th><th>Responsável</th><th>Descrição</th><th>Vencimento</th>
+          <th style="text-align:right;">Valor Financiado</th>
+          <th style="text-align:right;color:#16A34A;">Foi à Fábrica (40%)</th>
+        </tr></thead>
+        <tbody>
+          ${regTodos.map(r=>`<tr>
+            <td style="font-size:12px;color:var(--gl);white-space:nowrap;">${mesLab(r.mesRef)}</td>
+            <td class="td-bold">${_esc(r.l.nome)}</td>
+            <td style="color:var(--gl);">${_esc(r.l.responsavel||'—')}</td>
+            <td style="font-size:12px;">${_esc(r.c.desc||'Financiamento')}${r.c.parcelas>1?' · '+r.c.parcelas+'x':''}</td>
+            <td style="font-size:12px;">${r.c.vencimento?fmtD(r.c.vencimento):'—'}</td>
+            <td style="text-align:right;">R$ ${fmt2(r.valorFin)}</td>
+            <td style="text-align:right;font-weight:700;color:#16A34A;">R$ ${fmt2(r.valorBip)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="border-top:2px solid var(--border);font-weight:700;">
+          <td colspan="5" style="text-align:right;padding:10px 8px;">TOTAL ACUMULADO</td>
+          <td style="text-align:right;padding:10px 8px;">R$ ${fmt2(totFinAcum)}</td>
+          <td style="text-align:right;padding:10px 8px;color:#16A34A;">R$ ${fmt2(totBipAcum)}</td>
+        </tr></tfoot>
+      </table></div>
+    </div>` : '';
+
+  document.getElementById(_tgt).innerHTML = blocoMes + blocoAcum + `
     <div style="margin-top:12px;font-size:11px;color:var(--gl);text-align:right;">
       * Bipartido = 40% do valor financiado líquido (financiado − retenção que a loja absorve). A financeira envia direto à fábrica para liberar o pedido.
     </div>`;
