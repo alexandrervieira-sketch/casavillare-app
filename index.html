@@ -8601,7 +8601,15 @@ async function cfgRenderRodizio(){
     const d=await _fbDb.collection('_config').doc('leadRodizio').get();
     if(d.exists){ const v=d.data()||{}; cfg={ativo:!!v.ativo, disponiveis:Array.isArray(v.disponiveis)?v.disponiveis:[]}; }
   }catch(e){ console.warn('[CVP] rodízio load:',e&&e.message); }
+  // Auto-limpa da lista quem não é mais vendedor ativo (ex.: desligado). A tela já esconde
+  // o desligado, mas o WORKER lê a lista crua — se ele sobrar aqui, a IA continua mandando
+  // leads pra quem saiu, sem o gestor conseguir tirar (não aparece botão). Corrige o doc uma vez.
+  const _nomesAtivos=new Set(vends.map(p=>p.nome));
+  const _dispLimpa=(cfg.disponiveis||[]).filter(nm=>_nomesAtivos.has(nm));
+  const _tinhaOrfao=_dispLimpa.length!==(cfg.disponiveis||[]).length;
+  cfg.disponiveis=_dispLimpa;
   window._cfgRodizioCfg=cfg;
+  if(_tinhaOrfao && ST.perfil==='gestor'){ _cfgRodizioSalvar(cfg); return; } // persiste a lista limpa e re-renderiza
   const dispSet=new Set(cfg.disponiveis);
   const rows=vends.map(p=>{
     const on=dispSet.has(p.nome);
