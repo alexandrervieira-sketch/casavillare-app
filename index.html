@@ -8642,6 +8642,20 @@ async function _cfgRodizioSalvar(cfg){
 }
 function cfgRodizioToggleAtivo(){ const c=window._cfgRodizioCfg||{ativo:false,disponiveis:[]}; c.ativo=!c.ativo; _cfgRodizioSalvar(c); }
 function cfgRodizioToggleVend(nome){ const c=window._cfgRodizioCfg||{ativo:false,disponiveis:[]}; const s=new Set(c.disponiveis||[]); if(s.has(nome)) s.delete(nome); else s.add(nome); c.disponiveis=[...s]; _cfgRodizioSalvar(c); }
+// Tira uma pessoa do rodízio de leads (usado quando é marcada como DESLIGADA). O worker lê a
+// lista crua de disponíveis; se o desligado sobrar, a IA continuaria mandando lead pra ele →
+// lead abandonado. Regra: desligado não entra em NADA novo (ver _estaDesligado/_ativoNoMes).
+async function _rodizioRemover(nome){
+  try{
+    if(!_fbReady||!_fbDb) return;
+    const ref=_fbDb.collection('_config').doc('leadRodizio');
+    const d=await ref.get();
+    if(!d.exists) return;
+    const v=d.data()||{}; const disp=Array.isArray(v.disponiveis)?v.disponiveis:[];
+    if(!disp.includes(nome)) return;
+    await ref.set({disponiveis:disp.filter(n=>n!==nome)},{merge:true}); // merge: preserva ativo/idx
+  }catch(e){ console.warn('[CVP] rodízio remover desligado:',e&&e.message); }
+}
 
 // Configurações em SOMENTE LEITURA para quem não é gestor (ex.: financeiro): consulta, não altera.
 function _configRO(){
@@ -9237,7 +9251,9 @@ async function cfgSalvarColab(){
     toast('Colaborador atualizado ✅');
   }
   _cfgTouch('equipe'); _cfgTouch('configs'); _cfgTouch('senhas');
-  save(); fecharModal('modal-colab'); rConfig(); rLogin();
+  save();
+  if(situacao==='desligado') _rodizioRemover(nome); // desligou → sai do rodízio na hora (não recebe lead novo)
+  fecharModal('modal-colab'); rConfig(); rLogin();
 }
 
 function cfgRemColabModal(){
