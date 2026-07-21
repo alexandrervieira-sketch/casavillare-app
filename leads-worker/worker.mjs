@@ -244,7 +244,7 @@ export default {
         id, nome, _uAt: Date.now(),
         telefone, email: '', cidade: _txt(b.cidade),
         origem: mapOrigem(b.origem), responsavel,
-        etapa: 'atendimento', status: 'ativo',
+        etapa: 'leads', status: 'ativo',  // cai na caixa "Leads" (triagem) — o time avança p/ 1º Atendimento
         valor: 0, desconto: 0, taxaLoja: 0, taxaCli: 0, parcelas: 0, absorcao: 'cliente', condicoesPgto: null,
         proxContato: '',
         ambiente: _txt(b.ambientes), metragem: '', estilo: '',

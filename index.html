@@ -1674,6 +1674,7 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div class="fr r3">
         <div><label class="lbl">Etapa atual</label>
           <select class="inp" id="ld-etapa" onchange="ldTogglePgtoSection()">
+            <option value="leads">Leads</option>
             <option value="atendimento">1º Atendimento</option>
             <option value="briefing">Briefing</option>
             <option value="projeto">Projeto</option>
@@ -4068,7 +4069,7 @@ function _calcAlertas(){
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'atrasado',info:'Contato venceu '+_fmtDateBR(l.proxContato)});
       else if(!l.proxContato&&['apresentacao','negociacao','fechamento'].includes(l.etapa))
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'quente',info:'Em '+(CRM_ETAPAS.find(e=>e.id===l.etapa)?.label||l.etapa)+' sem próximo contato — não deixe esfriar'});
-      else if(!l.proxContato&&(l.dataCriacao||'')<ago7)
+      else if(!l.proxContato&&l.etapa!=='leads'&&(l.dataCriacao||'')<ago7)
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'parado',info:'Sem próximo contato agendado'});
     });
   }
@@ -9433,6 +9434,7 @@ function cfgRemTaxaModal(){
 // CRM
 // ══════════════════════════════════════════════════════
 const CRM_ETAPAS=[
+  {id:'leads',       label:'Leads',           cor:'#64748B'},
   {id:'atendimento', label:'1º Atendimento', cor:'#A78B6D'},
   {id:'briefing',    label:'Briefing',        cor:'#BFA87D'},
   {id:'projeto',     label:'Projeto',         cor:'#8B6D9E'},
