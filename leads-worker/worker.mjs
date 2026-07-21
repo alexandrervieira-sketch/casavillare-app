@@ -90,6 +90,20 @@ function mapOrigem(o) {
 }
 function _hojeBR() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); } // data local (BRT = UTC-3)
 function _txt(v) { return (v == null ? '' : String(v)).trim(); }
+// Id determinístico (só dígitos) a partir de uma chave de idempotência — reenvio gera o MESMO id (não duplica).
+async function _idFromKey(key) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key)));
+  let n = 0n; for (let i = 0; i < 8; i++) n = (n << 8n) | BigInt(h[i]);
+  return n.toString();
+}
+// Resolve a chave de API → nome do CANAL. Suporta múltiplas chaves (env API_KEYS = JSON chave:canal)
+// ou uma única (env API_KEY → canal "ia"). '' = não autorizado.
+function _canalDaChave(env, key) {
+  if (!key) return '';
+  if (env.API_KEYS) { try { const mp = JSON.parse(env.API_KEYS); if (mp[key]) return mp[key]; } catch (e) {} }
+  if (env.API_KEY && key === env.API_KEY) return 'ia';
+  return '';
+}
 
 export default {
   async fetch(req, env) {
@@ -100,9 +114,10 @@ export default {
     }
     if (req.method !== 'POST' || url.pathname !== '/lead') return json({ error: 'rota não encontrada' }, 404);
 
-    // Auth: Bearer API_KEY
+    // Auth: Bearer contra uma ou várias chaves; resolve o CANAL (qual IA enviou).
     const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
-    if (!m || !env.API_KEY || m[1] !== env.API_KEY) return json({ error: 'Não autorizado' }, 401);
+    const canal = _canalDaChave(env, m && m[1]);
+    if (!canal) return json({ error: 'Não autorizado' }, 401);
 
     let b;
     try { b = await req.json(); } catch (e) { return json({ error: 'JSON inválido' }, 400); }
@@ -129,7 +144,9 @@ export default {
       if (extra.length) obsLinhas.push(extra.join('\n'));
       obsLinhas.push('— via IA de pré-atendimento (WhatsApp)');
 
-      const id = String(Date.now()) + String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); // só dígitos (o app usa _sid)
+      // Id: com idempotencyKey → determinístico (reenvio não duplica); sem → aleatório. Sempre só dígitos (o app usa _sid).
+      const idem = _txt(b.idempotencyKey);
+      const id = idem ? await _idFromKey(idem) : (String(Date.now()) + String(Math.floor(Math.random() * 1000000)).padStart(6, '0'));
       const dataCriacao = _txt(b.captadoEm) ? _txt(b.captadoEm).slice(0, 10) : _hojeBR();
       const lead = {
         id, nome, _uAt: Date.now(),
@@ -142,7 +159,8 @@ export default {
         prazo: _txt(b.prazo), prazoEntrega: '', tipoVenda: '', especificadorId: '', rtPct: 0,
         orcamento: '', obs: obsLinhas.join('\n\n'), tags: '',
         dataCriacao, dataFechamento: null,
-        _origemIA: true, // marca de origem — o app pode mostrar selo e checar "já registrado" por telefone
+        _origemIA: true,      // veio da integração — o app mostra selo e checa "já registrado" por telefone
+        _canalOrigem: canal,  // qual IA/canal enviou (ex.: "ia-whatsapp" hoje, "ia-propria" no futuro) — comparação de desempenho
       };
 
       // Grava o lead em leads/<id> = {id, _json}
