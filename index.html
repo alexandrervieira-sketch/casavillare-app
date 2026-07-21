@@ -6230,25 +6230,36 @@ function rRelResumo(){
         <div style="font-size:11px;font-weight:700;color:var(--gl);text-transform:uppercase;letter-spacing:.5px;">📈 Evolução — últimos 12 meses (valor vendido)</div>
         ${metaAtual>0?`<div style="font-size:12.5px;color:var(--mid);">🎯 Meta do mês: <strong style="color:#B91C1C;">${fmtBRL(metaAtual)}</strong></div>`:''}
       </div>
-      <div style="display:flex;align-items:flex-end;gap:6px;height:160px;">
-        ${evol.map(e=>{
-          const bateu=e.meta>0&&e.valor>=e.meta;
-          const barH=e.valor?Math.max(3,e.valor/maxVal*130):0;
-          const metaH=e.meta>0?e.meta/maxVal*130:0;
-          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;" title="${e.label}: ${fmtBRL(e.valor)} · ${e.n} contrato(s)${e.meta>0?' · Meta '+fmtBRL(e.meta)+(bateu?' ✅ bateu':' ❌ faltou'):''}">
-            <div style="font-size:12.5px;font-weight:700;color:${bateu?'#15803D':'var(--dark)'};white-space:nowrap;">${e.valor>0?(e.valor>=1000?Math.round(e.valor/1000)+'k':Math.round(e.valor)):''}</div>
-            <div style="position:relative;width:100%;height:130px;display:flex;align-items:flex-end;">
-              <div style="width:100%;background:${bateu?'linear-gradient(180deg,#4ADE80,#16A34A)':'linear-gradient(180deg,#C8A97E,#A9773F)'};height:${barH}px;border-radius:4px 4px 0 0;"></div>
-              ${e.meta>0?`<div style="position:absolute;left:-1px;right:-1px;bottom:${metaH}px;border-top:2px dashed #B91C1C;"></div>`:''}
-            </div>
-            <div style="font-size:11.5px;font-weight:600;color:var(--mid);">${e.label}</div>
-          </div>`;
-        }).join('')}
+      <div style="position:relative;">
+        <div style="display:flex;align-items:flex-end;">
+          ${evol.map(e=>{
+            const bateu=e.meta>0&&e.valor>=e.meta;
+            const barH=e.valor?Math.max(3,e.valor/maxVal*130):0;
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;">
+              <div style="font-size:12.5px;font-weight:700;height:18px;line-height:18px;color:${bateu?'#15803D':'var(--dark)'};white-space:nowrap;">${e.valor>0?(e.valor>=1000?Math.round(e.valor/1000)+'k':Math.round(e.valor)):''}</div>
+              <div style="width:100%;height:130px;display:flex;align-items:flex-end;justify-content:center;" title="${e.label}: ${fmtBRL(e.valor)} · ${e.n} contrato(s)${e.meta>0?' · Meta '+fmtBRL(e.meta)+(bateu?' ✅ bateu':' ❌ faltou'):''}">
+                <div style="width:72%;background:${bateu?'linear-gradient(180deg,#4ADE80,#16A34A)':'linear-gradient(180deg,#C8A97E,#A9773F)'};height:${barH}px;border-radius:4px 4px 0 0;"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        ${(()=>{ // linha de meta CONTÍNUA (uma linha só ligando as metas mês a mês), por cima das barras
+          const N=evol.length;
+          const pts=evol.map((e,i)=> e.meta>0 ? ((i*10+5)+','+(130-e.meta/maxVal*130)) : null);
+          const segs=[]; let cur=[];
+          pts.forEach(p=>{ if(p){cur.push(p);} else if(cur.length){segs.push(cur);cur=[];} });
+          if(cur.length) segs.push(cur);
+          const lines=segs.map(seg=>{ let s=seg; if(seg.length===1){ const xy=seg[0].split(','); s=[(+xy[0]-3)+','+xy[1],(+xy[0]+3)+','+xy[1]]; } return `<polyline fill="none" stroke="#B91C1C" stroke-width="1.6" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" points="${s.join(' ')}"/>`; }).join('');
+          return `<svg style="position:absolute;left:0;bottom:0;width:100%;height:130px;pointer-events:none;overflow:visible;" viewBox="0 0 ${N*10} 130" preserveAspectRatio="none">${lines}</svg>`;
+        })()}
+      </div>
+      <div style="display:flex;margin-top:6px;">
+        ${evol.map(e=>`<div style="flex:1;text-align:center;font-size:11.5px;font-weight:600;color:var(--mid);">${e.label}</div>`).join('')}
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:11px;color:var(--gl);">
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:2px;background:linear-gradient(180deg,#4ADE80,#16A34A);display:inline-block;"></span>Bateu a meta</span>
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:2px;background:linear-gradient(180deg,#C8A97E,#A9773F);display:inline-block;"></span>Abaixo da meta</span>
-        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:16px;border-top:2px dashed #B91C1C;display:inline-block;"></span>Linha da meta do mês</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><svg width="22" height="8" style="overflow:visible;"><line x1="0" y1="4" x2="22" y2="4" stroke="#B91C1C" stroke-width="1.6" stroke-dasharray="5 4"/></svg>Linha da meta (mês a mês)</span>
       </div>
     </div>
     <div style="font-family:'Sora',sans-serif;font-size:13px;font-weight:500;margin-bottom:10px;color:var(--mid);">Por vendedor — ${per.label}</div>
