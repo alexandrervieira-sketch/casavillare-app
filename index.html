@@ -6812,7 +6812,6 @@ function abrirFichaRentab(pedId){
             ${P.custoOutros>0?linha('(−) Outros custos',P.custoOutros,R.custoOutros,{sub:true}):''}
             ${P.transporte>0?linha('(−) Transporte',P.transporte,R.transporte,{sub:true}):''}
             ${P.medicao>0?linha('(−) Medição',P.medicao,R.medicao,{sub:true}):''}
-            ${P.imposto>0?linha('(−) Imposto s/ venda (Simples/DAS)',P.imposto,R.imposto,{sub:true}):''}
             ${linha('(−) Comissão montagem',P.comMont,R.comMont,{sub:true})}
             ${linha('(−) Comissão supervisor de obra',P.comSup,R.comSup,{sub:true})}
             <tr style="border-top:2px solid #CBD5E1;background:#F0FDF4;">
@@ -7364,12 +7363,13 @@ function _cascataProjeto(p){
   const custoOutros=((p&&p.outrosCustos)||[]).reduce((a,c)=>a+(c.valor||0),0);
   const transporte=_pedTransporte(p, custoFab);       // 6% do custo de fábrica (padrão) ou frete manual
   const medicao=_pedMedicao(p);                        // custo tabelado da medição (70/100/160/outro)
-  const imposto=_round2((vendaBruta-desconto)*_efetivaVenda(lead));  // Simples/DAS sobre a receita (valor ao cliente × efetiva) — mesma base do DRE
-  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros,transporte,medicao,imposto};
+  // NOTA: o DAS (imposto) NÃO entra por projeto — é custo MENSAL (proporcional ao faturamento),
+  // fica só no DRE mensal e no Fluxo. Custo fiscal por venda é a emissão da NF-e (ver custo NF-e).
+  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros,transporte,medicao};
   const monta=(comProj,comMont,comSup)=>{
     // Arredonda cada comissão a centavos (como comVend) — evita drift de fração no lucro/margem vs. as fichas.
     comProj=_round2(comProj); comMont=_round2(comMont); comSup=_round2(comSup);
-    const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+transporte+medicao+imposto+comMont+comSup;
+    const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+transporte+medicao+comMont+comSup;
     const lucro=liquido-custoTotal;
     return {...base,comProj,comMont,comSup,custoTotal,lucro,margem:liquido>0?lucro/liquido*100:0};
   };
@@ -12090,9 +12090,8 @@ function pdCalcMargem(){
   // reflete o 6% no campo (modo Fábrica) enquanto o usuário digita o custo fábrica
   { const _tt=document.getElementById('pd-transp-tipo'), _tv=document.getElementById('pd-transp-valor'); if(_tt&&_tv&&_tt.value==='fabrica') _tv.value=_fmtInputBRL(transporte); }
   const medicao=_pdMedicaoModal();
-  const imposto=Math.round(venda*_efetivaVenda(lead)*100)/100;
 
-  const custoTotal=fab+custoForn+custoOutros+transporte+medicao+imposto+taxaCartao+rt+comissao;
+  const custoTotal=fab+custoForn+custoOutros+transporte+medicao+taxaCartao+rt+comissao;
   const lucro=venda-custoTotal;
   const margem=venda>0?Math.round(lucro/venda*100):0;
 
@@ -12117,7 +12116,6 @@ function pdCalcMargem(){
     (custoOutros?_r('Outros Custos',custoOutros):'') +
     (transporte?_r('Transporte',transporte,false,'#0891B2',document.getElementById('pd-transp-tipo')?.value==='fabrica'?'6% fábrica':''):'') +
     (medicao?_r('Medição',medicao):'') +
-    (imposto?_r('Imposto s/ venda (DAS)',imposto,false,'#B45309','estimado'):'') +
     (taxaCartao?_r('Taxa Cartão / Financ.',taxaCartao,false,'#7C3AED'):'') +
     (rt?_r('RT (Retorno Técnico)',rt,false,'#0891B2',''+lead.rtPct+'%'):'') +
     (comissao?_r('Comissão Vendedor',comissao,false,'#D97706','estimada '+comPct.toFixed(1)+'%'):'') +
