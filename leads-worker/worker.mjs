@@ -141,6 +141,19 @@ async function tratarAdmin(req, env, acao) {
   }
 }
 
+// Lê um blob de _config (equipe/configs) e devolve o objeto (._val). Formato: doc {id,_json},
+// _json = JSON.stringify({id,_val,_uAt}). Retorna null se não existir/der erro.
+async function lerCfgBlob(sa, token, key) {
+  try {
+    const r = await fetch(fsBase(sa) + '/_config/' + key, { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j.fields || !j.fields._json) return null;
+    const outer = JSON.parse(j.fields._json.stringValue);
+    return outer && outer._val || null;
+  } catch (e) { return null; }
+}
+
 // ── Rodízio: lê _config/leadRodizio, incrementa o idx atômico e devolve o próximo vendedor ──
 async function proximoVendedor(sa, token) {
   // Lê a config (ativo, disponiveis). Se não existe/inativa/vazia → sem responsável (distribuição manual).
@@ -151,8 +164,18 @@ async function proximoVendedor(sa, token) {
   } catch (e) {}
   const f = (cfg && cfg.fields) || {};
   const ativo = f.ativo && f.ativo.booleanValue === true;
-  const disp = (f.disponiveis && f.disponiveis.arrayValue && f.disponiveis.arrayValue.values || []).map(v => v.stringValue).filter(Boolean);
+  let disp = (f.disponiveis && f.disponiveis.arrayValue && f.disponiveis.arrayValue.values || []).map(v => v.stringValue).filter(Boolean);
   if (!ativo || !disp.length) return '';
+  // TRAVA DEFINITIVA (auditoria 21/07): não confia cegamente em disponiveis. Confere na hora se
+  // cada nome ainda é COMERCIAL ATIVO (na equipe e não desligado). Fecha os furos client-side
+  // (exclusão/rename/offline) — desligado NUNCA recebe lead, mesmo que sobre na lista.
+  const equipe = await lerCfgBlob(sa, token, 'equipe');
+  const configs = await lerCfgBlob(sa, token, 'configs');
+  if (equipe && Array.isArray(equipe.comercial)) {
+    const ativos = new Set(equipe.comercial.filter(p => p && p.nome).map(p => p.nome));
+    disp = disp.filter(n => ativos.has(n) && !(configs && configs[n] && configs[n].situacao === 'desligado'));
+  }
+  if (!disp.length) return ''; // ninguém válido → não atribuído (gestor distribui na mão)
   // Incremento ATÔMICO do idx (transform) — garante que dois leads simultâneos nunca caem no mesmo vendedor.
   const body = { writes: [{ transform: { document: fsBase(sa).replace('https://firestore.googleapis.com/v1/', '') + '/_config/leadRodizio', fieldTransforms: [{ fieldPath: 'idx', increment: { integerValue: '1' } }] } }] };
   let novoIdx = 0;

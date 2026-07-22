@@ -8691,6 +8691,20 @@ async function _rodizioRemover(nome){
     await ref.set({disponiveis:disp.filter(n=>n!==nome)},{merge:true}); // merge: preserva ativo/idx
   }catch(e){ console.warn('[CVP] rodízio remover desligado:',e&&e.message); }
 }
+// Renomeia uma pessoa no rodízio (quando o cadastro é renomeado). Sem isso, o nome ANTIGO
+// fica órfão em disponiveis e o worker manda lead pra um nome que não existe mais.
+async function _rodizioRenomear(antigo, novo){
+  try{
+    if(!_fbReady||!_fbDb||antigo===novo) return;
+    const ref=_fbDb.collection('_config').doc('leadRodizio');
+    const d=await ref.get();
+    if(!d.exists) return;
+    const v=d.data()||{}; const disp=Array.isArray(v.disponiveis)?v.disponiveis:[];
+    if(!disp.includes(antigo)) return;
+    const nova=[...new Set(disp.map(n=>n===antigo?novo:n))];
+    await ref.set({disponiveis:nova},{merge:true}); // merge: preserva ativo/idx
+  }catch(e){ console.warn('[CVP] rodízio renomear:',e&&e.message); }
+}
 
 // Configurações em SOMENTE LEITURA para quem não é gestor (ex.: financeiro): consulta, não altera.
 function _configRO(){
@@ -9264,6 +9278,7 @@ async function cfgSalvarColab(){
       }
       _cfgTouch('metas');
       if(ST.configs[antigo]){ST.configs[nome]=ST.configs[antigo];delete ST.configs[antigo];} // MOVE (preserva _cfgpriv)
+      _rodizioRenomear(antigo,nome); // rodízio: renomeia no doc leadRodizio (senão nome antigo fica órfão → lead pra ninguém)
     }
     if(!ST.configs[nome]) ST.configs[nome]={};
     const c1=ST.configs[nome];
@@ -9298,7 +9313,7 @@ function cfgRemColabModal(){
   const p=ST.equipe[_colabArea][_colabIdx];
   if(!confirm(`Remover ${p.nome}?`)) return;
   ST.equipe[_colabArea].splice(_colabIdx,1);
-  _cfgTouch('equipe'); save(); fecharModal('modal-colab'); rConfig(); rLogin(); toast('Removido');
+  _cfgTouch('equipe'); save(); _rodizioRemover(p.nome); fecharModal('modal-colab'); rConfig(); rLogin(); toast('Removido');
 }
 function _parseDateBR(s){
   // DD/MM/AAAA → YYYY-MM-DD
@@ -9312,9 +9327,10 @@ function _fmtDateBR(iso){
 function cfgRemPessoa(area,i){
   if(!_gestorPodeExcluir()) return;
   if(!_cfgSyncPronto()) return;
-  if(!confirm(`Remover ${ST.equipe[area][i].nome}?`))return;
+  const _nomeRem=ST.equipe[area][i].nome;
+  if(!confirm(`Remover ${_nomeRem}?`))return;
   ST.equipe[area].splice(i,1);
-  _cfgTouch('equipe'); save();rConfig();rLogin();toast('Removido');
+  _cfgTouch('equipe'); save(); _rodizioRemover(_nomeRem); rConfig();rLogin();toast('Removido');
 }
 
 // ── Tabela de Financiamento Inline ──────────────────
@@ -14174,7 +14190,7 @@ function rBipartido(tgt){
         <div class="stat-card" style="border-left:4px solid #64748B;">
           <div class="sc-label">Financiado (acumulado)</div>
           <div class="sc-val">R$ ${fmt2(totFinAcum)}</div>
-          <div style="font-size:11px;color:var(--gl);margin-top:4px;">${regTodos.length} venda(s) com bipartido</div>
+          <div style="font-size:11px;color:var(--gl);margin-top:4px;">${new Set(regTodos.map(r=>r.l.id)).size} venda(s) · ${regTodos.length} parcela(s)</div>
         </div>
         <div class="stat-card" style="border-left:4px solid #16A34A;">
           <div class="sc-label">Total à Fábrica (Bipartido 40%)</div>
