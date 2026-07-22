@@ -14805,13 +14805,11 @@ function rFinanceiro(){
   if(canvas2){
     const bgColors=dataRes.map(v=>v>=0?'rgba(76,175,80,0.7)':'rgba(229,57,53,0.6)');
     const bdColors=dataRes.map(v=>v>=0?'#4CAF50':'#E53935');
-    if(_chartDREInst){
-      _chartDREInst.data.labels=labels;
-      _chartDREInst.data.datasets[0].data=dataRes;
-      _chartDREInst.data.datasets[0].backgroundColor=bgColors;
-      _chartDREInst.data.datasets[0].borderColor=bdColors;
-      _chartDREInst.update();
-    } else {
+    // innerHTML recria o canvas a cada render → destrói a instância antiga (presa no canvas
+    // detached) e cria uma nova no canvas atual. Sem isso, o gráfico fica em branco no re-render.
+    if(_chartDREInst){ try{_chartDREInst.destroy();}catch(e){} _chartDREInst=null; }
+    { try{ const _old=Chart.getChart&&Chart.getChart(canvas2); if(_old) _old.destroy(); }catch(e){} }
+    {
       _chartDREInst=new Chart(canvas2,{
         type:'bar',
         data:{labels,datasets:[{
