@@ -14641,11 +14641,12 @@ function rFinanceiro(){
 
   // DRE principal
   const _trReg=_tribReg(mesAno), _trPago=_trReg&&_trReg.dasPago;
-  const dreHtml=`
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:${_trPago?'#F0FDF4':'#FFFBEB'};border:1px solid ${_trPago?'#86EFAC':'#FDE68A'};border-radius:10px;padding:9px 14px;margin-bottom:12px;font-size:13px;">
+  // Banner do DAS — FORA do grid (senão vira um 3º item e quebra as 2 colunas).
+  const dasBanner=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:${_trPago?'#F0FDF4':'#FFFBEB'};border:1px solid ${_trPago?'#86EFAC':'#FDE68A'};border-radius:10px;padding:9px 14px;margin-bottom:16px;font-size:13px;">
     <span>🧮 <strong>DAS do mês:</strong> ${fmt(d.dasPrevisto)} previsto · ${_trPago?('✅ pago em '+_fmtDateBR(_trReg.dataPagamento)):('⏳ pendente · vence '+_fmtDateBR(_tribVenc(mesAno)))}</span>
     ${_temPermFC('fiscal')?`<button class="btn btn-s btn-sm" style="font-size:11px;" onclick="navTo('tab-fiscal');setTimeout(()=>fiscalSubTab('tributario'),100)">ver Tributário →</button>`:''}
-  </div>
+  </div>`;
+  const dreHtml=`
   <div class="dre-card">
     <div class="dre-sec-hdr"><span>Receitas</span></div>
     <div class="dre-row dre-indent">
@@ -14790,7 +14791,7 @@ function rFinanceiro(){
       </div>
     </div>`;
 
-  document.getElementById('fin-content').innerHTML=`<div class="dre-wrap">${dreHtml}${lateralHtml}</div>`;
+  document.getElementById('fin-content').innerHTML=`${dasBanner}<div class="dre-wrap">${dreHtml}${lateralHtml}</div>`;
 
   // Renderiza gráfico de resultado
   const labels=[];const dataRes=[];
