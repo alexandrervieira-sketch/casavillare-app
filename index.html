@@ -12046,7 +12046,16 @@ function pdCalcFab(){
   // Não auto-preencher percentual fixo. Mantido só para recálculos dependentes.
   pdCalcMargem();
 }
-function pdTranspChange(){ const e=document.getElementById('pd-transp-tipo'),v=document.getElementById('pd-transp-valor'); if(e&&v) v.style.display=e.value==='outro'?'':'none'; }
+function pdTranspChange(){
+  const e=document.getElementById('pd-transp-tipo'),v=document.getElementById('pd-transp-valor'); if(!e||!v) return;
+  if(e.value==='nenhum'){ v.style.display='none'; return; }
+  v.style.display='';
+  if(e.value==='fabrica'){ // mostra o 6% calculado, só leitura, atualiza ao vivo com o custo fábrica
+    const fab=_parseBRL(document.getElementById('pd-valor-fab')?.value)||0;
+    v.readOnly=true; v.tabIndex=-1; v.style.background='#F5F3F0'; v.style.color='var(--mid)';
+    v.value=_fmtInputBRL(Math.round(fab*0.06*100)/100);
+  } else { v.readOnly=false; v.tabIndex=0; v.style.background=''; v.style.color=''; }
+}
 function pdMedicaoChange(){ const e=document.getElementById('pd-medicao-sel'),v=document.getElementById('pd-medicao-valor'); if(e&&v) v.style.display=e.value==='outro'?'':'none'; }
 function _pdTranspModal(fab){ const t=document.getElementById('pd-transp-tipo')?.value||'fabrica'; if(t==='nenhum')return 0; if(t==='outro')return _parseBRL(document.getElementById('pd-transp-valor')?.value)||0; return Math.round((fab||0)*0.06*100)/100; }
 function _pdMedicaoModal(){ const s=document.getElementById('pd-medicao-sel')?.value||'0'; return s==='outro'?(_parseBRL(document.getElementById('pd-medicao-valor')?.value)||0):(parseFloat(s)||0); }
@@ -12078,6 +12087,8 @@ function pdCalcMargem(){
   const custoForn=(_pdFornsAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0);
   const custoOutros=(_pdOutrosCustos||[]).reduce((a,c)=>a+(c.valor||0),0);
   const transporte=_pdTranspModal(fab);
+  // reflete o 6% no campo (modo Fábrica) enquanto o usuário digita o custo fábrica
+  { const _tt=document.getElementById('pd-transp-tipo'), _tv=document.getElementById('pd-transp-valor'); if(_tt&&_tv&&_tt.value==='fabrica') _tv.value=_fmtInputBRL(transporte); }
   const medicao=_pdMedicaoModal();
   const imposto=Math.round(venda*_efetivaVenda(lead)*100)/100;
 
