@@ -2341,6 +2341,32 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div id="pd-outros-lista" style="display:flex;flex-direction:column;gap:6px;"></div>
       </div>
 
+      <!-- Transporte + Medição (custos automáticos do projeto) -->
+      <div class="fr r2" style="margin-top:12px;">
+        <div><label class="lbl">🚛 Transporte</label>
+          <div style="display:flex;gap:6px;">
+            <select class="inp" id="pd-transp-tipo" onchange="pdTranspChange();pdCalcMargem()" style="flex:1;margin:0;">
+              <option value="fabrica">Fábrica (6% do custo)</option>
+              <option value="outro">Outro frete (valor)</option>
+              <option value="nenhum">Sem transporte</option>
+            </select>
+            <input class="inp" type="text" inputmode="decimal" id="pd-transp-valor" placeholder="0,00" oninput="_maskBRL(this);pdCalcMargem()" style="width:110px;margin:0;display:none;"/>
+          </div>
+        </div>
+        <div><label class="lbl">📏 Medição</label>
+          <div style="display:flex;gap:6px;">
+            <select class="inp" id="pd-medicao-sel" onchange="pdMedicaoChange();pdCalcMargem()" style="flex:1;margin:0;">
+              <option value="0">— Sem medição —</option>
+              <option value="70">R$ 70</option>
+              <option value="100">R$ 100</option>
+              <option value="160">R$ 160</option>
+              <option value="outro">Outro valor</option>
+            </select>
+            <input class="inp" type="text" inputmode="decimal" id="pd-medicao-valor" placeholder="0,00" oninput="_maskBRL(this);pdCalcMargem()" style="width:110px;margin:0;display:none;"/>
+          </div>
+        </div>
+      </div>
+
       <!-- Resumo financeiro -->
       <div id="pd-resumo-fin" style="display:none;margin-top:14px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;">
         <div style="font-size:12px;font-weight:700;color:var(--dark);margin-bottom:10px;">💰 Resumo Financeiro do Projeto</div>
@@ -3544,6 +3570,7 @@ function _fsSubscribe(){
 
 // ── Persistência ───────────────────────────────────────────────────────────
 function save(){
+  _tribCacheMap={}; // dados mudaram → invalida o cache de alíquota efetiva
   try{
     localStorage.setItem('cvp_pay',JSON.stringify(ST));
     _checkStorageUsage();
@@ -6783,6 +6810,9 @@ function abrirFichaRentab(pedId){
             ${linha(P.custoFabBip?'(−) Custo fábrica (bipartido 40%)':'(−) Custo fábrica',P.custoFab,R.custoFab,{sub:true})}
             ${P.custoForn>0?linha('(−) Custo fornecedores',P.custoForn,R.custoForn,{sub:true}):''}
             ${P.custoOutros>0?linha('(−) Outros custos',P.custoOutros,R.custoOutros,{sub:true}):''}
+            ${P.transporte>0?linha('(−) Transporte',P.transporte,R.transporte,{sub:true}):''}
+            ${P.medicao>0?linha('(−) Medição',P.medicao,R.medicao,{sub:true}):''}
+            ${P.imposto>0?linha('(−) Imposto s/ venda (Simples/DAS)',P.imposto,R.imposto,{sub:true}):''}
             ${linha('(−) Comissão montagem',P.comMont,R.comMont,{sub:true})}
             ${linha('(−) Comissão supervisor de obra',P.comSup,R.comSup,{sub:true})}
             <tr style="border-top:2px solid #CBD5E1;background:#F0FDF4;">
@@ -7332,11 +7362,14 @@ function _cascataProjeto(p){
   const custoFabBip=!(custoFabManual>0)&&bipFab>0; // sinaliza a origem p/ rotular na ficha
   const custoForn=((p&&p.fornecedoresAdicionais)||[]).reduce((a,f)=>a+(f.valor||0),0);
   const custoOutros=((p&&p.outrosCustos)||[]).reduce((a,c)=>a+(c.valor||0),0);
-  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros};
+  const transporte=_pedTransporte(p, custoFab);       // 6% do custo de fábrica (padrão) ou frete manual
+  const medicao=_pedMedicao(p);                        // custo tabelado da medição (70/100/160/outro)
+  const imposto=_round2((vendaBruta-desconto)*_efetivaVenda(lead));  // Simples/DAS sobre a receita (valor ao cliente × efetiva) — mesma base do DRE
+  const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros,transporte,medicao,imposto};
   const monta=(comProj,comMont,comSup)=>{
     // Arredonda cada comissão a centavos (como comVend) — evita drift de fração no lucro/margem vs. as fichas.
     comProj=_round2(comProj); comMont=_round2(comMont); comSup=_round2(comSup);
-    const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+comMont+comSup;
+    const custoTotal=comVend+comProj+custoFab+custoForn+custoOutros+transporte+medicao+imposto+comMont+comSup;
     const lucro=liquido-custoTotal;
     return {...base,comProj,comMont,comSup,custoTotal,lucro,margem:liquido>0?lucro/liquido*100:0};
   };
@@ -12013,6 +12046,10 @@ function pdCalcFab(){
   // Não auto-preencher percentual fixo. Mantido só para recálculos dependentes.
   pdCalcMargem();
 }
+function pdTranspChange(){ const e=document.getElementById('pd-transp-tipo'),v=document.getElementById('pd-transp-valor'); if(e&&v) v.style.display=e.value==='outro'?'':'none'; }
+function pdMedicaoChange(){ const e=document.getElementById('pd-medicao-sel'),v=document.getElementById('pd-medicao-valor'); if(e&&v) v.style.display=e.value==='outro'?'':'none'; }
+function _pdTranspModal(fab){ const t=document.getElementById('pd-transp-tipo')?.value||'fabrica'; if(t==='nenhum')return 0; if(t==='outro')return _parseBRL(document.getElementById('pd-transp-valor')?.value)||0; return Math.round((fab||0)*0.06*100)/100; }
+function _pdMedicaoModal(){ const s=document.getElementById('pd-medicao-sel')?.value||'0'; return s==='outro'?(_parseBRL(document.getElementById('pd-medicao-valor')?.value)||0):(parseFloat(s)||0); }
 function pdCalcMargem(){
   const venda =_parseBRL(document.getElementById('pd-valor')?.value)||0;
   const fab   =_parseBRL(document.getElementById('pd-valor-fab')?.value)||0;
@@ -12040,8 +12077,11 @@ function pdCalcMargem(){
   // Outros custos cadastrados
   const custoForn=(_pdFornsAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0);
   const custoOutros=(_pdOutrosCustos||[]).reduce((a,c)=>a+(c.valor||0),0);
+  const transporte=_pdTranspModal(fab);
+  const medicao=_pdMedicaoModal();
+  const imposto=Math.round(venda*_efetivaVenda(lead)*100)/100;
 
-  const custoTotal=fab+custoForn+custoOutros+taxaCartao+rt+comissao;
+  const custoTotal=fab+custoForn+custoOutros+transporte+medicao+imposto+taxaCartao+rt+comissao;
   const lucro=venda-custoTotal;
   const margem=venda>0?Math.round(lucro/venda*100):0;
 
@@ -12064,6 +12104,9 @@ function pdCalcMargem(){
     _r('Custo Fábrica',fab)+
     (custoForn?_r('Custo Fornecedores',custoForn):'') +
     (custoOutros?_r('Outros Custos',custoOutros):'') +
+    (transporte?_r('Transporte',transporte,false,'#0891B2',document.getElementById('pd-transp-tipo')?.value==='fabrica'?'6% fábrica':''):'') +
+    (medicao?_r('Medição',medicao):'') +
+    (imposto?_r('Imposto s/ venda (DAS)',imposto,false,'#B45309','estimado'):'') +
     (taxaCartao?_r('Taxa Cartão / Financ.',taxaCartao,false,'#7C3AED'):'') +
     (rt?_r('RT (Retorno Técnico)',rt,false,'#0891B2',''+lead.rtPct+'%'):'') +
     (comissao?_r('Comissão Vendedor',comissao,false,'#D97706','estimada '+comPct.toFixed(1)+'%'):'') +
@@ -12550,6 +12593,13 @@ function abrirModalPedido(id){
     pdRenderFornsLista(_pdFornsAdicionais);
     _pdOutrosCustos=p.outrosCustos?_deepClone(p.outrosCustos):[];
     pdRenderOutrosCustos();
+    // Transporte + Medição
+    document.getElementById('pd-transp-tipo').value=p.transporteTipo||'fabrica';
+    document.getElementById('pd-transp-valor').value=p.transporteValor?_fmtInputBRL(p.transporteValor):'';
+    pdTranspChange();
+    { const med=p.medicao||0, sel=document.getElementById('pd-medicao-sel'), val=document.getElementById('pd-medicao-valor');
+      if(med===0){ sel.value='0'; val.value=''; } else if([70,100,160].includes(med)){ sel.value=String(med); val.value=''; } else { sel.value='outro'; val.value=_fmtInputBRL(med); }
+      pdMedicaoChange(); }
     pdCalcMargem(); // recalcula DEPOIS de carregar forns/outros (o calc anterior rodava com os arrays ainda vazios)
     document.getElementById('pd-status').value         =p.status||'projeto';
     document.getElementById('pd-lead').value           =p.leadId||'';
@@ -12607,6 +12657,8 @@ function abrirModalPedido(id){
     document.getElementById('pd-prev-montagem').value='';
     document.getElementById('pd-data-entrega').value='';
     document.getElementById('pd-data-montagem').value='';
+    document.getElementById('pd-transp-tipo').value='fabrica'; document.getElementById('pd-transp-valor').value=''; pdTranspChange();
+    document.getElementById('pd-medicao-sel').value='0'; document.getElementById('pd-medicao-valor').value=''; pdMedicaoChange();
     document.getElementById('pd-status').value='projeto';
     document.getElementById('pd-lead').value='';
     document.getElementById('pd-obs').value='';
@@ -12657,6 +12709,9 @@ function salvarPedido(){
     obs:          document.getElementById('pd-obs').value.trim(),
     fornecedoresAdicionais: _pdFornsAdicionais.filter(f=>f.nome),
     outrosCustos: _pdOutrosCustos.filter(c=>c.valor>0),
+    transporteTipo:  document.getElementById('pd-transp-tipo').value||'fabrica',
+    transporteValor: document.getElementById('pd-transp-tipo').value==='outro'?_parseBRL(document.getElementById('pd-transp-valor').value):0,
+    medicao:         _pdMedicaoModal(),
     // Assistência Técnica
     atErroTipo:      document.querySelector('input[name="pd-at-tipo"]:checked')?.value||'',
     atErroSubTipo:   document.getElementById('pd-at-subtipo')?.value||'',
@@ -13460,15 +13515,32 @@ function _tribRBT12(mesAno){
   for(let i=1;i<=12;i++){ const d=new Date(Y,(M-1)-i,1); soma+=_dreReceitaCRM(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   return soma;
 }
-// Cálculo completo do mês: RBT12 → faixa → efetiva → DAS previsto.
+// Cálculo completo do mês: RBT12 → faixa → efetiva → DAS previsto. Memoizado por competência
+// (limpo no save()) — evita recomputar o RBT12 (12 varreduras) a cada pedido na rentabilidade.
+let _tribCacheMap={};
 function _tribCalc(mesAno){
+  if(!/^\d{4}-\d{2}$/.test(mesAno||'')) mesAno=_hojeLocal().slice(0,7);
+  if(_tribCacheMap[mesAno]) return _tribCacheMap[mesAno];
   const rbt12=_tribRBT12(mesAno);
   const f=_tribFaixa(rbt12);
   const efetiva = rbt12>0 ? Math.max(0,(rbt12*f.nom - f.pd)/rbt12) : f.nom; // início: sem histórico → nominal da 1ª faixa
   const faturamentoMes=_dreReceitaCRM(mesAno);
   const dasPrevisto=Math.round(faturamentoMes*efetiva*100)/100;
-  return { rbt12, faixa:f, nominal:f.nom, pd:f.pd, efetiva, faturamentoMes, dasPrevisto };
+  return (_tribCacheMap[mesAno]={ rbt12, faixa:f, nominal:f.nom, pd:f.pd, efetiva, faturamentoMes, dasPrevisto });
 }
+// Alíquota efetiva do mês de uma venda (competência = fechamento do lead; senão mês atual).
+function _efetivaVenda(lead){
+  const comp=(lead&&(lead.dataFechamento||lead.dataCriacao)||'').slice(0,7);
+  return _tribCalc(comp).efetiva;
+}
+// Transporte do projeto: 'fabrica' = 6% do custo de fábrica (padrão); 'outro' = valor manual; 'nenhum' = 0.
+function _pedTransporte(p, custoFab){
+  const t=(p&&p.transporteTipo)||'fabrica';
+  if(t==='nenhum') return 0;
+  if(t==='outro') return (p&&p.transporteValor)||0;
+  return Math.round((custoFab||0)*0.06*100)/100;
+}
+function _pedMedicao(p){ return (p&&p.medicao)||0; }
 // Registro de pagamento do mês (o que é gravado). Vencimento: dia 20 do mês seguinte.
 function _tribReg(mesAno){ return (ST.tributario||[]).find(t=>t.competencia===mesAno)||null; }
 function _tribVenc(mesAno){ const [Y,M]=mesAno.split('-').map(Number); const d=new Date(Y,M,20); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-20'; }
@@ -13523,7 +13595,8 @@ function calcDRE(mesAno){
     const _fab=(p.valorFabrica||0)>0?(p.valorFabrica||0):_bipartidoLead(_l); // sem custo manual, usa o bipartido (40% financiado)
     return a+_fab
             +(p.fornecedoresAdicionais||[]).reduce((s,f)=>s+(f.valor||0),0)
-            +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0);
+            +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0)
+            +_pedTransporte(p,_fab)+_pedMedicao(p); // transporte (6% ou manual) + medição — imposto já entra na dedução do DAS
   },0);
   const cpv         =cpvManual+cpvPedidos;
   // Investimento showroom/interno do mês (compras que NÃO são venda): reduz o resultado como investimento.
