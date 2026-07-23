@@ -3399,11 +3399,19 @@ async function _fsLoadAll(){
       const tombNaNuvem=[];
       cloud=cloud.filter(d=>{ const id=String(d&&(d.id??d._id)); if(_tombHas(col,id)){ tombNaNuvem.push(id); return false; } return true; });
       const cloudIds=new Set(cloud.map(d=>String(d&&(d.id??d._id))));
-      cloud.forEach(d=>{ const id=String(d&&(d.id??d._id)); if(id&&id!=='undefined') _fsSeen[col+'/'+id]=JSON.stringify(d); });
+      const _localArr=Array.isArray(ST[col])?ST[col]:[];
+      const _localById=new Map();
+      _localArr.forEach(it=>{ const id=String(it&&(it.id??it._id)); if(id&&id!=='undefined') _localById.set(id,it); });
+      let _localNovo=false;
+      // Para cada doc da nuvem: mantém a versão LOCAL se ela for MAIS NOVA (_uAt maior) — protege
+      // edição offline ainda não sincronizada de ser sobrescrita pela nuvem antiga ao recarregar.
+      // _fsSeen recebe a versão da NUVEM, então a sync enxerga o local como mudança e o reenvia.
+      const _merged=cloud.map(d=>{ const id=String(d&&(d.id??d._id)); if(id&&id!=='undefined') _fsSeen[col+'/'+id]=JSON.stringify(d);
+        const loc=_localById.get(id); if(loc&&(loc._uAt||0)>(d._uAt||0)){ _localNovo=true; return loc; } return d; });
       // Extras locais só são preservados se NÃO tiverem tombstone (senão é um apagado ressuscitando)
-      const extras=(Array.isArray(ST[col])?ST[col]:[]).filter(it=>{ const id=String(it&&(it.id??it._id)); return id&&id!=='undefined'&&!cloudIds.has(id)&&!_tombHas(col,id); });
-      ST[col]=cloud.concat(extras);                 // nuvem + locais inéditos (preservados)
-      if(extras.length) toPush.push(col);
+      const extras=_localArr.filter(it=>{ const id=String(it&&(it.id??it._id)); return id&&id!=='undefined'&&!cloudIds.has(id)&&!_tombHas(col,id); });
+      ST[col]=_merged.concat(extras);               // nuvem (ou local se mais novo) + locais inéditos
+      if(extras.length||_localNovo) toPush.push(col);
       if(_fbAuthed&&tombNaNuvem.length){ const ref=_fbDb.collection(col); for(const id of tombNaNuvem){ try{ await ref.doc(id).delete(); }catch(e){} delete _fsSeen[col+'/'+id]; } }
     }
     _fsConfigDocs().forEach(d=>{ _fsSeen['_config/'+d.id]=JSON.stringify(d); });
@@ -4086,22 +4094,34 @@ function rHome(){
 function _calcAlertas(){
   const hoje=_hojeLocal();
   const _add=(d,n)=>{const x=new Date(hoje+'T12:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
-  const lim7=_add(hoje,7), ago7=_add(hoje,-7);
+  const lim7=_add(hoje,7), ago7=_add(hoje,-7), ago2=_add(hoje,-2);
   const perfil=ST.perfil, nome=ST.nome, area=ST.area, isG=perfil==='gestor';
   const out={leads:[],pedidos:[],pagar:[],receber:[]};
 
-  // 1) Contatos atrasados & leads parados (comercial vê os seus; gestor vê todos)
+  // 1) Contatos atrasados, leads parados e CAIXA DE TRIAGEM (comercial vê os seus; gestor vê todos + os não-atribuídos)
   if(isG||area==='comercial'){
     let base=(ST.leads||[]).filter(l=>l.status!=='perdido'&&l.status!=='ganho');
     if(!isG) base=base.filter(l=>l.responsavel===nome);
     base.forEach(l=>{
+      if(l.etapa==='leads'){ // caixa de triagem — rede de segurança pra NÃO perder lead da IA
+        if(!l.responsavel)
+          out.leads.push({id:l.id,nome:l.nome,resp:'(não atribuído)',tipo:'triagem',info:'⚠️ Lead sem responsável — distribua ou triague'});
+        else if((l.dataCriacao||'')<ago2)
+          out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'triagem',info:'Aguardando triagem há +2 dias — leve p/ 1º Atendimento ou descarte'});
+        return;
+      }
       if(l.proxContato&&l.proxContato<hoje)
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'atrasado',info:'Contato venceu '+_fmtDateBR(l.proxContato)});
       else if(!l.proxContato&&['apresentacao','negociacao','fechamento'].includes(l.etapa))
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'quente',info:'Em '+(CRM_ETAPAS.find(e=>e.id===l.etapa)?.label||l.etapa)+' sem próximo contato — não deixe esfriar'});
-      else if(!l.proxContato&&l.etapa!=='leads'&&(l.dataCriacao||'')<ago7)
+      else if(!l.proxContato&&(l.dataCriacao||'')<ago7)
         out.leads.push({id:l.id,nome:l.nome,resp:l.responsavel,tipo:'parado',info:'Sem próximo contato agendado'});
     });
+  }
+  // Gestor: também vê leads NÃO ATRIBUÍDOS em qualquer etapa ativa (rede extra — não some do radar)
+  if(isG){
+    (ST.leads||[]).filter(l=>l.status!=='perdido'&&l.status!=='ganho'&&!l.responsavel&&l.etapa!=='leads')
+      .forEach(l=>out.leads.push({id:l.id,nome:l.nome,resp:'(não atribuído)',tipo:'triagem',info:'Lead sem responsável em '+(CRM_ETAPAS.find(e=>e.id===l.etapa)?.label||l.etapa)}));
   }
 
   // 2) Prazos de pedidos estourados (obras vê os seus; gestor vê todos)
@@ -4186,7 +4206,7 @@ function rHomeAlertas(){
       ${htmlItens}${itens.length>6?`<div style="font-size:11px;color:#9CA3AF;padding:2px 4px;">+${itens.length-6} mais…</div>`:''}
     </div>`:'';
 
-  const leadsH=a.leads.slice(0,6).map(l=>linha(l.tipo==='atrasado'?'⏰':l.tipo==='quente'?'🔥':'💤',_esc2(l.nome),_esc2(l.info)+(ST.perfil==='gestor'&&l.resp?' · '+_esc2(l.resp):''),`abrirModalLead('${_sid(l.id)}')`,l.tipo!=='parado')).join('');
+  const leadsH=a.leads.slice(0,6).map(l=>linha(l.tipo==='atrasado'?'⏰':l.tipo==='quente'?'🔥':l.tipo==='triagem'?'📥':'💤',_esc2(l.nome),_esc2(l.info)+(ST.perfil==='gestor'&&l.resp?' · '+_esc2(l.resp):''),`abrirModalLead('${_sid(l.id)}')`,l.tipo!=='parado')).join('');
   const metasH=(a.metas||[]).slice(0,6).map(m=>linha('🎯',_esc2(m.label)+(ST.perfil==='gestor'&&m.resp?' · '+_esc2(m.resp):''),_esc2(m.info),`navTo('tab-metas')`,true)).join('');
   const pedsH =a.pedidos.slice(0,6).map(p=>linha('📦',_esc2(p.nome),_esc2(p.info),`abrirModalPedido('${_sid(p.id)}')`,true)).join('');
   const pagH  =a.pagar.slice(0,6).map(c=>linha('💸',_esc2(c.desc)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc),`abrirModalCP('${_sid(c.id)}')`,c.vencida)).join('');
@@ -10144,7 +10164,7 @@ function leadCardHtml(l,etapa){
     ${l.proxContato?`<div class="pipe-card-row" style="color:${atrasado?'var(--fail)':'var(--gl)'};">${atrasado?'⚠️ Atrasado':'📅'} ${new Date(l.proxContato+'T12:00').toLocaleDateString('pt-BR')}</div>`:''}
     ${etaIdx>=CRM_ETAPAS.findIndex(e=>e.id==='fechamento')&&l.prazoEntrega?`<div class="pipe-card-row" style="color:#0369A1;">🚚 ${l.prazoEntrega} dias úteis</div>`:''}
     ${etaIdx>=CRM_ETAPAS.findIndex(e=>e.id==='fechamento')&&l.tipoVenda?`<div class="pipe-card-row"><span style="font-size:10px;background:${l.tipoVenda==='programada'?'#EDE9FE':'#DCFCE7'};color:${l.tipoVenda==='programada'?'#6D28D9':'#166534'};padding:1px 7px;border-radius:10px;font-weight:600;">${l.tipoVenda==='programada'?'📅 Programada':'🛒 Normal'}</span></div>`:''}
-    ${l.tags?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;">${l.tags.split(',').map(t=>`<span class="badge b-wait" style="font-size:10px;">${t.trim()}</span>`).join('')}</div>`:''}
+    ${l.tags?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;">${l.tags.split(',').map(t=>`<span class="badge b-wait" style="font-size:10px;">${_esc(t.trim())}</span>`).join('')}</div>`:''}
     ${(prox||podeVoltar)?`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
       <span>${podeVoltar?`<button onclick="voltarEtapa('${l.id}')" class="btn btn-s btn-sm" style="font-size:11px;" title="Voltar etapa">←</button>`:''}</span>
       <span>${prox?`<button onclick="avancarEtapa('${l.id}')" class="btn btn-s btn-sm" style="font-size:11px;">→ ${prox.label}</button>`:''}</span>

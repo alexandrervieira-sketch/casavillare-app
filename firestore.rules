@@ -42,7 +42,8 @@ service cloud.firestore {
       return isGestor() || isFinanceiro();
     }
     function isFinanceira(c) {
-      return c == 'dre' || c == 'folhas' || c == 'comissoes' || c == 'vendasCom';
+      return c == 'dre' || c == 'folhas' || c == 'comissoes' || c == 'vendasCom'
+          || c == 'tributario' || c == 'notasCompra';
     }
 
     // ── Trilha de auditoria: leitura só gestor; cria sim; edita/apaga NUNCA ──

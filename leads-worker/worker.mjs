@@ -153,6 +153,15 @@ async function lerCfgBlob(sa, token, key) {
     return outer && outer._val || null;
   } catch (e) { return null; }
 }
+// Lê um doc qualquer e devolve os fields (ou null). Usado no dedup de leads.
+async function fsGetDoc(sa, token, path) {
+  try {
+    const r = await fetch(fsBase(sa) + '/' + path, { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.fields || null;
+  } catch (e) { return null; }
+}
 
 // ── Rodízio: lê _config/leadRodizio, incrementa o idx atômico e devolve o próximo vendedor ──
 async function proximoVendedor(sa, token) {
@@ -171,10 +180,11 @@ async function proximoVendedor(sa, token) {
   // (exclusão/rename/offline) — desligado NUNCA recebe lead, mesmo que sobre na lista.
   const equipe = await lerCfgBlob(sa, token, 'equipe');
   const configs = await lerCfgBlob(sa, token, 'configs');
-  if (equipe && Array.isArray(equipe.comercial)) {
-    const ativos = new Set(equipe.comercial.filter(p => p && p.nome).map(p => p.nome));
-    disp = disp.filter(n => ativos.has(n) && !(configs && configs[n] && configs[n].situacao === 'desligado'));
-  }
+  // FAIL-CLOSED (auditoria 22/07): se NÃO deu p/ ler a equipe, NÃO distribui — melhor "não atribuído"
+  // (visível na triagem, gestor distribui) do que arriscar cair num desligado que sobrou na lista.
+  if (!equipe || !Array.isArray(equipe.comercial)) return '';
+  const ativos = new Set(equipe.comercial.filter(p => p && p.nome).map(p => p.nome));
+  disp = disp.filter(n => ativos.has(n) && !(configs && configs[n] && configs[n].situacao === 'desligado'));
   if (!disp.length) return ''; // ninguém válido → não atribuído (gestor distribui na mão)
   // Incremento ATÔMICO do idx (transform) — garante que dois leads simultâneos nunca caem no mesmo vendedor.
   const body = { writes: [{ transform: { document: fsBase(sa).replace('https://firestore.googleapis.com/v1/', '') + '/_config/leadRodizio', fieldTransforms: [{ fieldPath: 'idx', increment: { integerValue: '1' } }] } }] };
@@ -245,7 +255,21 @@ export default {
 
     try {
       const token = await getToken(sa);
+      const agora = Date.now();
+
+      // DEDUP (auditoria 22/07) — evita lead DUPLICADO ou lead progredido SOBRESCRITO em reenvio da IA.
+      const idem = _txt(b.idempotencyKey);
+      const idDet = idem ? await _idFromKey(idem) : null;
+      // (a) por idempotencyKey: se o lead já existe, devolve SEM sobrescrever nem re-distribuir.
+      if (idDet && await fsGetDoc(sa, token, 'leads/' + idDet))
+        return json({ ok: true, leadId: idDet, dedup: 'idempotencyKey', responsavel: '(já existente)' }, 200);
+      // (b) por telefone: lead recente (<24h) com o mesmo número → devolve o existente (não duplica).
+      const _idx = await fsGetDoc(sa, token, '_leadidx/' + telefone);
+      if (_idx && _idx._json) { try { const p = JSON.parse(_idx._json.stringValue); if (p.leadId && (agora - (p.ts || 0)) < 24 * 3600 * 1000) return json({ ok: true, leadId: p.leadId, dedup: 'telefone', responsavel: '(já existente)' }, 200); } catch (e) {} }
+
+      // Não é duplicado → distribui (rodízio) e cria.
       const responsavel = await proximoVendedor(sa, token);
+      const id = idDet || (String(agora) + String(Math.floor(Math.random() * 1000000)).padStart(6, '0'));
 
       // Resumo estruturado nas Observações (nada se perde)
       const obsLinhas = [];
@@ -259,9 +283,6 @@ export default {
       if (extra.length) obsLinhas.push(extra.join('\n'));
       obsLinhas.push('— via IA de pré-atendimento (WhatsApp)');
 
-      // Id: com idempotencyKey → determinístico (reenvio não duplica); sem → aleatório. Sempre só dígitos (o app usa _sid).
-      const idem = _txt(b.idempotencyKey);
-      const id = idem ? await _idFromKey(idem) : (String(Date.now()) + String(Math.floor(Math.random() * 1000000)).padStart(6, '0'));
       const dataCriacao = _txt(b.captadoEm) ? _txt(b.captadoEm).slice(0, 10) : _hojeBR();
       const lead = {
         id, nome, _uAt: Date.now(),
@@ -285,6 +306,15 @@ export default {
         body: JSON.stringify({ fields: { id: { stringValue: id }, _json: { stringValue: JSON.stringify(lead) } } }),
       });
       if (!r.ok) { const t = await r.text(); return json({ error: 'falha ao gravar', detalhe: t.slice(0, 200) }, 502); }
+
+      // Índice de telefone p/ dedup (coleção privada _leadidx, ignorada pelo app). Best-effort.
+      try {
+        await fetch(fsBase(sa) + '/_leadidx/' + telefone, {
+          method: 'PATCH',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { id: { stringValue: telefone }, _json: { stringValue: JSON.stringify({ leadId: id, ts: agora }) } } }),
+        });
+      } catch (e) {}
 
       return json({ ok: true, leadId: id, responsavel: responsavel || '(não atribuído)' }, 201);
     } catch (e) {
