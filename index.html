@@ -11384,19 +11384,9 @@ ${obsRows?`
   <tbody>${obsRows}</tbody>
 </table>`:''}
 
-</div><!-- /page1 -->
-
-<!-- ═══════════════ PAGE 2: PAGAMENTO ═══════════════ -->
-<div class="page">
-
-<!-- repete cabeçalho reduzido -->
-<div class="header">
-  <div class="logo-area">${_docLogoHtml()}</div>
-  <div class="company-info">${_docEmpInfoHtml()}</div>
-  <div class="contrato-num">CONTRATO N.º<br><span style="font-size:16px;">${numC}</span></div>
-</div>
-
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;margin-top:-1px;">
+<!-- ═══════════════ PAGAMENTO (na mesma página dos itens) ═══════════════ -->
+<div class="section-title" style="margin-top:12px;">Condições de Pagamento</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;">
   <div style="border:1px solid #000;padding:6px 8px;border-right:none;">
     <strong style="font-size:10px;">TOTAL DO CONTRATO${descontoPctCt>0?' (−'+descontoPctCt+'%)':''}</strong><br>
     <span style="font-size:13px;font-weight:bold;">R$ ${fmtBRL(totalAposDescCt)}</span>
@@ -11431,7 +11421,7 @@ ${obsRows?`
   </tbody>
 </table>
 
-</div><!-- /page2 -->
+</div><!-- /page1: dados + itens + pagamento -->
 
 <!-- ═══════════════ CLÁUSULAS ═══════════════ -->
 <div class="page clausulas">
