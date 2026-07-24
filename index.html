@@ -10159,9 +10159,23 @@ function togglePerdidos(){
   if(el) el.style.display=el.style.display==='none'?'block':'none';
 }
 
+// Hora/data de entrada do lead no CRM. criadoEm = timestamp completo (com hora);
+// leads legados (sem criadoEm) caem para dataCriacao (só data).
+function _leadChegada(l){
+  if(l&&l.criadoEm){ const d=new Date(l.criadoEm); if(!isNaN(d.getTime())){
+    const ag=new Date(); const hh=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    if(d.toDateString()===ag.toDateString()) return 'hoje '+hh;
+    const ont=new Date(ag); ont.setDate(ag.getDate()-1);
+    if(d.toDateString()===ont.toDateString()) return 'ontem '+hh;
+    return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+hh;
+  }}
+  if(l&&l.dataCriacao){ const d=new Date(l.dataCriacao+'T12:00'); if(!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}); }
+  return '';
+}
 function leadCardHtml(l,etapa){
   const hoje=_hojeLocal();
   const atrasado=l.proxContato&&l.proxContato<hoje;
+  const chegada=_leadChegada(l);
   const _d12=new Date();_d12.setMonth(_d12.getMonth()-12);
   const _corte12=_d12.toISOString().split('T')[0];
   const parado=!l.proxContato&&(l.dataCriacao||'')<_corte12;
@@ -10176,6 +10190,7 @@ function leadCardHtml(l,etapa){
       <div class="pipe-card-name" style="flex:1;padding-right:6px;">${_esc(l.nome)}</div>
       <span class="orig-badge" style="background:${origCor}18;color:${origCor};flex-shrink:0;">${origLbl}</span>
     </div>
+    ${chegada?`<div class="pipe-card-row" style="color:var(--gl);font-size:10px;">🕐 Entrou: ${chegada}</div>`:''}
     ${l._origemIA?`<div class="pipe-card-row" style="color:#0D9488;font-weight:600;">🤖 via IA de pré-atendimento</div>`:''}
     ${_leadJaRegistrado(l)?`<div class="pipe-card-row" style="color:#B45309;font-weight:600;">⚠️ Cliente já registrado antes</div>`:''}
     ${l.responsavel?`<div class="pipe-card-row">👤 ${_esc(l.responsavel)}</div>`:''}
@@ -10397,7 +10412,8 @@ function salvarLead(){
                       ? (document.getElementById('ld-motivo-perda-obs')?.value||'')
                       : (prevLead?.motivoPerdaObs||''),
     dataCriacao,
-    dataFechamento: _dataFech
+    dataFechamento: _dataFech,
+    criadoEm: isEdit?(prevLead?.criadoEm||undefined):new Date().toISOString() // hora exata de entrada no CRM (novo lead); edição preserva
   };
   // ── Rollback financeiro ao reverter lead de GANHO para outro status ──
   let _rollbackFinanceiro=false;

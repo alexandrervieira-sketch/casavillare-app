@@ -295,6 +295,7 @@ export default {
         prazo: _txt(b.prazo), prazoEntrega: '', tipoVenda: '', especificadorId: '', rtPct: 0,
         orcamento: '', obs: obsLinhas.join('\n\n'), tags: '',
         dataCriacao, dataFechamento: null,
+        criadoEm: _txt(b.captadoEm) || new Date().toISOString(), // hora EXATA de chegada (captadoEm do provedor se vier, senão a hora que o worker recebeu)
         _origemIA: true,      // veio da integração — o app mostra selo e checa "já registrado" por telefone
         _canalOrigem: canal,  // qual IA/canal enviou (ex.: "ia-whatsapp" hoje, "ia-propria" no futuro) — comparação de desempenho
       };
