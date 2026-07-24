@@ -3309,7 +3309,7 @@ function _cfgprivDocs(){
   const arr=[];
   for(const nome in (ST.configs||{})){
     const c=ST.configs[nome]||{}, pv={id:nome}; let tem=false;
-    for(const k of _CFG_PRIV_FIELDS){ if(c[k]!==undefined&&c[k]!==''&&c[k]!==null){ pv[k]=c[k]; tem=true; } }
+    for(const k of _CFG_PRIV_FIELDS){ if(c[k]!==undefined&&c[k]!==''&&c[k]!==null&&c[k]!==0){ pv[k]=c[k]; tem=true; } } // !==0: nunca empurra salário/adiantamento zerado sobre um valor bom na nuvem
     if(tem) arr.push(pv);
   }
   return arr;
@@ -9373,8 +9373,11 @@ async function cfgSalvarColab(){
     c1.departamento =departamento||c1.departamento||'';
     c1.endereco     =endereco||c1.endereco||'';
     c1.obs          =obs||c1.obs||'';
-    c1.salarioBase  =salario;
-    c1.adiantamento =adiantamento;
+    // Salário/adiantamento são privados (E1). Só sobrescreve se o campo veio PREENCHIDO.
+    // Campo vazio = "não estou mexendo no salário" → PRESERVA o valor atual. Senão, editar
+    // qualquer outro dado do cadastro zerava o salário (e o 0 vazava pro _cfgpriv na nuvem).
+    if((document.getElementById('colab-salario').value||'').trim()!=='')      c1.salarioBase =salario;
+    if((document.getElementById('colab-adiantamento').value||'').trim()!=='') c1.adiantamento=adiantamento;
     { const _pm=_lerPermsUI(); c1.permissoes=_pm.permissoes; c1.permissoesEd=_pm.permissoesEd; }
     toast('Colaborador atualizado ✅');
   }
