@@ -7049,8 +7049,44 @@ function rRelConversao(){
     <div class="orig-wrap">
       <div class="orig-chart-box"><canvas id="chart-origem" height="220"></canvas></div>
       <div class="orig-table-box" id="orig-table"></div>
-    </div>`;
+    </div>
+    <div class="meta-section-title" style="margin-top:24px;">🕐 Horários de Entrada dos Leads — ${per.label}</div>
+    <div id="rel-horario" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 24px;"></div>`;
   rRelOrigemChart(_convDe, _convAte);
+  rRelHorarioLeads(_convDe, _convAte);
+}
+
+// Distribuição dos leads por HORA do dia (BRT) — descobre os horários de pico de entrada.
+// Usa criadoEm (timestamp completo). Leads sem criadoEm (raros após backfill) entram só na contagem "sem hora".
+function rRelHorarioLeads(de,ate){
+  const el=document.getElementById('rel-horario'); if(!el) return;
+  const _dLoc=iso=>{ const d=new Date(new Date(iso).getTime()-3*3600*1000); return isNaN(d.getTime())?'':d.toISOString().slice(0,10); };
+  const _hBRT=iso=>{ const d=new Date(iso); return isNaN(d.getTime())?null:(d.getUTCHours()-3+24)%24; };
+  const hist=new Array(24).fill(0); let total=0, semHora=0;
+  (ST.leads||[]).forEach(l=>{
+    if(!l||!l.criadoEm){ if(l&&l.dataCriacao&&l.dataCriacao>=de&&l.dataCriacao<=ate) semHora++; return; }
+    const dloc=_dLoc(l.criadoEm);
+    if(dloc&&dloc>=de&&dloc<=ate){ const h=_hBRT(l.criadoEm); if(h!=null){ hist[h]++; total++; } }
+  });
+  if(!total){ el.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Nenhum lead com horário registrado neste período.'+(semHora?` (${semHora} sem hora)`:'')+'</div>'; return; }
+  const max=Math.max(...hist), picoH=hist.indexOf(max);
+  const faixa=(a,b)=>hist.slice(a,b).reduce((s,x)=>s+x,0);
+  const periodos=[['Madrugada','00–05h',faixa(0,6)],['Manhã','06–11h',faixa(6,12)],['Tarde','12–17h',faixa(12,18)],['Noite','18–23h',faixa(18,24)]];
+  const picoP=periodos.reduce((a,b)=>b[2]>a[2]?b:a);
+  const bars=hist.map((n,h)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;">
+      <div style="font-size:9px;color:var(--muted);height:12px;">${n||''}</div>
+      <div title="${String(h).padStart(2,'0')}h — ${n} lead(s)" style="width:72%;height:${max?Math.round(n/max*92):0}px;min-height:${n?2:0}px;background:${h===picoH?'var(--p)':'#D9CBB2'};border-radius:3px 3px 0 0;"></div>
+      <div style="font-size:8px;color:var(--muted);">${h%3===0?String(h).padStart(2,'0'):''}</div>
+    </div>`).join('');
+  el.innerHTML=`
+    <div style="font-size:13px;color:var(--dark);margin-bottom:4px;">Total com horário: <b>${total}</b> lead(s)${semHora?` <span style="color:var(--muted);font-size:11px;">(+${semHora} sem hora)</span>`:''}</div>
+    <div style="font-size:12px;color:var(--gl);margin-bottom:16px;">🔝 Pico às <b>${String(picoH).padStart(2,'0')}h</b> · Período mais forte: <b>${picoP[0]}</b> <span style="font-size:10px;">${picoP[1]}</span> (${picoP[2]} leads)</div>
+    <div style="display:flex;align-items:flex-end;gap:2px;height:120px;">${bars}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+      ${periodos.map(p=>`<div style="flex:1;min-width:100px;text-align:center;background:#FAF7F1;border-radius:8px;padding:8px 6px;">
+        <div style="font-size:11px;color:var(--muted);">${p[0]} <span style="font-size:9px;">${p[1]}</span></div>
+        <div style="font-size:18px;font-weight:700;color:${p===picoP?'var(--p)':'var(--dark)'};">${p[2]}</div></div>`).join('')}
+    </div>`;
 }
 
 // ══════════════════════════════════════════════════════
