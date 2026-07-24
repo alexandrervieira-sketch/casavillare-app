@@ -7559,6 +7559,18 @@ function salvarVendaCom(){
   if(!dataIso) return toast('Informe a data');
   if(desc<0||desc>40) return toast('Desconto deve ser entre 0% e 40%');
 
+  // AVISO anti-dupla-contagem: essa venda já pode estar no CRM como lead GANHO? (só em lançamento NOVO)
+  // Se sim e o usuário lançar aqui também, a receita e o DAS DOBRAM no DRE (venda contada 2x).
+  if(!_vcId){
+    const _norm=x=>String(x||'').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const alvo=_norm(cliente);
+    const dup=alvo.length>=3?(ST.leads||[]).find(l=>{ if(l.status!=='ganho') return false; const ln=_norm(l.nome); return ln&&(ln===alvo||ln.includes(alvo)||alvo.includes(ln)); }):null;
+    if(dup){
+      const vLead=(dup.valor||0)*(1-(dup.desconto||0)/100);
+      if(!confirm('⚠️ Já existe um lead GANHO parecido no CRM:\n\n• '+(dup.nome||'?')+' — '+fmt(vLead)+' (fechado '+_fmtDateBR(dup.dataFechamento||dup.dataCriacao)+')\n\nLançar esta venda manual TAMBÉM faz a receita e o imposto (DAS) serem contados 2× no DRE.\n\n• OK = lançar mesmo assim\n• Cancelar = NÃO lançar (a venda já está no CRM)')) return;
+    }
+  }
+
   const {pontos,pct}=_calcComVendaPontos(desc + (assume==='loja'&&pgto!=='avista'?taxaPct:0)); // taxa absorvida entra como desconto
   const valorApdesc =bruto*(1-desc/100);
   const taxaValor   =pgto!=='avista'&&assume==='loja'?valorApdesc*(taxaPct/100):0;
