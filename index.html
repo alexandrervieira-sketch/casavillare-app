@@ -245,8 +245,8 @@ body:not(.perfil-gestor) .btn-danger{display:none!important;}
 .wip p{font-size:13px;}
 /* CRM pipe aprimorado */
 .pipe-wrap{display:flex;gap:14px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;}
-.pipe-col{flex:0 0 240px;background:var(--card);border-radius:14px;padding:14px 12px;border:1px solid var(--border);}
-.pipe-col-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.pipe-col{flex:0 0 240px;background:var(--card);border-radius:14px;padding:14px 12px;border:1px solid var(--border);max-height:calc(100vh - 240px);overflow-y:auto;}
+.pipe-col-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;position:sticky;top:0;background:var(--card);z-index:2;padding-top:2px;}
 .pipe-col-name{font-family:'Sora',sans-serif;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.8px;}
 .pipe-count{border-radius:20px;font-size:10px;font-weight:700;padding:2px 8px;background:rgba(0,0,0,.07);color:var(--gray);}
 .pipe-col-valor{font-size:11px;color:var(--gl);margin-bottom:10px;padding-bottom:8px;border-bottom:.5px solid var(--border);}
