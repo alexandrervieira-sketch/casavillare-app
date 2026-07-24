@@ -11243,33 +11243,36 @@ function gerarContrato(cadId){
 <title>Contrato ${numC} — ${_esc(c.nome)}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff;}
-.page{width:210mm;min-height:297mm;padding:14mm 14mm 12mm;margin:0 auto;page-break-after:always;}
-.page:last-child{page-break-after:auto;}
-.clausulas-doc{width:210mm;padding:14mm;margin:0 auto;} /* fluxo contínuo: sem altura fixa nem quebra forçada — o navegador pagina naturalmente */
-.header{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:10px;border:1px solid #000;padding:8px 10px;margin-bottom:0;}
-.logo-area{border-right:1px solid #000;padding-right:10px;min-height:60px;display:flex;align-items:center;justify-content:center;}
-.logo-text{font-size:22px;font-weight:900;line-height:1.1;color:#000;font-family:Georgia,serif;}
-.logo-text span{display:block;font-size:11px;font-weight:400;}
-.company-info{font-size:9.5px;line-height:1.6;text-align:center;}
-.company-info strong{font-size:11px;}
-.contrato-num{border-left:1px solid #000;padding-left:10px;text-align:center;font-weight:bold;font-size:11px;white-space:nowrap;}
-table.dados{width:100%;border-collapse:collapse;margin-bottom:0;}
-table.dados td,table.dados th{border:1px solid #000;padding:5px 7px;font-size:10.5px;vertical-align:top;}
-table.dados th{font-weight:bold;font-size:10px;background:#f5f5f5;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:9px;color:#000;background:#fff;}
+@page{size:A4;margin:10mm 12mm;}
+/* Documento em tabela única: o cabeçalho (thead) REPETE em toda página impressa; o corpo (tbody) flui e pagina naturalmente. */
+.doc{width:186mm;margin:0 auto;border-collapse:collapse;}
+.doc>thead>tr>td{padding:0 0 6px;border:none;}
+.doc>tbody>tr>td{padding:0;border:none;vertical-align:top;}
+.header{display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:10px;border:1px solid #000;padding:6px 10px;}
+.logo-area{border-right:1px solid #000;padding-right:10px;min-height:48px;display:flex;align-items:center;justify-content:center;}
+.logo-text{font-size:20px;font-weight:900;line-height:1.05;color:#000;font-family:Georgia,serif;}
+.logo-text span{display:block;font-size:10px;font-weight:400;}
+.company-info{font-size:8px;line-height:1.45;text-align:center;}
+.company-info strong{font-size:9.5px;}
+.contrato-num{border-left:1px solid #000;padding-left:10px;text-align:center;font-weight:bold;font-size:9px;white-space:nowrap;}
+table.dados{width:100%;border-collapse:collapse;}
+table.dados td,table.dados th{border:1px solid #000;padding:3px 6px;font-size:8px;vertical-align:top;line-height:1.25;}
+table.dados td strong{font-size:7.5px;}
+table.dados th{font-weight:bold;font-size:7.5px;background:#f0f0f0;}
 table.items{width:100%;border-collapse:collapse;}
-table.items th,table.items td{border:1px solid #000;padding:4px 7px;font-size:10.5px;}
-table.items th{background:#f5f5f5;font-size:10px;text-align:center;}
-table.items .total-row td{font-weight:bold;background:#f0f0f0;}
+table.items th,table.items td{border:1px solid #000;padding:2px 6px;font-size:8px;line-height:1.2;}
+table.items th{background:#f0f0f0;font-size:7.5px;text-align:center;font-weight:bold;}
+table.items .total-row td{font-weight:bold;background:#f5f5f5;}
 table.pag{width:100%;border-collapse:collapse;}
-table.pag th,table.pag td{border:1px solid #000;padding:5px 7px;font-size:10.5px;}
-table.pag th{background:#f5f5f5;font-size:10px;text-align:center;}
-.section-title{font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px;}
-.clausula-title{font-weight:bold;text-transform:uppercase;margin:14px 0 4px;font-size:10.5px;page-break-inside:avoid;page-break-after:avoid;}
-.clausulas p{font-size:10.5px;line-height:1.65;text-align:justify;margin-bottom:6px;page-break-inside:avoid;}
-.clausulas .sub-item{padding-left:16px;}
-.assin-wrap{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:48px;}
-.assin-line{border-top:1px solid #000;padding-top:6px;text-align:center;font-size:10px;}
+table.pag th,table.pag td{border:1px solid #000;padding:2px 6px;font-size:8px;line-height:1.2;}
+table.pag th{background:#f0f0f0;font-size:7.5px;text-align:center;font-weight:bold;}
+.section-title{font-size:8.5px;font-weight:bold;text-transform:uppercase;letter-spacing:.3px;margin:8px 0 3px;}
+.clausula-title{font-weight:bold;text-transform:uppercase;margin:7px 0 2px;font-size:8.5px;page-break-inside:avoid;page-break-after:avoid;}
+.clausulas p{font-size:8.3px;line-height:1.32;text-align:justify;margin-bottom:2px;page-break-inside:avoid;}
+.clausulas .sub-item{padding-left:12px;}
+.assin-wrap{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:36px;}
+.assin-line{border-top:1px solid #000;padding-top:6px;text-align:center;font-size:8px;}
 .toolbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;display:flex;align-items:center;justify-content:space-between;padding:10px 20px;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .toolbar .ct-title{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .toolbar .tb-btn{border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s;}
@@ -11281,9 +11284,7 @@ body.has-toolbar{padding-top:52px;}
 @media print{
   .toolbar{display:none!important;}
   body{background:#fff;padding-top:0!important;}
-  .page{margin:0;padding:14mm;page-break-after:always;}
-  .page:last-child{page-break-after:auto;}
-  .clausulas-doc{margin:0;padding:14mm;}
+  .doc{width:auto;}
 }
 </style></head><body class="has-toolbar">
 
@@ -11295,18 +11296,19 @@ body.has-toolbar{padding-top:52px;}
   </div>
 </div>
 
-<!-- ═══════════════ PAGE 1: DADOS + ITENS ═══════════════ -->
-<div class="page">
-
-<!-- CABEÇALHO -->
-<div class="header">
-  <div class="logo-area">${_docLogoHtml()}</div>
-  <div class="company-info">${_docEmpInfoHtml()}</div>
-  <div class="contrato-num">CONTRATO N.º<br><span style="font-size:16px;">${numC}</span></div>
-</div>
+<!-- ═══════════════ DOCUMENTO — cabeçalho (thead) REPETE em toda página ═══════════════ -->
+<table class="doc">
+<thead><tr><td>
+  <div class="header">
+    <div class="logo-area">${_docLogoHtml()}</div>
+    <div class="company-info">${_docEmpInfoHtml()}</div>
+    <div class="contrato-num">CONTRATO N.º<br><span style="font-size:14px;">${numC}</span></div>
+  </div>
+</td></tr></thead>
+<tbody><tr><td>
 
 <!-- RESPONSÁVEL / LOJA / DATA -->
-<table class="dados" style="margin-top:-1px;">
+<table class="dados" style="margin-top:4px;">
   <tr>
     <td style="width:40%;"><strong>RESPONSÁVEL PELA VENDA</strong><br>${c.respVenda?_esc(c.respVenda):'&nbsp;'}</td>
     <td style="width:30%;"><strong>LOJA</strong><br>Valinhos</td>
@@ -11363,16 +11365,16 @@ body.has-toolbar{padding-top:52px;}
   <tbody>
     ${itemRows||'<tr><td colspan="4" style="text-align:center;padding:20px;color:#999;">Nenhum ambiente cadastrado</td></tr>'}
     <tr class="total-row">
-      <td colspan="3" style="text-align:right;font-size:11px;letter-spacing:.5px;">SUBTOTAL</td>
+      <td colspan="3" style="text-align:right;font-size:8px;letter-spacing:.5px;">SUBTOTAL</td>
       <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalAmbientes)}</td>
     </tr>
     ${descontoPctCt>0?`
     <tr style="background:#F0FFF4;">
-      <td colspan="3" style="text-align:right;font-size:11px;color:#166534;font-weight:600;">DESCONTO (${descontoPctCt}%)</td>
+      <td colspan="3" style="text-align:right;font-size:8px;color:#166534;font-weight:600;">DESCONTO (${descontoPctCt}%)</td>
       <td style="text-align:right;white-space:nowrap;color:#166534;font-weight:600;">− R$ ${fmtBRL(valorDescontoCt)}</td>
     </tr>
     <tr class="total-row">
-      <td colspan="3" style="text-align:right;font-size:11px;letter-spacing:.5px;">TOTAL DO CONTRATO</td>
+      <td colspan="3" style="text-align:right;font-size:8px;letter-spacing:.5px;">TOTAL DO CONTRATO</td>
       <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalAposDescCt)}</td>
     </tr>`:''}
   </tbody>
@@ -11389,22 +11391,22 @@ ${obsRows?`
 <!-- ═══════════════ PAGAMENTO (na mesma página dos itens) ═══════════════ -->
 <div class="section-title" style="margin-top:12px;">Condições de Pagamento</div>
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;">
-  <div style="border:1px solid #000;padding:6px 8px;border-right:none;">
-    <strong style="font-size:10px;">TOTAL DO CONTRATO${descontoPctCt>0?' (−'+descontoPctCt+'%)':''}</strong><br>
-    <span style="font-size:13px;font-weight:bold;">R$ ${fmtBRL(totalAposDescCt)}</span>
-    ${descontoPctCt>0?`<span style="font-size:9px;color:#555;display:block;">Bruto: R$ ${fmtBRL(totalAmbientes)}</span>`:''}
+  <div style="border:1px solid #000;padding:4px 7px;border-right:none;">
+    <strong style="font-size:7.5px;">TOTAL DO CONTRATO${descontoPctCt>0?' (−'+descontoPctCt+'%)':''}</strong><br>
+    <span style="font-size:11px;font-weight:bold;">R$ ${fmtBRL(totalAposDescCt)}</span>
+    ${descontoPctCt>0?`<span style="font-size:7px;color:#555;display:block;">Bruto: R$ ${fmtBRL(totalAmbientes)}</span>`:''}
   </div>
-  <div style="border:1px solid #000;padding:6px 8px;border-right:none;">
-    <strong style="font-size:10px;">PRAZO DE ENTREGA</strong><br>
-    <span style="font-size:11px;">${prazoEntregaFmt}</span>
+  <div style="border:1px solid #000;padding:4px 7px;border-right:none;">
+    <strong style="font-size:7.5px;">PRAZO DE ENTREGA</strong><br>
+    <span style="font-size:9px;">${prazoEntregaFmt}</span>
   </div>
-  <div style="border:1px solid #000;padding:6px 8px;border-right:none;">
-    <strong style="font-size:10px;">TIPO DE VENDA</strong><br>
-    <span style="font-size:11px;">${tipoVendaLabel}</span>
+  <div style="border:1px solid #000;padding:4px 7px;border-right:none;">
+    <strong style="font-size:7.5px;">TIPO DE VENDA</strong><br>
+    <span style="font-size:9px;">${tipoVendaLabel}</span>
   </div>
-  <div style="border:1px solid #000;padding:6px 8px;">
-    <strong style="font-size:10px;">DATA DO CONTRATO</strong><br>
-    <span style="font-size:11px;">${dataC}</span>
+  <div style="border:1px solid #000;padding:4px 7px;">
+    <strong style="font-size:7.5px;">DATA DO CONTRATO</strong><br>
+    <span style="font-size:9px;">${dataC}</span>
   </div>
 </div>
 
@@ -11423,16 +11425,8 @@ ${obsRows?`
   </tbody>
 </table>
 
-</div><!-- /page1: dados + itens + pagamento -->
-
-<!-- ═══════════════ CLÁUSULAS (fluxo contínuo — o navegador pagina sozinho) ═══════════════ -->
-<div class="clausulas-doc clausulas">
-<div class="header">
-  <div class="logo-area">${_docLogoHtml()}</div>
-  <div class="company-info">${_docEmpInfoHtml()}</div>
-  <div class="contrato-num">CONTRATO N.º<br><span style="font-size:16px;">${numC}</span></div>
-</div>
-
+<!-- ═══════════════ CLÁUSULAS (nova página; o cabeçalho vem do thead e repete sozinho) ═══════════════ -->
+<div class="clausulas" style="page-break-before:always;">
 <div class="clausula-title">CONTRATO DE COMPRA E VENDA DE PRODUTOS E DE PRESTAÇÃO DE SERVIÇOS</div>
 <p>1- O CONTRATANTE, firma o presente instrumento com a CONTRATADA na melhor forma de direito para o fornecimento de móveis planejados, bem como a prestação de serviços, através da elaboração de projeto, entrega, instalação e montagem dos móveis, conforme o projeto aprovado.</p>
 <p>2- No quadro resumo estão especificados a quantidade, descrição do ambiente com todos os detalhes, a linha e a forma de pagamento que integram o presente instrumento.</p>
@@ -11586,7 +11580,9 @@ ${obsRows?`
     </div>
   </div>
 </div>
-</div><!-- /clausulas-final -->
+</div><!-- /clausulas -->
+</td></tr></tbody>
+</table>
 
 </body></html>`;
 
