@@ -13552,13 +13552,14 @@ function _dreReceitaCRM(mesAno){
     const ref=l.dataFechamento||(l.dataCriacao||'');
     return ref&&ref.startsWith(mesAno);
   }).reduce((a,l)=>a+(l.valor||0)*(1-(l.desconto||0)/100),0);
+  // REGIME DE COMPETÊNCIA (24/07): TODA venda ganha entra INTEGRAL no mês do FECHAMENTO,
+  // qualquer forma de pagamento (cartão, financiamento E boleto/PIX). O recebimento real
+  // parcela a parcela fica no Fluxo de Caixa (regime de caixa). Antes o boleto era espalhado
+  // por vencimento no DRE — distorcia a margem mensal (custo no fechamento × receita diferida).
   const recLeadsParc=(ST.leads||[]).filter(l=>l.status==='ganho'&&l.condicoesPgto&&l.condicoesPgto.length)
     .reduce((a,l)=>{
-      const fechMes=(l.dataFechamento||l.dataCriacao||'').startsWith(mesAno);
-      return a+(l.condicoesPgto||[]).reduce((s,c)=>{
-        const noMes=(c.forma==='financiamento'||c.forma==='cartao')?fechMes:(c.vencimento||'').startsWith(mesAno);
-        return s+(noMes?(c.valor||0):0);
-      },0);
+      if(!(l.dataFechamento||l.dataCriacao||'').startsWith(mesAno)) return a;
+      return a+(l.condicoesPgto||[]).reduce((s,c)=>s+(c.valor||0),0);
     },0);
   const recVendasCom=(ST.vendasCom||[]).filter(v=>v.mesAno===mesAno).reduce((a,v)=>a+(v.valorApdesc!=null?v.valorApdesc:(v.valorBruto||0)*(1-(v.desconto||0)/100)),0);
   return recLeadsCash+recLeadsParc+recVendasCom;
