@@ -2728,6 +2728,9 @@ textarea.inp{resize:vertical;min-height:68px;}
       <button class="modal-close" onclick="fecharModal('modal-contrato')">✕</button>
     </div>
     <div class="modal-body">
+      <div id="ct-recompra" style="display:none;margin-bottom:12px;padding:8px 11px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;font-size:12px;color:#92400E;line-height:1.5;">
+        ⚠️ Este cliente <b>já tem um contrato</b> com os itens da compra anterior carregados. Se for uma <b>nova compra</b>, ao importar o XML escolha <b>“começar contrato novo”</b> — assim não mistura com a venda passada.
+      </div>
       <div style="margin-bottom:14px;">
         <label class="lbl">Orçamento Promob — Ambientes e Itens</label>
         <label class="btn btn-s" style="width:100%;font-size:12px;cursor:pointer;margin:0 0 8px;">
@@ -9962,6 +9965,7 @@ function ldCondTotalCheck(){
     </div>`;
 }
 let _ctXmlInfoList=[];
+let _ctJaTinha=false; // recompra: o cliente já tinha um contrato gerado quando este modal abriu
 let _cadXmlInfoList=[];
 
 let _crmMesFech=new Date().getMonth(), _crmAnoFech=new Date().getFullYear();
@@ -10996,6 +11000,10 @@ function abrirModalContrato(cadId){
   document.getElementById('ct-titulo').textContent='📄 Contrato — '+c.nome;
   document.getElementById('ct-sub').textContent=c.numContrato?'N° '+c.numContrato:'Novo contrato';
   _ctXmlInfoList=c.xmlInfoList?[...c.xmlInfoList]:[];
+  // Recompra: este cliente JÁ tem um contrato gerado (nº + itens). Ao importar um XML novo,
+  // o sistema vai perguntar se é NOVA compra (limpa a anterior) — evita misturar as vendas.
+  _ctJaTinha=!!(c.numContrato && c.xmlInfoList && c.xmlInfoList.length);
+  const _rc=document.getElementById('ct-recompra'); if(_rc) _rc.style.display=_ctJaTinha?'block':'none';
   ctAtualizarXmlInfo();
   abrirModal('modal-contrato');
 }
@@ -11003,7 +11011,15 @@ function abrirModalContrato(cadId){
 function ctLerXml(){ document.getElementById('ct-xml-input')?.click(); }
 
 function ctOnXmlChange(input){
-  _lerXmlFiles(Array.from(input.files||[]), function(info){
+  const files=Array.from(input.files||[]);
+  // Recompra: se o cliente já tinha um contrato (itens da compra anterior carregados) e você
+  // está importando XML novo, pergunta se é NOVA compra — para não somar com a venda passada.
+  if(_ctJaTinha && _ctXmlInfoList.length){
+    const nova=confirm('⚠️ Este cliente já tem um contrato gerado, e os itens da compra ANTERIOR estão carregados.\n\nEsta importação é de uma NOVA compra?\n\n• OK = começar um contrato NOVO (remove os itens da compra anterior)\n• Cancelar = é a MESMA venda (ex.: mais um ambiente) → adicionar aos itens atuais');
+    if(nova){ _ctXmlInfoList=[]; ctAtualizarXmlInfo(); }
+  }
+  _ctJaTinha=false; // já tratado nesta abertura do modal
+  _lerXmlFiles(files, function(info){
     _ctXmlInfoList.push(info);
     ctAtualizarXmlInfo();
   });
