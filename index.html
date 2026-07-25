@@ -2728,9 +2728,6 @@ textarea.inp{resize:vertical;min-height:68px;}
       <button class="modal-close" onclick="fecharModal('modal-contrato')">✕</button>
     </div>
     <div class="modal-body">
-      <div id="ct-recompra" style="display:none;margin-bottom:12px;padding:8px 11px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;font-size:12px;color:#92400E;line-height:1.5;">
-        ⚠️ Este cliente <b>já tem um contrato</b> com os itens da compra anterior carregados. Se for uma <b>nova compra</b>, ao importar o XML escolha <b>“começar contrato novo”</b> — assim não mistura com a venda passada.
-      </div>
       <div style="margin-bottom:14px;">
         <label class="lbl">Orçamento Promob — Ambientes e Itens</label>
         <label class="btn btn-s" style="width:100%;font-size:12px;cursor:pointer;margin:0 0 8px;">
@@ -11042,9 +11039,9 @@ function abrirModalContrato(cadId){
   _ctXmlInfoList=(c.xmlInfoList&&c.xmlInfoList.length)?[...c.xmlInfoList]
                :(_cadSemItensM&&_leadCtM&&_leadCtM.xmlInfoList?[..._leadCtM.xmlInfoList]:[]);
   // Recompra: só é "recompra" se este cadastro JÁ teve um contrato GERADO antes (contratoGeradoEm).
-  // Assim a 1ª compra (que já nasce com nº + itens do lead) NÃO dispara o aviso falsamente.
+  // Não há banner fixo (virava ruído ao reabrir o mesmo contrato); a proteção fica no momento de
+  // IMPORTAR um XML novo (ctOnXmlChange pergunta "nova compra? × mesma venda").
   _ctJaTinha=!!c.contratoGeradoEm;
-  const _rc=document.getElementById('ct-recompra'); if(_rc) _rc.style.display=_ctJaTinha?'block':'none';
   ctAtualizarXmlInfo();
   abrirModal('modal-contrato');
 }
