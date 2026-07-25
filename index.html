@@ -11041,9 +11041,9 @@ function abrirModalContrato(cadId){
   const _cadSemItensM=!(c.xmlInfoList&&c.xmlInfoList.length)&&!(c.ambientes&&c.ambientes.length);
   _ctXmlInfoList=(c.xmlInfoList&&c.xmlInfoList.length)?[...c.xmlInfoList]
                :(_cadSemItensM&&_leadCtM&&_leadCtM.xmlInfoList?[..._leadCtM.xmlInfoList]:[]);
-  // Recompra: este cliente JÁ tem um contrato gerado (nº + itens). Ao importar um XML novo,
-  // o sistema vai perguntar se é NOVA compra (limpa a anterior) — evita misturar as vendas.
-  _ctJaTinha=!!(c.numContrato && c.xmlInfoList && c.xmlInfoList.length);
+  // Recompra: só é "recompra" se este cadastro JÁ teve um contrato GERADO antes (contratoGeradoEm).
+  // Assim a 1ª compra (que já nasce com nº + itens do lead) NÃO dispara o aviso falsamente.
+  _ctJaTinha=!!c.contratoGeradoEm;
   const _rc=document.getElementById('ct-recompra'); if(_rc) _rc.style.display=_ctJaTinha?'block':'none';
   ctAtualizarXmlInfo();
   abrirModal('modal-contrato');
@@ -11129,7 +11129,10 @@ function ctAtualizarXmlInfo(){
 function ctGerarContrato(){
   const c=(ST.cadastros||[]).find(x=>String(x.id)===String(_ctCadId));
   if(!c){toast('Cadastro não encontrado');return;}
-  if(_ctXmlInfoList.length){c.xmlInfoList=[..._ctXmlInfoList];save();}
+  if(_ctXmlInfoList.length){c.xmlInfoList=[..._ctXmlInfoList];}
+  c.contratoGeradoEm=new Date().toISOString(); // marca que este cadastro JÁ teve um contrato gerado (sinal de recompra)
+  c._uAt=Date.now();
+  save();
   fecharModal('modal-contrato');
   gerarContrato(String(_ctCadId));
 }
