@@ -11035,7 +11035,12 @@ function abrirModalContrato(cadId){
   _ctCadId=String(cadId);
   document.getElementById('ct-titulo').textContent='📄 Contrato — '+c.nome;
   document.getElementById('ct-sub').textContent=c.numContrato?'N° '+c.numContrato:'Novo contrato';
-  _ctXmlInfoList=c.xmlInfoList?[...c.xmlInfoList]:[];
+  // Itens do cadastro; se vier sem itens (nem XML nem ambientes), pré-carrega o XML do LEAD
+  // vinculado — assim o contrato já sai com os ambientes da negociação, sem reimportar.
+  const _leadCtM=c.leadId?(ST.leads||[]).find(l=>String(l.id)===String(c.leadId)):null;
+  const _cadSemItensM=!(c.xmlInfoList&&c.xmlInfoList.length)&&!(c.ambientes&&c.ambientes.length);
+  _ctXmlInfoList=(c.xmlInfoList&&c.xmlInfoList.length)?[...c.xmlInfoList]
+               :(_cadSemItensM&&_leadCtM&&_leadCtM.xmlInfoList?[..._leadCtM.xmlInfoList]:[]);
   // Recompra: este cliente JÁ tem um contrato gerado (nº + itens). Ao importar um XML novo,
   // o sistema vai perguntar se é NOVA compra (limpa a anterior) — evita misturar as vendas.
   _ctJaTinha=!!(c.numContrato && c.xmlInfoList && c.xmlInfoList.length);
@@ -11255,8 +11260,12 @@ function gerarContrato(cadId){
   const dataC=fmtDate(c.dataContrato)||new Date().toLocaleDateString('pt-BR');
   const ctFilename='Contrato_'+(numC+'').replace(/[^a-zA-Z0-9]/g,'_')+'_'+(c.nome||'').replace(/[^a-zA-Z0-9]/g,'_');
 
-  // Usa XML se disponível, senão ambientes do cadastro
-  const xmlList=c.xmlInfoList||[];
+  // Usa XML do cadastro; se o cadastro estiver SEM itens (nem XML nem ambientes),
+  // cai para o XML do LEAD vinculado (fonte única da negociação) — evita contrato vazio/retrabalho.
+  const _leadItens=c.leadId?(ST.leads||[]).find(l=>String(l.id)===String(c.leadId)):null;
+  const _cadSemItens=!(c.xmlInfoList&&c.xmlInfoList.length)&&!(c.ambientes&&c.ambientes.length);
+  const xmlList=(c.xmlInfoList&&c.xmlInfoList.length)?c.xmlInfoList
+              :(_cadSemItens&&_leadItens&&_leadItens.xmlInfoList?_leadItens.xmlInfoList:[]);
   let itemRows='',totalAmbientesXml=0;
   if(xmlList.length){
     let ri=0;
@@ -13219,8 +13228,23 @@ function abrirModalCadastro(id,tipo,dadosLead){
       document.getElementById('cad-nome').value  =dadosLead.nome||'';
       document.getElementById('cad-tel').value   =dadosLead.telefone||'';
       document.getElementById('cad-email').value =dadosLead.email||'';
+      if(dadosLead.cidade) document.getElementById('cad-cli-cidade').value=dadosLead.cidade;
       if(dadosLead.responsavel) document.getElementById('cad-cli-resp').value=dadosLead.responsavel;
-      if(dadosLead.prazo) document.getElementById('cad-cli-prazo').value=dadosLead.prazo;
+      // Prazo de entrega do funil (campo certo é prazoEntrega; 'prazo' é legado) → não redigitar
+      const _pz=dadosLead.prazoEntrega||dadosLead.prazo;
+      if(_pz) document.getElementById('cad-cli-prazo').value=/dia/i.test(''+_pz)?(''+_pz):(_pz+' dias úteis');
+      // AMBIENTES/ITENS do lead (Promob importado na negociação) → o cadastro já vem preenchido.
+      // Fim do retrabalho de reimportar o XML só para gerar o contrato.
+      if(dadosLead.xmlInfoList && dadosLead.xmlInfoList.length){
+        _cadXmlInfoList=[...dadosLead.xmlInfoList];
+        dadosLead.xmlInfoList.forEach(info=>{
+          (info.ambientesData||[]).forEach(a=>{
+            const obs=(a.itens||[]).map(it=>{let l=it.desc; if(it.dim)l+=' ('+it.dim+')'; if(it.qtd&&it.qtd!==1)l+=' ×'+it.qtd; return l;}).join('\n');
+            addAmbiente({nome:a.descricao, valor:a.valorVenda, obs});
+          });
+        });
+        calcTotalContrato();
+      }
       document.getElementById('cad-cli-leadid').value=String(dadosLead.id);
       document.getElementById('cad-cli-lead-nome').textContent=dadosLead.nome;
       document.getElementById('cad-cli-lead-wrap').style.display='';
