@@ -11328,6 +11328,8 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:9px;color:#000;background:
 @page{size:A4;margin:10mm 12mm;}
 /* Documento em tabela única: o cabeçalho (thead) REPETE em toda página impressa; o corpo (tbody) flui e pagina naturalmente. */
 .doc{width:186mm;margin:0 auto;border-collapse:collapse;}
+.doc>thead{display:table-header-group;} /* garante que o cabeçalho REPITA em toda página impressa (Chrome/Firefox) */
+.doc>tbody{display:table-row-group;}
 .doc>thead>tr>td{padding:0 0 6px;border:none;}
 .doc>tbody>tr>td{padding:0;border:none;vertical-align:top;}
 .header{display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:10px;border:1px solid #000;padding:6px 10px;}
@@ -11365,7 +11367,7 @@ body.has-toolbar{padding-top:52px;}
 @media print{
   .toolbar{display:none!important;}
   body{background:#fff;padding-top:0!important;}
-  .doc{width:auto;}
+  .doc{width:100%;}
 }
 </style></head><body class="has-toolbar">
 
@@ -11507,7 +11509,7 @@ ${obsRows?`
 </table>
 
 <!-- ═══════════════ CLÁUSULAS (nova página; o cabeçalho vem do thead e repete sozinho) ═══════════════ -->
-<div class="clausulas" style="page-break-before:always;">
+<div class="clausulas" style="margin-top:10px;">
 <div class="clausula-title">CONTRATO DE COMPRA E VENDA DE PRODUTOS E DE PRESTAÇÃO DE SERVIÇOS</div>
 <p>1- O CONTRATANTE, firma o presente instrumento com a CONTRATADA na melhor forma de direito para o fornecimento de móveis planejados, bem como a prestação de serviços, através da elaboração de projeto, entrega, instalação e montagem dos móveis, conforme o projeto aprovado.</p>
 <p>2- No quadro resumo estão especificados a quantidade, descrição do ambiente com todos os detalhes, a linha e a forma de pagamento que integram o presente instrumento.</p>
