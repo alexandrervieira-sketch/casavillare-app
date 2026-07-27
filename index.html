@@ -599,6 +599,10 @@ textarea.inp{resize:vertical;min-height:68px;}
 <body>
 
 <!-- ── LOGIN ── -->
+<div id="cv-splash" style="position:fixed;inset:0;z-index:999999;background:#1b1e2b;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="font-size:30px;font-weight:800;letter-spacing:.5px;">Casa <span style="font-weight:400;opacity:.85;">Villare</span></div>
+  <div style="font-size:11px;letter-spacing:2px;opacity:.55;text-transform:uppercase;">Carregando…</div>
+</div>
 <div id="login-overlay">
   <div class="login-card">
     <div class="lc-left">
@@ -17439,6 +17443,8 @@ function salvarNFeManual(){
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
+// Splash de carregamento: rede de segurança pra ele sumir mesmo se algo falhar no init.
+setTimeout(()=>{try{const s=document.getElementById('cv-splash');if(s)s.remove();}catch(e){}},5000);
 load();
 initFirebase();
 // Migração: backfill dataFechamento em leads ganho que não possuem a data
@@ -17461,6 +17467,8 @@ if(ST.nome&&ST.perfil&&ST.area){
     ST.nome=''; ST.perfil=''; ST.area='';
   }
 }
+// Decisão tomada (app restaurado OU login à mostra): remove o splash de carregamento.
+try{const _sp=document.getElementById('cv-splash');if(_sp)_sp.remove();}catch(e){}
 </script>
 </body>
 </html>
