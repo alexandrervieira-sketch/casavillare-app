@@ -265,7 +265,9 @@ export default {
         return json({ ok: true, leadId: idDet, dedup: 'idempotencyKey', responsavel: '(já existente)' }, 200);
       // (b) por telefone: lead recente (<24h) com o mesmo número → devolve o existente (não duplica).
       const _idx = await fsGetDoc(sa, token, '_leadidx/' + telefone);
-      if (_idx && _idx._json) { try { const p = JSON.parse(_idx._json.stringValue); if (p.leadId && (agora - (p.ts || 0)) < 24 * 3600 * 1000) return json({ ok: true, leadId: p.leadId, dedup: 'telefone', responsavel: '(já existente)' }, 200); } catch (e) {} }
+      // Só deduplica por telefone se o lead apontado AINDA EXISTIR (igual ao caminho de idempotencyKey).
+      // Se foi excluído no app (o índice não é limpo), ignora e cria de novo — nunca perde um contato real.
+      if (_idx && _idx._json) { try { const p = JSON.parse(_idx._json.stringValue); if (p.leadId && (agora - (p.ts || 0)) < 24 * 3600 * 1000 && await fsGetDoc(sa, token, 'leads/' + p.leadId)) return json({ ok: true, leadId: p.leadId, dedup: 'telefone', responsavel: '(já existente)' }, 200); } catch (e) {} }
 
       // Não é duplicado → distribui (rodízio) e cria.
       const responsavel = await proximoVendedor(sa, token);
@@ -283,7 +285,10 @@ export default {
       if (extra.length) obsLinhas.push(extra.join('\n'));
       obsLinhas.push('— via IA de pré-atendimento (WhatsApp)');
 
-      const dataCriacao = _txt(b.captadoEm) ? _txt(b.captadoEm).slice(0, 10) : _hojeBR();
+      // captadoEm vem do provedor externo (IA) — valida se é data REAL antes de usar; senão um texto
+      // tipo "ontem à tarde" corromperia dataCriacao/criadoEm e o lead sumiria dos relatórios de período.
+      const _capOk = _txt(b.captadoEm) && !isNaN(new Date(_txt(b.captadoEm)).getTime());
+      const dataCriacao = _capOk ? _txt(b.captadoEm).slice(0, 10) : _hojeBR();
       const lead = {
         id, nome, _uAt: Date.now(),
         telefone, email: '', cidade: _txt(b.cidade),
@@ -295,7 +300,7 @@ export default {
         prazo: _txt(b.prazo), prazoEntrega: '', tipoVenda: '', especificadorId: '', rtPct: 0,
         orcamento: '', obs: obsLinhas.join('\n\n'), tags: '',
         dataCriacao, dataFechamento: null,
-        criadoEm: _txt(b.captadoEm) || new Date().toISOString(), // hora EXATA de chegada (captadoEm do provedor se vier, senão a hora que o worker recebeu)
+        criadoEm: _capOk ? _txt(b.captadoEm) : new Date().toISOString(), // hora EXATA de chegada (captadoEm do provedor SE for data válida, senão a hora que o worker recebeu)
         _origemIA: true,      // veio da integração — o app mostra selo e checa "já registrado" por telefone
         _canalOrigem: canal,  // qual IA/canal enviou (ex.: "ia-whatsapp" hoje, "ia-propria" no futuro) — comparação de desempenho
       };
