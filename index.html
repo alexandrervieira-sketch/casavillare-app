@@ -23,14 +23,6 @@
   --ok:#4CAF50;--fail:#E53935;--warn:#F59E0B;
   --card:#FFFFFF;--border:#E0D8CE;
 }
-/* ── Temas de cor (troca só o DESTAQUE; fundo e texto continuam claros) ── */
-:root[data-accent="azul"]   {--p:#4C7CA8;--gold:#6E9CC6;--cream:#DCE7F0;}
-:root[data-accent="verde"]  {--p:#5A8C6E;--gold:#7DB097;--cream:#DDECE2;}
-:root[data-accent="vinho"]  {--p:#9B5A63;--gold:#C08791;--cream:#F0DEE1;}
-:root[data-accent="grafite"]{--p:#6A6A6A;--gold:#8C8C8C;--cream:#E4E4E4;}
-.cv-sw{width:22px;height:22px;border-radius:50%;background:var(--sw);border:2px solid transparent;cursor:pointer;padding:0;transition:transform .1s;}
-.cv-sw:hover{transform:scale(1.12);}
-.cv-sw.on{border-color:#fff;box-shadow:0 0 0 2px var(--sw);}
 body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--dark);min-height:100vh;}
 
 /* ── LOGIN ── */
@@ -718,16 +710,6 @@ textarea.inp{resize:vertical;min-height:68px;}
         </div>
         <div style="background:#E5E7EB;border-radius:4px;height:5px;overflow:hidden;">
           <div id="_ls-bar-fill" style="height:100%;width:0%;background:#22C55E;transition:width .4s,background .4s;border-radius:4px;"></div>
-        </div>
-      </div>
-      <div style="margin:6px 0 9px;">
-        <div style="font-size:10px;color:#9CA3AF;margin-bottom:6px;">🎨 Cor do sistema</div>
-        <div style="display:flex;gap:9px;" id="cv-accent-row">
-          <button class="cv-sw" data-acc=""        title="Taupe (padrão)" style="--sw:#A78B6D;" onclick="cvSetAccent(this.dataset.acc)"></button>
-          <button class="cv-sw" data-acc="azul"     title="Azul"           style="--sw:#4C7CA8;" onclick="cvSetAccent(this.dataset.acc)"></button>
-          <button class="cv-sw" data-acc="verde"    title="Verde"          style="--sw:#5A8C6E;" onclick="cvSetAccent(this.dataset.acc)"></button>
-          <button class="cv-sw" data-acc="vinho"    title="Vinho"          style="--sw:#9B5A63;" onclick="cvSetAccent(this.dataset.acc)"></button>
-          <button class="cv-sw" data-acc="grafite"  title="Grafite"        style="--sw:#6A6A6A;" onclick="cvSetAccent(this.dataset.acc)"></button>
         </div>
       </div>
       <button onclick="trocarMinhaSenha()" style="width:100%;margin-bottom:6px;background:transparent;border:1px solid #3a3a3a;color:#cbb89a;border-radius:8px;padding:6px 8px;font-size:11.5px;font-weight:600;cursor:pointer;">🔑 Trocar minha senha</button>
@@ -17472,9 +17454,6 @@ function salvarNFeManual(){
 // ══════════════════════════════════════════════════════
 // Splash de carregamento: rede de segurança pra ele sumir mesmo se algo falhar no init.
 setTimeout(()=>{try{const s=document.getElementById('cv-splash');if(s)s.remove();}catch(e){}},5000);
-// Tema de cor (destaque) — preferência por navegador, salva em localStorage.
-function cvSetAccent(a){ a=a||''; document.documentElement.setAttribute('data-accent',a); try{localStorage.setItem('cv_accent',a);}catch(e){} document.querySelectorAll('.cv-sw').forEach(b=>b.classList.toggle('on',(b.dataset.acc||'')===a)); }
-try{ cvSetAccent(localStorage.getItem('cv_accent')||''); }catch(e){}
 load();
 initFirebase();
 // Migração: backfill dataFechamento em leads ganho que não possuem a data
