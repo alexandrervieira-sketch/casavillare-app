@@ -11137,7 +11137,7 @@ function ctAtualizarXmlInfo(){
 function ctGerarContrato(){
   const c=(ST.cadastros||[]).find(x=>String(x.id)===String(_ctCadId));
   if(!c){toast('Cadastro não encontrado');return;}
-  if(_ctXmlInfoList.length){c.xmlInfoList=[..._ctXmlInfoList];}
+  c.xmlInfoList = _ctXmlInfoList.length ? [..._ctXmlInfoList] : null; // reflete o modal SEMPRE (remover todos os itens realmente esvazia — antes ficava com os itens antigos)
   c.contratoGeradoEm=new Date().toISOString(); // marca que este cadastro JÁ teve um contrato gerado (sinal de recompra)
   c._uAt=Date.now();
   save();
@@ -11329,7 +11329,7 @@ function gerarContrato(cadId){
 
   const html=`<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"/>
-<title>Contrato ${numC} — ${_esc(c.nome)}</title>
+<title>Contrato ${_esc(numC)} — ${_esc(c.nome)}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff;}
@@ -11380,7 +11380,7 @@ body.has-toolbar{padding-top:52px;}
 </style></head><body class="has-toolbar">
 
 <div class="toolbar">
-  <span class="ct-title">📄 Contrato N.º ${numC} — ${_esc(c.nome)}</span>
+  <span class="ct-title">📄 Contrato N.º ${_esc(numC)} — ${_esc(c.nome)}</span>
   <div class="tb-actions">
     <button class="tb-btn tb-print" onclick="window.print()">🖨 Imprimir</button>
     <button class="tb-btn tb-pdf" onclick="var _t=document.title;document.title='${ctFilename}';window.print();setTimeout(function(){document.title=_t;},300);">📥 Salvar PDF</button>
@@ -11393,7 +11393,7 @@ body.has-toolbar{padding-top:52px;}
   <div class="header">
     <div class="logo-area">${_docLogoHtml()}</div>
     <div class="company-info">${_docEmpInfoHtml()}</div>
-    <div class="contrato-num">CONTRATO N.º<br><span style="font-size:14px;">${numC}</span></div>
+    <div class="contrato-num">CONTRATO N.º<br><span style="font-size:14px;">${_esc(numC)}</span></div>
   </div>
 </td></tr></thead>
 <tbody><tr><td>
@@ -11420,8 +11420,8 @@ body.has-toolbar{padding-top:52px;}
     <td><strong>BAIRRO</strong><br>${c.bairroCli?_esc(c.bairroCli):'&nbsp;'}</td>
     <td><strong>CIDADE</strong><br>${c.cidade?_esc(c.cidade):'&nbsp;'}</td>
     <td style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
-      <div style="border-right:1px solid #000;padding-right:6px;"><strong>UF</strong><br>${c.estado||'&nbsp;'}</div>
-      <div style="padding-left:6px;"><strong>CEP</strong><br>${c.cep||'&nbsp;'}</div>
+      <div style="border-right:1px solid #000;padding-right:6px;"><strong>UF</strong><br>${c.estado?_esc(c.estado):'&nbsp;'}</div>
+      <div style="padding-left:6px;"><strong>CEP</strong><br>${c.cep?_esc(c.cep):'&nbsp;'}</div>
     </td>
   </tr>
   <tr>
@@ -11437,8 +11437,8 @@ body.has-toolbar{padding-top:52px;}
     <td><strong>BAIRRO</strong><br>${bairroEnt?_esc(bairroEnt):'&nbsp;'}</td>
     <td><strong>CIDADE</strong><br>${cidadeEnt?_esc(cidadeEnt):'&nbsp;'}</td>
     <td style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
-      <div style="border-right:1px solid #000;padding-right:6px;"><strong>UF</strong><br>${ufEnt||'&nbsp;'}</div>
-      <div style="padding-left:6px;"><strong>CEP</strong><br>${cepEnt||'&nbsp;'}</div>
+      <div style="border-right:1px solid #000;padding-right:6px;"><strong>UF</strong><br>${ufEnt?_esc(ufEnt):'&nbsp;'}</div>
+      <div style="padding-left:6px;"><strong>CEP</strong><br>${cepEnt?_esc(cepEnt):'&nbsp;'}</div>
     </td>
   </tr>
 </table>
@@ -13447,6 +13447,15 @@ function salvarCadastro(){
   const existente=(ST.cadastros||[]).find(c=>String(c.id)===String(_cadId));
   cad.xmlInfoList = _cadXmlInfoList.length ? [..._cadXmlInfoList]
                   : (existente?.xmlInfoList || null);
+  // Reconcilia CONTRATO × PEDIDO: o xmlInfoList é congelado na importação; se o usuário EDITOU/
+  // adicionou/removeu ambientes, a soma diverge e o contrato sairia com o valor VELHO do XML
+  // enquanto o pedido usa os ambientes atuais. Nesse caso descarta o XML → o contrato passa a
+  // usar os ambientes atuais (mesma base do pedido). As especificações seguem em ambiente.obs.
+  if(cad.xmlInfoList){
+    const _sX=cad.xmlInfoList.reduce((s,x)=>s+((x.ambientesData||[]).reduce((a,d)=>a+(d.valorVenda||0),0)),0);
+    const _sA=(cad.ambientes||[]).reduce((s,a)=>s+(a.valor||0),0);
+    if(Math.abs(_sX-_sA)>0.5) cad.xmlInfoList=null; // ambientes editados → XML defasado, descarta
+  }
   if(!ST.cadastros) ST.cadastros=[];
   const idx=ST.cadastros.findIndex(c=>String(c.id)===String(_cadId));
   // Trava de duplicidade: novo cadastro de cliente para um lead que JÁ tem cadastro
