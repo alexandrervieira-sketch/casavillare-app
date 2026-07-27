@@ -3998,7 +3998,14 @@ function entrar(nome,perfil,area){
     _tab('tab-config-btn',_perms.config);
   }
   _idleStart();
-  navTo('tab-home');
+  // Restaura a última aba usada (F5 mantém você onde estava). Cai pra Home se não houver,
+  // se a aba não existir mais, ou se o perfil não tiver permissão nela.
+  let _tabIni='tab-home';
+  try{
+    const _s=localStorage.getItem('cv_tab');
+    if(_s && document.getElementById(_s)){ const _pk=_TAB_PERM[_s]; if(!_pk || _temPerm(_pk)) _tabIni=_s; }
+  }catch(e){}
+  navTo(_tabIni);
 }
 
 function sair(){
@@ -4043,6 +4050,7 @@ function _idleStop(){
 function navTo(tabId){
   const _pk=_TAB_PERM[tabId];
   if(_pk && !_temPerm(_pk)){ toast('🔒 Você não tem acesso a esta área.'); return; } // bloqueia atalhos do dashboard p/ áreas sem permissão
+  try{localStorage.setItem('cv_tab',tabId);}catch(e){} // lembra a aba atual → F5 mantém você onde estava (restaurado em entrar())
   window.scrollTo({top:0,behavior:'instant'});
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId));
