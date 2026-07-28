@@ -8839,6 +8839,21 @@ function rConfig(){
         <div id="cfg-erros-body" style="margin-top:10px;"></div>
       </div>
       <div class="cfg-block">
+        <div class="cfg-block-hdr"><h3>💬 Mensagens de WhatsApp</h3></div>
+        <div class="cfg-info" style="margin-bottom:12px;">Textos que abrem prontos ao clicar nos botões 💬 (lead, pedido, cobrança). Edite como quiser. Campos entre chaves são preenchidos automaticamente: <b>{nome}</b> (1º nome do cliente), <b>{vendedor}</b>, <b>{empresa}</b>, <b>{valor}</b> e <b>{vencimento}</b> (na cobrança). No envio, o WhatsApp ainda deixa ajustar antes de mandar.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${Object.keys(_WA_TPL_DEF).map(k=>`
+            <div>
+              <label class="lbl">${_esc(_WA_TPL_LABEL[k]||k)}</label>
+              <textarea class="inp" id="wa-tpl-${k}" rows="2" style="resize:vertical;width:100%;">${_esc(_waTpl(k))}</textarea>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;">
+          <button class="btn btn-s btn-sm" onclick="cfgResetWaTpl()">↺ Voltar ao padrão</button>
+          <button class="btn btn-p btn-sm" onclick="cfgSalvarWaTpl()">💾 Salvar mensagens</button>
+        </div>
+      </div>
+      <div class="cfg-block">
         <div class="cfg-block-hdr"><h3>📆 Google Calendar</h3></div>
         <div class="cfg-row">
           <div>
@@ -9772,24 +9787,51 @@ function _leadJaRegistrado(l){
   return false;
 }
 // ── WhatsApp: monta o link wa.me e abre com a mensagem pronta. NÃO envia sozinho — abre o WhatsApp
-// com o texto preenchido; a pessoa confere e envia. Reaproveita o negócio que já roda no WhatsApp. ──
+// com o texto preenchido; a pessoa confere/edita e envia. Reaproveita o negócio que já roda no WhatsApp. ──
 function _waLink(tel, msg){
   let d=_telNorm(tel);
   if(d.length<10) return '';                 // curto demais p/ ser telefone válido
   if(d.length<=11) d='55'+d;                 // 10–11 dígitos = local (DDD+número) → adiciona DDI Brasil (13/12 já têm)
   return 'https://wa.me/'+d+(msg?('?text='+encodeURIComponent(msg)):'');
 }
-function _waPrimeiroNome(nome){ return String(nome||'').trim().split(/\s+/)[0]||''; }
-function _waMsgFollowup(nome){
-  const vend=ST.nome||'', emp=(ST.empresa&&ST.empresa.nome)||'Casa Villare Ambientes Planejados', pn=_waPrimeiroNome(nome);
-  return `Olá${pn?' '+pn:''}! Aqui é ${vend} da ${emp}. Tudo bem? 😊`;
-}
 function _waAbrir(tel, msg){
   const link=_waLink(tel, msg);
   if(!link){ toast('📵 Sem telefone válido para o WhatsApp.'); return; }
   window.open(link,'_blank');
 }
-// Card do CRM: abre o WhatsApp do lead com uma saudação de follow-up
+// Mensagens PADRÃO (editáveis pelo gestor em Config → Sistema; ST.waTemplates sobrepõe). Placeholders:
+// {nome} {vendedor} {empresa} {valor} {vencimento}
+const _WA_TPL_DEF={
+  followup:    'Olá {nome}! Aqui é {vendedor} da {empresa}. Tudo bem? 😊',
+  producao:    'Oi {nome}! Passando para avisar que o seu projeto entrou em produção na fábrica. 🔨 Em breve trago novidades!',
+  deposito:    'Oi {nome}! Seus móveis já chegaram ao nosso depósito. 🏬 Vamos combinar a entrega e a montagem?',
+  agendamento: 'Oi {nome}! Podemos agendar a entrega e a montagem dos seus móveis? 📅',
+  montagem:    'Oi {nome}! A montagem dos seus móveis começou. 🔧 Qualquer coisa, estou à disposição!',
+  concluido:   'Oi {nome}! Finalizamos o seu projeto. 🎉 Foi um prazer atender você — obrigado pela confiança!',
+  cobranca:    'Olá {nome}! Passando para lembrar da parcela de {valor} com vencimento em {vencimento}. Qualquer dúvida, estou à disposição! 🙂'
+};
+const _WA_TPL_LABEL={ followup:'Saudação / follow-up (lead)', producao:'Pedido entrou em produção', deposito:'Chegou ao depósito', agendamento:'Agendar entrega/montagem', montagem:'Montagem iniciada', concluido:'Projeto concluído', cobranca:'Cobrança de parcela' };
+// Etapa do pedido → qual mensagem usar
+const _WA_ETAPA_TPL={ producao:'producao', expedicao:'deposito', agendamento:'agendamento', montagem:'montagem', vistoria:'concluido', concluido:'concluido' };
+function _waTpl(key){ return (ST.waTemplates&&ST.waTemplates[key])||_WA_TPL_DEF[key]||''; }
+function _waFill(tpl, v){
+  v=v||{};
+  const pn=String(v.nome||'').trim().split(/\s+/)[0]||'';
+  return String(tpl||'')
+    .replace(/\{nome\}/g, pn)
+    .replace(/\{vendedor\}/g, ST.nome||'')
+    .replace(/\{empresa\}/g, (ST.empresa&&ST.empresa.nome)||'Casa Villare Ambientes Planejados')
+    .replace(/\{valor\}/g, v.valor||'')
+    .replace(/\{vencimento\}/g, v.vencimento||'');
+}
+function _waMsgFollowup(nome){ return _waFill(_waTpl('followup'), {nome}); }
+function _pedTelefone(p){
+  const lead=p&&p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+  if(lead&&_telNorm(lead.telefone).length>=10) return lead.telefone;
+  const cad=(ST.cadastros||[]).find(c=>c&&(String(c.leadId||'')===String((p&&p.leadId)||'\0')||(c.nome&&c.nome===(p&&(p.clienteNome||p.cliente)))));
+  return cad?(cad.telefone||cad.tel||cad.celular||''):'';
+}
+// Card do CRM: abre o WhatsApp do lead com a saudação de follow-up
 function leadWhats(id){
   const l=(ST.leads||[]).find(x=>String(x.id)===String(id));
   if(!l){ toast('Lead não encontrado'); return; }
@@ -9798,6 +9840,24 @@ function leadWhats(id){
 // Botão dentro do modal do lead: usa o que está digitado (telefone/nome podem ter mudado)
 function ldWhatsModal(){
   _waAbrir(document.getElementById('ld-tel')?.value||'', _waMsgFollowup(document.getElementById('ld-nome')?.value||''));
+}
+// Card do pedido: avisa o cliente conforme a ETAPA atual
+function pedWhats(id){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
+  if(!p){ toast('Pedido não encontrado'); return; }
+  const key=_WA_ETAPA_TPL[p.status];
+  if(!key){ toast('Sem mensagem de aviso para esta etapa.'); return; }
+  _waAbrir(_pedTelefone(p), _waFill(_waTpl(key), {nome:p.clienteNome||p.cliente||''}));
+}
+// A Receber: cobrança de uma parcela
+function crWhats(leadId, condId){
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
+  if(!l){ toast('Cliente não encontrado'); return; }
+  const c=(l.condicoesPgto||[]).find(x=>String(x.id)===String(condId));
+  if(!c){ toast('Parcela não encontrada'); return; }
+  const val=(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const venc=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'';
+  _waAbrir(l.telefone, _waFill(_waTpl('cobranca'), {nome:l.nome, valor:val, vencimento:venc}));
 }
 const MOTIVOS_PERDA=[
   {id:'concorrente',  label:'Fechou com concorrente', cor:'#EF4444'},
@@ -12072,6 +12132,7 @@ function _rPedPipe(ped,hoje,statsHtml){
         ${(isG||ST.configsCom?.comissaoVisivel)?comProjBadge:''}
         ${(isG||ST.configsCom?.comissaoVisivel)?comMontBadge:''}
         <div class="ped-card-btns">
+          ${_WA_ETAPA_TPL[e.id]&&_telNorm(_pedTelefone(p)).length>=10?`<button onclick="event.stopPropagation();pedWhats('${_sid(p.id)}')" title="Avisar o cliente no WhatsApp">💬</button>`:''}
           <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
           ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();abrirFichaRentab('${p.id}')" title="Rentabilidade do projeto (previsto × real)">📊</button>`:''}
           ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
@@ -14938,7 +14999,8 @@ function rFinCR(){
     <td>${isPago
       ?`<button class="btn btn-p btn-sm" onclick="crGerarRecibo('${p.leadId}','${p.id}')" title="Gerar recibo de pagamento">🧾 Recibo</button>
         <button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
-      :`<button class="btn btn-s btn-sm" onclick="crEditarParcela('${p.leadId}','${p.id}')" title="Editar valor/vencimento">✏️</button>
+      :`${_telNorm((( (ST.leads||[]).find(l=>String(l.id)===String(p.leadId))||{}).telefone)).length>=10?`<button class="btn btn-s btn-sm" onclick="crWhats('${p.leadId}','${p.id}')" title="Cobrar no WhatsApp">💬</button>`:''}
+        <button class="btn btn-s btn-sm" onclick="crEditarParcela('${p.leadId}','${p.id}')" title="Editar valor/vencimento">✏️</button>
         <button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
     </td></tr>`;
 
@@ -15361,6 +15423,25 @@ function cfgResetPrazos(){
   _cfgTouch('pedPrazos');
   save();
   toast('↺ Prazos no padrão');
+  rConfig();
+}
+// ── Mensagens de WhatsApp (editáveis pelo gestor, sincronizadas via _config) ──
+function cfgSalvarWaTpl(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor edita as mensagens.'); return; }
+  const t={};
+  Object.keys(_WA_TPL_DEF).forEach(k=>{ const el=document.getElementById('wa-tpl-'+k); if(el) t[k]=el.value; });
+  ST.waTemplates=t;
+  _cfgTouch('waTemplates');
+  save();
+  toast('✅ Mensagens salvas!');
+}
+function cfgResetWaTpl(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor edita as mensagens.'); return; }
+  if(!confirm('Voltar todas as mensagens aos textos padrão?')) return;
+  ST.waTemplates={};          // {} (não delete) para SINCRONIZAR o reset
+  _cfgTouch('waTemplates');
+  save();
+  toast('↺ Mensagens no padrão');
   rConfig();
 }
 function exportarBackup(){
