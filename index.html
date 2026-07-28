@@ -4008,6 +4008,10 @@ function sair(){
   _fbAuthLogout();
   sessionStorage.removeItem('cvp_token');
   ST.nome=''; ST.perfil=''; ST.area=''; save();
+  // LGPD: após o save() sincronizar com a nuvem, apaga a cópia LOCAL (cvp_pay guarda clientes/CPF/salários).
+  // Em máquina compartilhada da loja, o próximo a abrir o navegador NÃO encontra os dados no disco.
+  // Nada se perde: a nuvem é a fonte de verdade e recarrega no próximo login.
+  try{ localStorage.removeItem('cvp_pay'); }catch(e){}
   document.body.classList.remove('perfil-gestor');
   { const _sba=document.getElementById('sb-alertas'); if(_sba) _sba.style.display='none'; }
   document.getElementById('app').classList.remove('visible');
@@ -4132,7 +4136,7 @@ function _calcAlertas(){
     let base=(ST.pedidos||[]).filter(p=>p.status!=='concluido'&&p.status!=='venda_prog');
     if(!isG) base=base.filter(p=>[p.responsavel,p.projetista,p.montador].includes(nome));
     base.forEach(p=>{
-      const prazo=PED_PRAZOS[p.status]||0;
+      const prazo=_pedPrazo(p.status);
       const dias=_diasNaEtapa(p,hoje);
       const etapaEstourada=prazo>0&&dias>prazo;
       const entregaAtrasada=p.prevEntrega&&p.prevEntrega<hoje;
@@ -8708,6 +8712,21 @@ function rConfig(){
         </div>
       </div>
       <div class="cfg-block">
+        <div class="cfg-block-hdr"><h3>⏱️ Prazos das etapas de Pedidos</h3></div>
+        <div class="cfg-info" style="margin-bottom:12px;">Quantos dias <b>úteis</b> cada etapa deveria levar. Passou disso, o card do pedido fica marcado como <b>atrasado</b> e aparece nos alertas. Use <b>0</b> para uma etapa sem prazo. Vale para todos os computadores.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;">
+          ${PED_ETAPAS.filter(e=>e.id!=='venda_prog'&&e.id!=='concluido').map(e=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#FAFAF8;border:1px solid var(--border);border-radius:8px;padding:7px 11px;">
+              <span style="font-size:12.5px;">${e.icon||''} ${_esc(e.label)}</span>
+              <input class="inp" id="cfg-prazo-${e.id}" type="number" min="0" step="1" value="${_pedPrazo(e.id)}" style="width:62px;text-align:center;padding:5px;">
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+          <button class="btn btn-s btn-sm" onclick="cfgResetPrazos()">↺ Voltar ao padrão</button>
+          <button class="btn btn-p btn-sm" onclick="cfgSalvarPrazos()">💾 Salvar prazos</button>
+        </div>
+      </div>
+      <div class="cfg-block">
         <div class="cfg-block-hdr"><h3>☁️ Nuvem (vários computadores)</h3></div>
         <div class="cfg-row">
           <div>
@@ -11768,10 +11787,15 @@ const PED_ETAPAS=[
   {id:'assistencia', label:'Assistência',         icon:'🛠️', cor:'#EF4444'},
   {id:'concluido',   label:'Concluído',           icon:'✅', cor:'#16A34A'},
 ];
-// SLA em dias úteis por etapa (0 = sem prazo definido)
+// SLA em dias úteis por etapa (0 = sem prazo definido) — valores PADRÃO (editáveis em Config→Sistema)
 const PED_PRAZOS={
   medicao:5, proj_exec:10, exec_assn:2, pg_fab:1, pedido:1, expedicao:1, producao:23, agendamento:4
 };
+// Prazo efetivo de uma etapa: usa o valor editado pelo gestor (ST.pedPrazos, sincronizado) ou cai no padrão.
+function _pedPrazo(id){
+  const v=ST.pedPrazos&&ST.pedPrazos[id];
+  return (typeof v==='number'&&v>=0)?v:(PED_PRAZOS[id]||0);
+}
 let _pdId=null;
 let _pdBaseUAt=0;  // _uAt do pedido no momento em que o modal abriu (detecção de conflito multiusuário)
 
@@ -11817,7 +11841,7 @@ function _rPedPipe(ped,hoje,statsHtml){
   try{
   const isG=ST.perfil==='gestor';
   const cols=PED_ETAPAS.map(e=>{
-    const prazo=PED_PRAZOS[e.id]||0;
+    const prazo=_pedPrazo(e.id);
     const items=ped.filter(p=>p.status===e.id);
     const cards=items.map(p=>{
       const dt=p.prevEntrega||p.previsao||'';
@@ -15125,6 +15149,33 @@ function limparCacheLocal(){
   try{ localStorage.removeItem('cvp_pay'); }catch(e){}
   try{ sessionStorage.removeItem('cvp_token'); }catch(e){}
   location.reload();
+}
+// ── Prazos (SLA) das etapas de Pedidos — editáveis pelo gestor, sincronizados via _config ──
+function cfgSalvarPrazos(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor edita os prazos.'); return; }
+  const pr={};
+  PED_ETAPAS.forEach(e=>{
+    if(e.id==='venda_prog'||e.id==='concluido') return;
+    const el=document.getElementById('cfg-prazo-'+e.id);
+    if(!el) return;
+    let n=parseInt(el.value,10);
+    if(isNaN(n)||n<0) n=0;
+    pr[e.id]=n;
+  });
+  ST.pedPrazos=pr;
+  _cfgTouch('pedPrazos');
+  save();
+  toast('✅ Prazos salvos!');
+  rConfig();
+}
+function cfgResetPrazos(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor edita os prazos.'); return; }
+  if(!confirm('Voltar todos os prazos aos valores padrão?')) return;
+  ST.pedPrazos={};            // {} (não delete) para SINCRONIZAR o reset e não ressuscitar valores antigos da nuvem
+  _cfgTouch('pedPrazos');
+  save();
+  toast('↺ Prazos no padrão');
+  rConfig();
 }
 function exportarBackup(){
   const data=new Date();
