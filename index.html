@@ -10546,6 +10546,14 @@ function salvarLead(){
   }
 }
 
+// Nome da PEÇA a partir do arquivo (BANHEIRO.xml → "Banheiro"). Necessário porque o Promob grava
+// o nome do PROJETO no atributo DESCRIPTION do ambiente (ex.: "Projeto - QUARTO 2"), igual para TODAS
+// as peças do mesmo projeto — então o DESCRIPTION não identifica a peça; o nome do arquivo sim.
+function _ambienteDoArquivo(fileName){
+  const base=String(fileName||'').replace(/\.[^.]+$/,'').replace(/[_]+/g,' ').trim();
+  if(!base) return '';
+  return base.split(/\s+/).map(w=>w?w.charAt(0).toUpperCase()+w.slice(1).toLowerCase():w).join(' ');
+}
 // ── Promob XML — parser compartilhado ──
 function _parsePromob(xmlText, fileName){
   const parser=new DOMParser();
@@ -10572,9 +10580,14 @@ function _parsePromob(xmlText, fileName){
   const ambEls=listing.getElementsByTagName('AMBIENT');
   const ambientesArr=[];
   const ambDescs=[];
+  // 1 XML = 1 peça (padrão da loja): o nome confiável da peça é o NOME DO ARQUIVO, não o DESCRIPTION
+  // (que é o nome do projeto no Promob, repetido em todas as peças). Com vários ambientes num único
+  // arquivo, aí sim usa o DESCRIPTION de cada um (não dá pra distinguir pelo nome do arquivo).
+  const _nomeArq=_ambienteDoArquivo(fileName);
+  const _umAmbiente=ambEls.length===1;
   for(let j=0;j<ambEls.length;j++){
     const amb=ambEls[j];
-    const ambDesc=amb.getAttribute('DESCRIPTION')||('Ambiente '+(j+1));
+    const ambDesc=(_umAmbiente&&_nomeArq)?_nomeArq:(amb.getAttribute('DESCRIPTION')||('Ambiente '+(j+1)));
     ambDescs.push(ambDesc);
     let ambVenda=0;
     const ambTP=amb.getElementsByTagName('TOTALPRICES');
