@@ -1,6 +1,6 @@
 # Backlog & Plano de Trabalho — ERP Casa Villare
 
-> Documento vivo. Consolida tudo que levantamos (auditoria 27/06, segurança, NFe) — o que já foi feito e o que falta. Atualizado em 28/06/2026.
+> Documento vivo. Consolida tudo que levantamos (auditoria 27/06, segurança, NFe) — o que já foi feito e o que falta. Atualizado em 28/07/2026 (add: D4 cache/XML→IndexedDB, H1 prazos editáveis, H2 dark mode).
 > Legenda esforço: **P** pequeno · **M** médio · **G** grande. Risco: 🟢 baixo · 🟡 médio · 🔴 alto.
 
 ---
@@ -83,6 +83,7 @@
 | D1 | Cada doc da nuvem **re-renderiza a aba inteira** → debounce + coalescer | M | 🟡 |
 | D2 | `save()` serializa **todo o estado** no localStorage → IndexedDB / por coleção | G | 🟡 |
 | D3 | Loops **O(n²)** em renders (pedido→equipe, ganho→cadastro) → pré-indexar com `Map` | P | 🟢 |
+| D4 | Mover **`xmlInfoList` (dados do Promob)** do localStorage → **IndexedDB** (como os anexos já são) → o cache local para de crescer (chegou a 51% ≈ 2,6MB). É o "concreto" do D2. **Risco alto**: mexe na geração de contrato e na rentabilidade — testar contratos logo após. Discutido 27/07/2026. *(O risco de PERDA já foi resolvido: `save()` sincroniza com a nuvem mesmo com cache cheio, e há botão "Limpar cache" em Config→Sistema. Isto aqui é só otimização.)* | G | 🔴 |
 
 ### E) Segurança — Fase 2 (fechar o servidor 100%)
 | # | Item | Esforço | Risco |
@@ -106,6 +107,12 @@
 | G1 | Tolerância de **R$ 1,00** no fechamento de condições → reduzir p/ centavos | P | 🟢 |
 | G2 | Semântica do **valor de financiamento** (parcela × total) explícita | P | 🟡 |
 | G3 | Arredondamento de **pontos na fronteira** de faixa de comissão | P | 🟢 |
+
+### H) UX / Interface (pedidos do gestor — 27/07/2026)
+| # | Item | Esforço | Risco |
+|---|------|---------|-------|
+| H1 | **Editar por tela os prazos (SLA) das etapas de Pedidos** — hoje `PED_PRAZOS` é fixo no código (Medição 5, Proj. Exec. 10, Exec. Assinado 2, Em Produção 23…). Fazer editável em Configurações. | P | 🟢 |
+| H2 | **Modo escuro (dark mode)** — cores fixas *inline* pervasivas; exige converter tela a tela pra não ficar ilegível. Projeto dedicado, testar tela a tela. (Os "temas de destaque" chegaram a ser feitos e revertidos por poluírem a sidebar.) | G | 🔴 |
 
 ---
 
