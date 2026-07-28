@@ -703,15 +703,7 @@ textarea.inp{resize:vertical;min-height:68px;}
     <div class="sidebar-user">
       <div class="sidebar-user-label">Conectado como</div>
       <div class="sidebar-user-name" id="topbar-nome">—</div>
-      <button id="sb-alertas" onclick="navTo('tab-home')" style="display:none;width:100%;margin:6px 0 2px;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:8px;padding:6px 8px;font-size:11px;font-weight:700;cursor:pointer;text-align:left;">🔔 <span id="sb-alertas-n">0</span> pendência(s)</button>
-      <div style="margin:6px 0 8px;font-size:10px;color:#9CA3AF;" title="Espaço usado no cache deste navegador (não é a nuvem). A nuvem mantém todos os dados sincronizados entre as máquinas.">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-          <span>Cache local (este navegador)</span><span id="_ls-pct-lbl">—</span>
-        </div>
-        <div style="background:#E5E7EB;border-radius:4px;height:5px;overflow:hidden;">
-          <div id="_ls-bar-fill" style="height:100%;width:0%;background:#22C55E;transition:width .4s,background .4s;border-radius:4px;"></div>
-        </div>
-      </div>
+      <button id="sb-alertas" onclick="navTo('tab-home')" style="display:none;width:100%;margin:6px 0 8px;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;border-radius:8px;padding:6px 8px;font-size:11px;font-weight:700;cursor:pointer;text-align:left;">🔔 <span id="sb-alertas-n">0</span> pendência(s)</button>
       <button onclick="trocarMinhaSenha()" style="width:100%;margin-bottom:6px;background:transparent;border:1px solid #3a3a3a;color:#cbb89a;border-radius:8px;padding:6px 8px;font-size:11.5px;font-weight:600;cursor:pointer;">🔑 Trocar minha senha</button>
       <button class="btn-logout" onclick="sair()">Sair</button>
     </div>
@@ -3583,14 +3575,13 @@ function _fsSubscribe(){
 // ── Persistência ───────────────────────────────────────────────────────────
 function save(){
   _tribCacheMap={}; // dados mudaram → invalida o cache de alíquota efetiva
-  try{
-    localStorage.setItem('cvp_pay',JSON.stringify(ST));
-    _checkStorageUsage();
-    _fsSyncAll(); // shadow sync não-bloqueante
-  }catch(e){
-    console.error('[CVP] Falha ao salvar:',e);
-    alert('❌ Erro ao salvar dados. Armazenamento cheio.\nExporte um backup imediatamente.');
-  }
+  // 1) Cache local (rápido). Se o cache encher, NÃO pode bloquear a nuvem — só perde o cache local.
+  try{ localStorage.setItem('cvp_pay',JSON.stringify(ST)); }
+  catch(e){ console.warn('[CVP] Cache local cheio — os dados vão SÓ para a nuvem nesta gravação.',e); }
+  // 2) Sincroniza SEMPRE com a nuvem (fonte de verdade), independentemente do cache local ter dado certo.
+  try{ _fsSyncAll(); }catch(e){ console.error('[CVP] Sync com a nuvem falhou:',e); }
+  // 3) Atualiza o indicador/alertas de uso do cache
+  try{ _checkStorageUsage(); }catch(e){}
 }
 
 // ── IndexedDB — armazena arquivos dos leads (fotos, projetos, PDFs) ──
