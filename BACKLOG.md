@@ -112,7 +112,7 @@
 | # | Item | Esforço | Risco |
 |---|------|---------|-------|
 | H1 | **Editar por tela os prazos (SLA) das etapas de Pedidos** — hoje `PED_PRAZOS` é fixo no código (Medição 5, Proj. Exec. 10, Exec. Assinado 2, Em Produção 23…). Fazer editável em Configurações. | P | 🟢 |
-| H2 | **Modo escuro (dark mode)** — cores fixas *inline* pervasivas; exige converter tela a tela pra não ficar ilegível. Projeto dedicado, testar tela a tela. (Os "temas de destaque" chegaram a ser feitos e revertidos por poluírem a sidebar.) | G | 🔴 |
+| ~~H2~~ | ~~**Modo escuro (dark mode)**~~ ❌ **DESCARTADO pelo gestor (28/07/2026)** — não fazer. (Cores fixas inline pervasivas tornariam o esforço grande e arriscado; os "temas de destaque" já tinham sido feitos e revertidos.) | — | — |
 
 ---
 
