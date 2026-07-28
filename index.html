@@ -9014,7 +9014,8 @@ function _temPermFC(k){
   const pm=(ST.configs&&ST.configs[ST.nome]&&ST.configs[ST.nome].permissoes)||null;
   return !!(pm&&pm[k]);
 }
-// Pode EDITAR o módulo (não só ver). Sem mapa de edição salvo → edita (retrocompat). Gestor sempre.
+// Pode EDITAR o módulo (não só ver). Gestor sempre. Fail-closed: sem mapa de edição salvo → NÃO edita
+// (o gestor concede a edição em Configurações → Equipe).
 function _podeEditar(k){
   if(ST.perfil==='gestor') return true;
   if(!_temPerm(k)) return false;

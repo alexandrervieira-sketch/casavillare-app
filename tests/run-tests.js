@@ -263,10 +263,10 @@ test('mesLocal é o prefixo YYYY-MM de hojeLocal', () => {
 });
 
 // ── Permissões Leitura × Edição (retrocompatível: acesso sem mapa de edição → edita) ──
-test('podeEditar: acesso sem permissoesEd → edita (retrocompat, ninguém perde acesso)', () => {
+test('podeEditar: acesso sem permissoesEd → NÃO edita (fail-closed; gestor concede em Config)', () => {
   T.ST.perfil = 'financeiro'; T.ST.nome = 'Bruna'; T.ST.configs = { Bruna: { permissoes: { fin: 1 } } };
-  assert(T._temPerm('fin') === true, 'tem acesso a fin');
-  assert(T._podeEditar('fin') === true, 'sem permissoesEd → edita');
+  assert(T._temPerm('fin') === true, 'tem acesso (vê) a fin');
+  assert(T._podeEditar('fin') === false, 'sem permissoesEd → NÃO edita (fail-closed)');
   assert(T._podeEditar('crm') === false, 'sem acesso → não edita');
 });
 test('podeEditar: Leitura (permissoesEd[k]=0) vê mas não edita', () => {
@@ -496,12 +496,12 @@ test('E: receita financiada reconhecida no fechamento, não no vencimento', () =
   assert(T.calcDRE('2033-06').recCRM >= 60000, 'reconhecida em junho (fechamento)');
   assert(T.calcDRE('2033-08').recCRM < 60000, 'NÃO reconhecida de novo em agosto (vencimento)');
 });
-test('E: boleto parcelado continua reconhecido no vencimento', () => {
+test('E: boleto reconhecido no FECHAMENTO (competência 24/07) e NÃO de novo no vencimento', () => {
   T.ST.leads = T.ST.leads || [];
   T.ST.leads.push({ id: 'LdreB', status: 'ganho', dataFechamento: '2034-01-10', valor: 30000, desconto: 0,
     condicoesPgto: [{ id: 'c1', forma: 'boleto', valor: 30000, vencimento: '2034-03-05' }] });
-  assert(T.calcDRE('2034-01').recCRM < 30000, 'boleto NÃO entra no fechamento');
-  assert(T.calcDRE('2034-03').recCRM >= 30000, 'boleto entra no vencimento (março)');
+  assert(T.calcDRE('2034-01').recCRM >= 30000, 'boleto entra no fechamento (regime de competência)');
+  assert(T.calcDRE('2034-03').recCRM < 30000, 'boleto NÃO é reconhecido de novo no vencimento (evita contar 2x)');
 });
 
 // ── relatório ──
