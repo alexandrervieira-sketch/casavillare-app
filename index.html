@@ -4288,12 +4288,27 @@ function rHomeAlertas(){
   </div>`;
 }
 
+// Selo de tendência mês-a-mês para os KPIs (mais é melhor → ▲ verde). Vazio se não há base de comparação.
+function _kpiTrend(cur, prev, labelMes){
+  if(!prev && !cur) return '';
+  let txt, cls;
+  if(!prev){ txt='novos vs '+labelMes+' (0)'; cls='ks-ok'; }
+  else{
+    const d=Math.round((cur-prev)/prev*100);
+    if(d>0){ txt='▲ +'+d+'% vs '+labelMes; cls='ks-ok'; }
+    else if(d<0){ txt='▼ '+d+'% vs '+labelMes; cls='ks-fail'; }
+    else{ txt='= igual a '+labelMes; cls='ks-mid'; }
+  }
+  return `<div class="kpi-sub ${cls}" style="font-size:10px;margin-top:2px;">${txt}</div>`;
+}
 function rHomeKpi(){
   const el=document.getElementById('home-kpi-row');
   if(!el) return;
   const isG=ST.perfil==='gestor';
   const now=new Date();
   const mesKey=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const _prevD=new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevKey=_prevD.getFullYear()+'-'+String(_prevD.getMonth()+1).padStart(2,'0');
   const todos=ST.leads||[];
 
   // KPI 1 — Novos projetos este mês
@@ -4312,6 +4327,10 @@ function rHomeKpi(){
   const fechados=todos.filter(l=>l.status==='ganho'&&((l.dataFechamento||l.dataCriacao)||'').startsWith(mesKey));
   const fechadosVal=fechados.reduce((s,l)=>s+_leadValorVenda(l),0);
 
+  // Mês anterior (só contagem) para a tendência ▲/▼
+  const novosPrev=todos.filter(l=>(l.dataCriacao||'').startsWith(prevKey)).length;
+  const fechadosPrev=todos.filter(l=>l.status==='ganho'&&((l.dataFechamento||l.dataCriacao)||'').startsWith(prevKey)).length;
+
   // Filtro por perfil para contagens — valores = VALOR AO CLIENTE (venda real), não o Promob
   const filterU=lista=>lista; // dashboard: todos veem os números da empresa inteira
   const nN=filterU(novos).length,    vN=filterU(novos).reduce((s,l)=>s+_leadValorVenda(l),0);
@@ -4321,6 +4340,7 @@ function rHomeKpi(){
 
   const meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const mesNome=meses[now.getMonth()];
+  const prevNome=meses[_prevD.getMonth()].toLowerCase();
 
   el.innerHTML=`
     <div class="kpi-card" onclick="navTo('tab-crm')" style="cursor:pointer;" title="Ver no CRM">
@@ -4328,6 +4348,7 @@ function rHomeKpi(){
       <div class="kpi-label">Novos em ${mesNome}</div>
       <div class="kpi-value">${nN}</div>
       <div class="kpi-sub ks-mid">${vN>0?fmt(vN)+' em propostas':'sem valor estimado'}</div>
+      ${_kpiTrend(nN, novosPrev, prevNome)}
     </div>
     <div class="kpi-card" onclick="navTo('tab-crm')" style="cursor:pointer;" title="Ver no CRM">
       <div class="kpi-icon">🔥</div>
@@ -4346,6 +4367,7 @@ function rHomeKpi(){
       <div class="kpi-label">Fechados em ${mesNome}</div>
       <div class="kpi-value">${nF}</div>
       <div class="kpi-sub ks-ok">${nF>0?fmt(vF)+' realizados':'nenhum fechado'}</div>
+      ${_kpiTrend(nF, fechadosPrev, prevNome)}
     </div>`;
 }
 
