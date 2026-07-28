@@ -14848,6 +14848,19 @@ function rFinCR(){
   const totalGlobalRec =globalRec.reduce((a,c)=>a+(c.valor||0),0);
   const totalVencidas  =globalVencidas.reduce((a,c)=>a+(c.valor||0),0);
 
+  // Aging (idade dos recebíveis em aberto) + ranking de devedores — só das PENDENTES
+  const _diasAtraso=v=>{ if(!v) return -99999; return Math.floor((new Date(hoje+'T12:00')-new Date(v+'T12:00'))/86400000); };
+  const _ag={aVencer:{v:0,n:0}, d1:{v:0,n:0}, d2:{v:0,n:0}, d3:{v:0,n:0}};
+  globalPend.forEach(p=>{ const d=_diasAtraso(p.vencimento), val=p.valor||0;
+    if(d<=0){ _ag.aVencer.v+=val; _ag.aVencer.n++; }
+    else if(d<=30){ _ag.d1.v+=val; _ag.d1.n++; }
+    else if(d<=60){ _ag.d2.v+=val; _ag.d2.n++; }
+    else { _ag.d3.v+=val; _ag.d3.n++; }
+  });
+  const _devMap={};
+  globalVencidas.forEach(p=>{ const c=p.cliente||'—'; _devMap[c]=(_devMap[c]||0)+(p.valor||0); });
+  const _topDev=Object.entries(_devMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
   // Filtro por período
   const usandoFiltro=!!(_crFiltroInicio||_crFiltroFim);
   let parcelas=todasParcelas;
@@ -14919,6 +14932,33 @@ function rFinCR(){
       <div style="font-size:20px;font-weight:700;color:${totalVencidas?'#DC2626':'var(--gl)'};">${fmtL(totalVencidas)}</div>
       <div style="font-size:11px;color:var(--gl);">${globalVencidas.length} parcela${globalVencidas.length!==1?'s':''}</div>
     </div>
+  </div>
+
+  <!-- Aging: idade dos recebíveis em aberto -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+    <div style="font-size:11px;font-weight:700;color:var(--gl);text-transform:uppercase;margin-bottom:10px;">📊 Idade dos recebíveis em aberto</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+      ${[
+        ['A vencer', _ag.aVencer, '#166534','#F0FDF4','#86EFAC'],
+        ['1–30 dias de atraso', _ag.d1, '#B45309','#FFFBEB','#FCD34D'],
+        ['31–60 dias', _ag.d2, '#C2410C','#FFF7ED','#FDBA74'],
+        ['+60 dias', _ag.d3, '#DC2626','#FEF2F2','#FCA5A5']
+      ].map(b=>`
+        <div style="background:${b[3]};border:1px solid ${b[4]};border-radius:8px;padding:10px 12px;">
+          <div style="font-size:10px;color:${b[2]};text-transform:uppercase;font-weight:700;margin-bottom:4px;">${b[0]}</div>
+          <div style="font-size:17px;font-weight:800;color:${b[2]};">${fmtL(b[1].v)}</div>
+          <div style="font-size:10.5px;color:var(--gl);">${b[1].n} parcela${b[1].n!==1?'s':''}</div>
+        </div>`).join('')}
+    </div>
+    ${_topDev.length?`
+    <div style="margin-top:12px;">
+      <div style="font-size:10px;color:#DC2626;text-transform:uppercase;font-weight:700;margin-bottom:6px;">🔴 Maiores devedores (vencido em aberto)</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        ${_topDev.map(d=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 9px;background:#FFF5F5;border-radius:6px;">
+          <span style="font-weight:600;">${_esc(d[0])}</span>
+          <span style="font-weight:700;color:#DC2626;">${fmtL(d[1])}</span></div>`).join('')}
+      </div>
+    </div>`:''}
   </div>
 
   <!-- Filtros -->
