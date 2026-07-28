@@ -1620,7 +1620,10 @@ textarea.inp{resize:vertical;min-height:68px;}
         <input class="inp" id="ld-nome" placeholder="Nome do cliente ou empresa"/></div>
       <div class="fr r3">
         <div><label class="lbl">Telefone / WhatsApp</label>
-          <input class="inp" id="ld-tel" placeholder="(19) 99999-9999"/></div>
+          <div style="display:flex;gap:6px;">
+            <input class="inp" id="ld-tel" placeholder="(19) 99999-9999" style="flex:1;min-width:0;"/>
+            <button type="button" onclick="ldWhatsModal()" title="Abrir conversa no WhatsApp" style="flex-shrink:0;background:#25D366;color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:15px;">💬</button>
+          </div></div>
         <div><label class="lbl">E-mail</label>
           <input class="inp" id="ld-email" type="email" placeholder="email@exemplo.com"/></div>
         <div><label class="lbl">Cidade</label>
@@ -9768,6 +9771,34 @@ function _leadJaRegistrado(l){
   if((ST.cadastros||[]).some(c=>c&&_telNorm(c.telefone||c.tel||c.celular)===t)) return true;
   return false;
 }
+// ── WhatsApp: monta o link wa.me e abre com a mensagem pronta. NÃO envia sozinho — abre o WhatsApp
+// com o texto preenchido; a pessoa confere e envia. Reaproveita o negócio que já roda no WhatsApp. ──
+function _waLink(tel, msg){
+  let d=_telNorm(tel);
+  if(d.length<10) return '';                 // curto demais p/ ser telefone válido
+  if(d.length<=11) d='55'+d;                 // 10–11 dígitos = local (DDD+número) → adiciona DDI Brasil (13/12 já têm)
+  return 'https://wa.me/'+d+(msg?('?text='+encodeURIComponent(msg)):'');
+}
+function _waPrimeiroNome(nome){ return String(nome||'').trim().split(/\s+/)[0]||''; }
+function _waMsgFollowup(nome){
+  const vend=ST.nome||'', emp=(ST.empresa&&ST.empresa.nome)||'Casa Villare Ambientes Planejados', pn=_waPrimeiroNome(nome);
+  return `Olá${pn?' '+pn:''}! Aqui é ${vend} da ${emp}. Tudo bem? 😊`;
+}
+function _waAbrir(tel, msg){
+  const link=_waLink(tel, msg);
+  if(!link){ toast('📵 Sem telefone válido para o WhatsApp.'); return; }
+  window.open(link,'_blank');
+}
+// Card do CRM: abre o WhatsApp do lead com uma saudação de follow-up
+function leadWhats(id){
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(id));
+  if(!l){ toast('Lead não encontrado'); return; }
+  _waAbrir(l.telefone, _waMsgFollowup(l.nome));
+}
+// Botão dentro do modal do lead: usa o que está digitado (telefone/nome podem ter mudado)
+function ldWhatsModal(){
+  _waAbrir(document.getElementById('ld-tel')?.value||'', _waMsgFollowup(document.getElementById('ld-nome')?.value||''));
+}
 const MOTIVOS_PERDA=[
   {id:'concorrente',  label:'Fechou com concorrente', cor:'#EF4444'},
   {id:'preco',        label:'Preço acima do orçamento',cor:'#F97316'},
@@ -10345,7 +10376,10 @@ function leadCardHtml(l,etapa){
     ${parado?`<div style="font-size:9px;color:#F59E0B;margin-bottom:4px;font-weight:600;">⏸ Lead parado há +12 meses</div>`:''}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
       <div class="pipe-card-name" style="flex:1;padding-right:6px;">${_esc(l.nome)}</div>
-      <span class="orig-badge" style="background:${origCor}18;color:${origCor};flex-shrink:0;">${origLbl}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        ${_telNorm(l.telefone).length>=10?`<button onclick="event.stopPropagation();leadWhats('${_sid(l.id)}')" title="Falar no WhatsApp" style="background:none;border:none;cursor:pointer;font-size:15px;padding:0;line-height:1;">💬</button>`:''}
+        <span class="orig-badge" style="background:${origCor}18;color:${origCor};">${origLbl}</span>
+      </div>
     </div>
     ${chegada?`<div class="pipe-card-row" style="color:var(--gl);font-size:10px;">🕐 Entrou: ${chegada}</div>`:''}
     ${l._origemIA?`<div class="pipe-card-row" style="color:#0D9488;font-weight:600;">🤖 via IA de pré-atendimento</div>`:''}
