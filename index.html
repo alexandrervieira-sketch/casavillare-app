@@ -8698,6 +8698,16 @@ function rConfig(){
         </div>
       </div>
       <div class="cfg-block">
+        <div class="cfg-block-hdr"><h3>🧹 Cache local (este navegador)</h3></div>
+        <div class="cfg-row">
+          <div>
+            <div class="cfg-name">Limpar o cache deste navegador</div>
+            <div class="cfg-info">Apaga a cópia local e recarrega tudo da nuvem. Use se o navegador ficar lento ou o cache encher. <b>Seus dados estão salvos na nuvem</b> — nada é perdido. Você vai precisar entrar de novo.</div>
+          </div>
+          <button class="btn btn-s btn-sm" onclick="limparCacheLocal()">🧹 Limpar cache</button>
+        </div>
+      </div>
+      <div class="cfg-block">
         <div class="cfg-block-hdr"><h3>☁️ Nuvem (vários computadores)</h3></div>
         <div class="cfg-row">
           <div>
@@ -15109,6 +15119,13 @@ function excluirLancamento(){
 // PWA
 // ══════════════════════════════════════════════════════
 // ── Backup ──────────────────────────────────────────
+// Limpa a cópia LOCAL dos dados (cvp_pay). Os dados ficam na nuvem e são recarregados no login.
+function limparCacheLocal(){
+  if(!confirm('🧹 Limpar o cache local deste navegador?\n\nSeus dados estão salvos na NUVEM e serão recarregados — nada é perdido.\n\n⚠️ Você vai precisar fazer login novamente.')) return;
+  try{ localStorage.removeItem('cvp_pay'); }catch(e){}
+  try{ sessionStorage.removeItem('cvp_token'); }catch(e){}
+  location.reload();
+}
 function exportarBackup(){
   const data=new Date();
   const stamp=data.getFullYear()+'-'+String(data.getMonth()+1).padStart(2,'0')+'-'+String(data.getDate()).padStart(2,'0')
