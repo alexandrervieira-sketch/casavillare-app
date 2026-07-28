@@ -681,6 +681,8 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div class="sidebar-brand-sub">Sistema de Gestão</div>
     </div>
     <div class="sidebar-nav">
+      <button class="tab" onclick="_bgAbrir()" title="Buscar cliente, lead ou pedido (Ctrl+K)" style="color:var(--gl);display:flex;align-items:center;">🔍 Buscar<span style="margin-left:auto;font-size:9px;opacity:.55;border:1px solid currentColor;border-radius:4px;padding:1px 4px;">Ctrl+K</span></button>
+      <div class="tab-sep"></div>
       <button class="tab active" data-tab="tab-home"      onclick="navTo('tab-home')">🏠 Dashboard</button>
       <div class="tab-sep"></div>
       <button class="tab"        data-tab="tab-crm"       onclick="navTo('tab-crm')"       id="tab-crm-btn">🎯 CRM</button>
@@ -9859,6 +9861,78 @@ function crWhats(leadId, condId){
   const venc=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'';
   _waAbrir(l.telefone, _waFill(_waTpl('cobranca'), {nome:l.nome, valor:val, vencimento:venc}));
 }
+
+// ══ Busca global (Ctrl+K) — acha lead / cliente / pedido de qualquer tela ══
+function _bgEnsure(){
+  let ov=document.getElementById('busca-global');
+  if(ov) return ov;
+  ov=document.createElement('div');
+  ov.id='busca-global';
+  ov.style.cssText='display:none;position:fixed;inset:0;z-index:9999;background:rgba(20,18,16,.45);align-items:flex-start;justify-content:center;';
+  ov.onclick=function(e){ if(e.target===ov) _bgFechar(); };
+  ov.innerHTML=
+    '<div style="background:var(--card,#fff);width:min(620px,92vw);margin-top:9vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;">'
+    +'<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border,#eee);">'
+    +'<span style="font-size:18px;">🔍</span>'
+    +'<input id="bg-input" placeholder="Buscar cliente, lead ou pedido — nome, telefone ou nº..." autocomplete="off" '
+    +'style="flex:1;min-width:0;border:none;outline:none;font-size:15px;background:transparent;color:var(--dark,#222);" oninput="_bgRender()" onkeydown="if(event.key===&quot;Escape&quot;)_bgFechar()"/>'
+    +'<kbd style="font-size:10px;color:var(--gl,#999);border:1px solid var(--border,#ddd);border-radius:5px;padding:2px 5px;">Esc</kbd>'
+    +'</div><div id="bg-results" style="max-height:56vh;overflow:auto;"></div></div>';
+  document.body.appendChild(ov);
+  return ov;
+}
+function _bgHint(){ return '<div style="padding:16px;font-size:12.5px;color:var(--gl,#999);">Digite ao menos 2 letras (ou 3 dígitos do telefone).</div>'; }
+function _bgAbrir(){
+  if(!ST.nome) return;
+  const ov=_bgEnsure(); ov.style.display='flex';
+  const inp=document.getElementById('bg-input'); if(inp) inp.value='';
+  const box=document.getElementById('bg-results'); if(box) box.innerHTML=_bgHint();
+  setTimeout(function(){ const i=document.getElementById('bg-input'); if(i) i.focus(); },30);
+}
+function _bgFechar(){ const ov=document.getElementById('busca-global'); if(ov) ov.style.display='none'; }
+function _buscaGlobal(termo){
+  const t=String(termo||'').trim().toLowerCase();
+  const td=_telNorm(termo);
+  if(t.length<2 && td.length<3) return [];
+  const mt=function(s){ return t.length>=2 && String(s||'').toLowerCase().includes(t); };
+  const mtel=function(s){ return td.length>=3 && _telNorm(s).includes(td); };
+  const res=[];
+  if(_temPerm('crm')) (ST.leads||[]).forEach(function(l){
+    if(mt(l.nome)||mtel(l.telefone)||mt(l.email))
+      res.push({t:'Lead',ic:'🎯',nome:l.nome||'—',sub:[l.responsavel,l.telefone].filter(Boolean).join(' · '),fn:"abrirModalLead('"+_sid(l.id)+"')"});
+  });
+  if(_temPerm('cad')) (ST.cadastros||[]).forEach(function(c){
+    if(mt(c.nome)||mtel(c.telefone||c.tel||c.celular)||mt(c.cpf||c.cpfCnpj||c.cpfcnpj)||mt(c.email)){
+      const tipo=c.tipo||'cliente';
+      res.push({t:tipo==='parceiro'?'Parceiro':tipo==='fornecedor'?'Fornecedor':'Cliente',ic:'👤',nome:c.nome||'—',sub:[c.telefone||c.tel||c.celular,c.cidade].filter(Boolean).join(' · '),fn:"abrirModalCadastro('"+_sid(c.id)+"','"+tipo+"')"});
+    }
+  });
+  if(_temPerm('ped')) (ST.pedidos||[]).forEach(function(p){
+    const nome=p.clienteNome||p.cliente||'';
+    if(mt(nome)||mt(p.descricao)||mt(String(p.id)))
+      res.push({t:'Pedido',ic:'📦',nome:nome||'—',sub:p.descricao||'',fn:"abrirModalPedido('"+_sid(p.id)+"')"});
+  });
+  return res.slice(0,40);
+}
+function _bgRender(){
+  const inp=document.getElementById('bg-input'), box=document.getElementById('bg-results');
+  if(!inp||!box) return;
+  const termo=inp.value;
+  if(String(termo||'').trim().length<2 && _telNorm(termo).length<3){ box.innerHTML=_bgHint(); return; }
+  const res=_buscaGlobal(termo);
+  if(!res.length){ box.innerHTML='<div style="padding:16px;font-size:13px;color:var(--gl,#999);">Nada encontrado para "'+_esc(termo)+'".</div>'; return; }
+  box.innerHTML=res.map(function(r){
+    return '<div onclick="_bgFechar();'+r.fn+'" style="display:flex;align-items:center;gap:11px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border,#f0f0f0);" onmouseover="this.style.background=&quot;rgba(167,139,109,.10)&quot;" onmouseout="this.style.background=&quot;&quot;">'
+    +'<span style="font-size:17px;flex-shrink:0;">'+r.ic+'</span>'
+    +'<div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:600;color:var(--dark,#222);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_esc(r.nome)+'</div>'
+    +(r.sub?'<div style="font-size:11.5px;color:var(--gl,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_esc(r.sub)+'</div>':'')+'</div>'
+    +'<span style="font-size:10px;color:var(--gl,#999);border:1px solid var(--border,#ddd);border-radius:10px;padding:2px 8px;flex-shrink:0;">'+r.t+'</span></div>';
+  }).join('');
+}
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); _bgAbrir(); return; }
+  if(e.key==='Escape'){ const ov=document.getElementById('busca-global'); if(ov&&ov.style.display!=='none') _bgFechar(); }
+});
 const MOTIVOS_PERDA=[
   {id:'concorrente',  label:'Fechou com concorrente', cor:'#EF4444'},
   {id:'preco',        label:'Preço acima do orçamento',cor:'#F97316'},
