@@ -11957,7 +11957,9 @@ function _rPedPipe(ped,hoje,statsHtml){
       <div class="ped-pipe-body" style="${holdStyle}">${cards||`<div style="text-align:center;padding:18px 6px;font-size:11px;color:var(--gl);">Nenhum</div>`}</div>
     </div>`;
   }).join('');
+    const _pipeSL=(document.querySelector('.ped-pipe')||{}).scrollLeft||0; // guarda a rolagem horizontal atual
     document.getElementById('ped-content').innerHTML=statsHtml+`<div class="ped-pipe">${cols}</div>`;
+    if(_pipeSL){ const _pl=document.querySelector('.ped-pipe'); if(_pl) _pl.scrollLeft=_pipeSL; } // restaura → não "volta pro início" ao avançar/voltar
   }catch(err){
     const el=document.getElementById('ped-content');
     if(el) el.innerHTML=`<div style="padding:20px;color:red;background:#FEE2E2;border-radius:8px;font-size:13px;"><strong>Erro:</strong> ${err.message}</div>`;
