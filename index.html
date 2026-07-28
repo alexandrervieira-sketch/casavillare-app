@@ -3279,6 +3279,61 @@ async function auditCarregar(){
   }catch(e){ el.innerHTML='<div style="font-size:12px;color:#B91C1C;padding:8px 0;">Erro ao carregar: '+_esc(e&&e.message||'')+'</div>'; }
 }
 
+// ══ Monitor de erros em produção (coleção _erros; gestor vê em Config → Sistema) ══
+// Sem isto, um erro de render/save é 100% silencioso — só aparece no console da máquina do usuário,
+// que ninguém vê. Aqui as falhas não tratadas vão para a nuvem, com anti-spam (mesmo erro < 60s = 1x).
+const _errDedup={};
+function _registrarErro(tipo,msg,stack){
+  try{
+    if(!_fbReady||!_fbDb||!_fbAuthed) return;                 // sem sessão autenticada não grava (regras exigem login)
+    msg=String(msg||'(sem mensagem)').slice(0,500);
+    stack=String(stack||'').slice(0,1800);
+    const sig=tipo+'|'+msg.slice(0,120);
+    const agora=Date.now();
+    if(_errDedup[sig] && (agora-_errDedup[sig])<60000) return; // mesmo erro em menos de 60s: não repete
+    _errDedup[sig]=agora;
+    let aba=''; try{ aba=localStorage.getItem('cv_tab')||''; }catch(e){}
+    const id='err_'+agora+'_'+Math.random().toString(36).slice(2,6);
+    _fbDb.collection('_erros').doc(id).set({
+      tipo, msg, stack,
+      por: ST.nome||'?', perfil: ST.perfil||'', aba,
+      ua:(navigator.userAgent||'').slice(0,300),
+      em:new Date().toISOString()
+    }).catch(()=>{});
+  }catch(e){ /* o monitor NUNCA pode quebrar o app */ }
+}
+window.addEventListener('error', function(ev){
+  _registrarErro('js', ev&&ev.message, (ev&&ev.error&&ev.error.stack) || (ev&&ev.filename?ev.filename+':'+ev.lineno+':'+ev.colno:''));
+});
+window.addEventListener('unhandledrejection', function(ev){
+  const r=ev&&ev.reason;
+  _registrarErro('promessa', (r&&r.message)||String(r||''), (r&&r.stack)||'');
+});
+// Carrega e exibe os erros registrados (Configurações → Sistema, só gestor)
+async function errosCarregar(){
+  const el=document.getElementById('cfg-erros-body'); if(!el) return;
+  if(!_fbReady||!_fbDb||!_fbAuthed){ el.innerHTML='<div style="font-size:12px;color:var(--gl);padding:8px 0;">Sem conexão com a nuvem.</div>'; return; }
+  el.innerHTML='<div style="font-size:12px;color:var(--gl);padding:8px 0;">⏳ Carregando...</div>';
+  try{
+    const snap=await _fbDb.collection('_erros').orderBy('em','desc').limit(100).get();
+    const rows=snap.docs.map(d=>d.data());
+    if(!rows.length){ el.innerHTML='<div style="font-size:12px;color:#166534;padding:8px 0;">✅ Nenhum erro registrado — tudo funcionando.</div>'; return; }
+    let html='<div style="max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:8px;">'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11.5px;"><thead><tr style="background:#F5F0E8;position:sticky;top:0;">'
+      +'<th style="text-align:left;padding:6px 8px;">Data/Hora</th><th style="text-align:left;padding:6px 8px;">Usuário</th><th style="text-align:left;padding:6px 8px;">Aba</th><th style="text-align:left;padding:6px 8px;">Erro</th></tr></thead><tbody>';
+    rows.forEach(r=>{
+      const dt=r.em?new Date(r.em).toLocaleString('pt-BR'):'';
+      html+='<tr style="border-top:1px solid var(--border);vertical-align:top;">'
+        +'<td style="padding:5px 8px;white-space:nowrap;">'+_esc(dt)+'</td>'
+        +'<td style="padding:5px 8px;">'+_esc(r.por||'?')+(r.perfil?' <span style="color:var(--gl);">('+_esc(r.perfil)+')</span>':'')+'</td>'
+        +'<td style="padding:5px 8px;">'+_esc(r.aba||'')+'</td>'
+        +'<td style="padding:5px 8px;color:#B91C1C;">'+_esc(r.msg||'')+(r.stack?'<div style="color:var(--gl);font-size:10px;margin-top:2px;white-space:pre-wrap;max-height:60px;overflow:auto;">'+_esc(r.stack)+'</div>':'')+'</td></tr>';
+    });
+    html+='</tbody></table></div><div style="font-size:10.5px;color:var(--gl);margin-top:4px;">Últimos '+rows.length+' erros registrados.</div>';
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML='<div style="font-size:12px;color:#B91C1C;padding:8px 0;">Erro ao carregar: '+_esc(e&&e.message||'')+'</div>'; }
+}
+
 // Docs de _config = todas as chaves que NÃO são array (equipe, senhas, configs, fabrica, metas, etc.)
 // Blobs de _config sensíveis: só o GESTOR sincroniza. O servidor (firestore.rules)
 // bloqueia a escrita destes por não-gestores; se o não-gestor os incluísse no lote,
@@ -8746,6 +8801,17 @@ function rConfig(){
           <button class="btn btn-p btn-sm" onclick="auditCarregar()">🔄 Carregar</button>
         </div>
         <div id="cfg-audit-body" style="margin-top:10px;"></div>
+      </div>
+      <div class="cfg-block">
+        <div class="cfg-block-hdr"><h3>🐞 Monitor de Erros</h3></div>
+        <div class="cfg-row">
+          <div>
+            <div class="cfg-name">Falhas registradas no sistema</div>
+            <div class="cfg-info">Erros que aconteceram em qualquer computador da equipe — pra você agir antes de virar reclamação. Últimos 100.</div>
+          </div>
+          <button class="btn btn-p btn-sm" onclick="errosCarregar()">🔄 Carregar</button>
+        </div>
+        <div id="cfg-erros-body" style="margin-top:10px;"></div>
       </div>
       <div class="cfg-block">
         <div class="cfg-block-hdr"><h3>📆 Google Calendar</h3></div>

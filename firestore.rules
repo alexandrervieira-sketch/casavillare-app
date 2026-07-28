@@ -53,6 +53,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── Monitor de erros: qualquer autenticado registra; leitura só gestor; edita/apaga NUNCA ──
+    match /_erros/{doc} {
+      allow read:   if isGestor();
+      allow create: if autenticado();
+      allow update, delete: if false;
+    }
+
     // ── Config: leitura p/ qualquer autenticado; escrita só gestor p/ configs/equipe ──
     match /_config/{doc} {
       allow read:  if autenticado();
@@ -67,8 +74,8 @@ service cloud.firestore {
 
     // ── Demais coleções: financeiras só gestor/financeiro; resto, corporativo ──
     match /{collection}/{doc} {
-      allow read:  if collection != '_audit' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
-      allow write: if collection != '_audit' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow read:  if collection != '_audit' && collection != '_erros' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
+      allow write: if collection != '_audit' && collection != '_erros' && collection != '_config' && collection != '_cfgpriv' && autenticado() && (isFinanceira(collection) ? podeFinanceiro() : true);
     }
   }
 }
