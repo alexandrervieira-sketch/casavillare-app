@@ -796,6 +796,7 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div class="pg-hdr">
         <h2>Pedidos</h2>
         <div class="pg-actions">
+          <button class="btn btn-s" onclick="pedListaCompras()" title="Imprimir a lista de itens complementares a comprar (montagens em aberto)">🖨️ Lista de compras</button>
           <button class="btn btn-p" id="btn-novo-pedido" onclick="abrirModalPedido(null)" title="Pedido manual = Showroom/investimento interno. Venda de verdade entra pelo CRM.">🏛️ Novo Showroom</button>
         </div>
       </div>
@@ -2314,12 +2315,13 @@ textarea.inp{resize:vertical;min-height:68px;}
           <select class="inp" id="pd-resp"></select></div>
         <div><label class="lbl">Projetista</label>
           <select class="inp" id="pd-projetista"><option value="">— Nenhum —</option></select></div>
-        <div><label class="lbl">Montador</label>
-          <div style="display:flex;gap:6px;">
-            <select class="inp" id="pd-montador" style="flex:1;min-width:0;"><option value="">— Nenhum —</option></select>
-            <button type="button" onclick="montVerDados()" title="Ver dados do montador (telefone, PIX, CPF)" style="flex-shrink:0;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:0 11px;cursor:pointer;font-size:15px;line-height:1;">👁️</button>
-            <button type="button" onclick="montNovoAbrir()" title="Cadastrar um montador freelance (nome, telefone, PIX, CPF) sem sair daqui" style="flex-shrink:0;background:var(--p);color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:16px;line-height:1;">➕</button>
-          </div></div>
+        <div><label class="lbl" style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+            <span>Montador</span>
+            <span style="display:inline-flex;gap:8px;">
+              <button type="button" onclick="montVerDados()" title="Ver dados do montador (telefone, PIX, CPF)" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;">👁️</button>
+              <button type="button" onclick="montNovoAbrir()" title="Cadastrar um montador freelance (nome, telefone, PIX, CPF) sem sair daqui" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:0;color:var(--p);font-weight:700;">➕</button>
+            </span></label>
+          <select class="inp" id="pd-montador"><option value="">— Nenhum —</option></select></div>
       </div>
 
       <hr class="form-div"/>
@@ -2360,6 +2362,15 @@ textarea.inp{resize:vertical;min-height:68px;}
           <button type="button" class="btn btn-s btn-sm" onclick="pdAddOutroCusto()">+ Adicionar</button>
         </div>
         <div id="pd-outros-lista" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+
+      <!-- Itens Complementares (materiais avulsos da montagem: LED, dobradiças, corrediças...) -->
+      <div style="margin-top:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+          <label class="lbl" style="margin:0;">🧩 Itens Complementares <span style="font-size:10px;color:var(--gl);font-weight:400;">— avulsos p/ comprar: LED, perfil, canaleta, dobradiças, corrediças, botão liga/desliga...</span></label>
+          <button type="button" class="btn btn-s btn-sm" onclick="pdAddItemComp()">+ Inserir item</button>
+        </div>
+        <div id="pd-itenscomp-lista" style="display:flex;flex-direction:column;gap:6px;"></div>
       </div>
 
       <!-- Transporte + Medição (custos automáticos do projeto) -->
@@ -12500,6 +12511,7 @@ function _rPedPipe(ped,hoje,statsHtml){
           <span class="ped-card-val" title="Valor venda (ao cliente)">${_pedValorVendaCRM(p)?fmt(_pedValorVendaCRM(p)):'—'}</span>
           <span class="ped-card-date" style="${atrasado?'color:var(--fail);font-weight:600;':''}">${dtLabel}</span>
         </div>
+        ${p.itensComp&&p.itensComp.length?`<div style="margin-top:4px;padding:3px 8px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:6px;font-size:10px;color:#075985;">🧩 ${p.itensComp.length} ${p.itensComp.length===1?'item complementar':'itens complementares'}</div>`:''}
         ${p.valorFabrica?`<div style="display:flex;justify-content:space-between;align-items:center;background:#1C1A19;border-radius:5px;padding:3px 7px;margin-top:4px;"><span style="font-size:10px;color:#9CA3AF;">Custo Fáb.</span><span style="font-size:12px;font-weight:700;color:#F59E0B;">${fmt(p.valorFabrica)}</span></div>`:''}
         ${(()=>{
           const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
@@ -13066,6 +13078,59 @@ function pdAddOutroCusto(){
   _pdOutrosCustos.push({cat:'Frete',desc:'',valor:0});
   pdRenderOutrosCustos();
 }
+// ── Itens Complementares: materiais avulsos da montagem (LED, dobradiças...) p/ a lista de compras ──
+let _pdItensComp=[];
+function pdRenderItensComp(){
+  const el=document.getElementById('pd-itenscomp-lista');
+  if(!el) return;
+  if(!_pdItensComp.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--gl);padding:4px 0;">Nenhum item complementar. Clique em <b>+ Inserir item</b> (ex.: 5m de perfil LED, 10 dobradiças, 2 corrediças, 1 botão liga/desliga).</div>';
+    return;
+  }
+  el.innerHTML=_pdItensComp.map((it,i)=>`
+    <div style="display:grid;grid-template-columns:74px 1fr auto;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">
+      <input class="inp" type="text" style="margin:0;text-align:center;" placeholder="Qtd" value="${_esc(it.qtd||'')}" oninput="_pdItensComp[${i}].qtd=this.value"/>
+      <input class="inp" style="margin:0;" placeholder="Item (ex.: perfil LED 2m, botão liga/desliga, corrediça telescópica)" value="${_esc(it.desc||'')}" oninput="_pdItensComp[${i}].desc=this.value"/>
+      <button type="button" onclick="_pdItensComp.splice(${i},1);pdRenderItensComp()" style="background:none;border:none;color:#9CA3AF;font-size:16px;cursor:pointer;padding:0 4px;" title="Remover">✕</button>
+    </div>`).join('');
+}
+function pdAddItemComp(){
+  _pdItensComp.push({qtd:'',desc:''});
+  pdRenderItensComp();
+  setTimeout(()=>{ const inps=document.querySelectorAll('#pd-itenscomp-lista input'); if(inps.length>=2) inps[inps.length-1].focus(); },30);
+}
+// Lista de compras: consolida os Itens Complementares das montagens EM ABERTO (não concluídas), por pedido, p/ imprimir.
+function pedListaCompras(){
+  const peds=(ST.pedidos||[]).filter(p=>Array.isArray(p.itensComp)&&p.itensComp.length&&p.status!=='concluido'&&!_pedShowroom(p));
+  if(!peds.length){ toast('Nenhum item complementar nas montagens em aberto.'); return; }
+  const emp=(ST.empresa&&ST.empresa.nome)||'Casa Villare Ambientes Planejados';
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  let totalItens=0;
+  const blocos=peds.map(p=>{
+    const et=PED_ETAPAS.find(e=>e.id===p.status);
+    const nome=p.clienteNome||p.cliente||'—';
+    const linhas=p.itensComp.map(it=>{ totalItens++; return `<tr><td class="c">☐</td><td class="q">${_esc(it.qtd||'')}</td><td>${_esc(it.desc||'')}</td></tr>`; }).join('');
+    return `<div class="ped">
+      <div class="ped-h">${_esc(nome)}${p.nContrato?' · Contrato '+_esc(p.nContrato):''} <span class="et">${et?_esc(et.label):''}</span></div>
+      <table><thead><tr><th class="c"></th><th class="q">Qtd</th><th>Item</th></tr></thead><tbody>${linhas}</tbody></table>
+    </div>`;
+  }).join('');
+  const html='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Lista de Compras — Itens Complementares</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;color:#111;padding:22px;font-size:13px;}'
+    +'h1{font-size:19px;margin-bottom:2px;}.sub{color:#666;font-size:12px;margin-bottom:16px;}'
+    +'.ped{margin-bottom:16px;page-break-inside:avoid;}.ped-h{font-weight:700;font-size:13.5px;border-bottom:2px solid #A78B6D;padding-bottom:3px;margin-bottom:5px;}'
+    +'.et{font-weight:400;color:#999;font-size:11px;}table{width:100%;border-collapse:collapse;}'
+    +'th,td{text-align:left;padding:4px 6px;border-bottom:1px solid #eee;font-size:12.5px;vertical-align:top;}th{font-size:10px;text-transform:uppercase;color:#999;}'
+    +'.c{width:26px;text-align:center;font-size:15px;}.q{width:64px;text-align:center;}'
+    +'@media print{.noprint{display:none;}}</style></head><body>'
+    +'<div class="noprint" style="margin-bottom:14px;"><button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer;">🖨️ Imprimir</button></div>'
+    +'<h1>🧩 Lista de Compras — Itens Complementares</h1>'
+    +'<div class="sub">'+_esc(emp)+' · '+hoje+' · '+peds.length+' montagem(ns) · '+totalItens+' item(ns)</div>'
+    +blocos+'</body></html>';
+  const w=window.open('','_blank');
+  if(!w){ toast('Permita pop-ups para abrir a lista.'); return; }
+  w.document.write(html); w.document.close();
+}
 
 function pdOnClienteChange(){
   const cid=document.getElementById('pd-cliente-sel').value;
@@ -13392,6 +13457,8 @@ function abrirModalPedido(id){
   pdRenderFornsLista(_pdFornsAdicionais);
   _pdOutrosCustos=[];
   pdRenderOutrosCustos();
+  _pdItensComp=[];
+  pdRenderItensComp();
 
   if(id){
     const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
@@ -13420,6 +13487,7 @@ function abrirModalPedido(id){
     _pdFornsAdicionais=p.fornecedoresAdicionais?_deepClone(p.fornecedoresAdicionais):[];
     pdRenderFornsLista(_pdFornsAdicionais);
     _pdOutrosCustos=p.outrosCustos?_deepClone(p.outrosCustos):[];
+    _pdItensComp=p.itensComp?_deepClone(p.itensComp):[]; pdRenderItensComp();
     pdRenderOutrosCustos();
     // Transporte + Medição
     document.getElementById('pd-transp-tipo').value=p.transporteTipo||'fabrica';
@@ -13540,6 +13608,7 @@ function salvarPedido(){
     obs:          document.getElementById('pd-obs').value.trim(),
     fornecedoresAdicionais: _pdFornsAdicionais.filter(f=>f.nome),
     outrosCustos: _pdOutrosCustos.filter(c=>c.valor>0),
+    itensComp:    _pdItensComp.filter(i=>(i.desc||'').trim()),
     transporteTipo:  document.getElementById('pd-transp-tipo').value||'fabrica',
     transporteValor: document.getElementById('pd-transp-tipo').value==='outro'?_parseBRL(document.getElementById('pd-transp-valor').value):0,
     medicao:         _pdMedicaoModal(),
