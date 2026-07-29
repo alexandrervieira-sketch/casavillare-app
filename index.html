@@ -10459,11 +10459,37 @@ function crmNavMesFech(d){
   if(_crmMesFech>11){_crmMesFech=0;_crmAnoFech++;}
   rCrm();
 }
+// ── Filtros do CRM + visões salvas ──
+let _crmF={resp:'',origem:'',quick:''};
+function _crmViews(){ return (ST.crmViews&&typeof ST.crmViews==='object')?Object.keys(ST.crmViews).map(k=>ST.crmViews[k]):[]; }
+function crmSetF(key,val){ _crmF[key]=val; rCrm(); }
+function crmToggleQuick(v){ _crmF.quick=_crmF.quick===v?'':v; rCrm(); }
+function crmLimparF(){ _crmF={resp:'',origem:'',quick:''}; rCrm(); }
+function crmSalvarView(){
+  if(!_crmF.resp&&!_crmF.origem&&!_crmF.quick){ toast('Configure ao menos um filtro antes de salvar a visão.'); return; }
+  const nome=(prompt('Nome desta visão (ex.: "Meus quentes", "Atrasados de tráfego"):')||'').trim();
+  if(!nome) return;
+  if(!ST.crmViews||typeof ST.crmViews!=='object') ST.crmViews={};
+  const id=_newId();
+  ST.crmViews[id]={id, nome:nome.slice(0,40), f:{resp:_crmF.resp,origem:_crmF.origem,quick:_crmF.quick}};
+  _cfgTouch('crmViews'); save(); rCrm(); toast('✅ Visão salva!');
+}
+function crmAplicarView(id){
+  const v=ST.crmViews&&ST.crmViews[id];
+  if(!v){ toast('Visão não encontrada'); return; }
+  _crmF={resp:(v.f&&v.f.resp)||'', origem:(v.f&&v.f.origem)||'', quick:(v.f&&v.f.quick)||''};
+  rCrm();
+}
+function crmRemoverView(id){
+  if(!ST.crmViews||!ST.crmViews[id]) return;
+  if(!confirm('Remover esta visão salva?')) return;
+  delete ST.crmViews[id];
+  _cfgTouch('crmViews'); save(); rCrm();
+}
 function rCrm(){
   if(!ST.leads) ST.leads=[];
   { const _b=document.getElementById('btn-novo-lead'); if(_b) _b.style.display=_podeEditar('crm')?'':'none'; } // perfil leitura não cria
-  const filtroEl=document.getElementById('crm-filtro-resp');
-  const filtro=filtroEl?filtroEl.value:'';
+  const filtro=_crmF.resp;
   const ativos=ST.leads.filter(l=>l.status!=='perdido'&&l.status!=='ganho');
   const perdidos=ST.leads.filter(l=>l.status==='perdido');
   const mesStrFech=`${_crmAnoFech}-${String(_crmMesFech+1).padStart(2,'0')}`;
@@ -10475,7 +10501,12 @@ function rCrm(){
   // Vendedor vê apenas seus próprios leads; gestor respeita o filtro de responsável
   const isVend=ST.perfil==='vendedor';
   const filtroEfetivo=isVend?ST.nome:filtro;
-  const visiveis=filtroEfetivo?ativos.filter(l=>l.responsavel===filtroEfetivo):ativos;
+  let visiveis=filtroEfetivo?ativos.filter(l=>l.responsavel===filtroEfetivo):ativos.slice();
+  if(_crmF.origem) visiveis=visiveis.filter(l=>(l.origem||'outro')===_crmF.origem);
+  const _hj=_hojeLocal();
+  if(_crmF.quick==='atrasados') visiveis=visiveis.filter(l=>l.proxContato&&l.proxContato<_hj);
+  else if(_crmF.quick==='semprox') visiveis=visiveis.filter(l=>!l.proxContato);
+  else if(_crmF.quick==='quentes') visiveis=visiveis.filter(l=>['apresentacao','negociacao','fechamento'].includes(l.etapa));
   // Sobrescreve ganhos e perdidos com filtro efetivo para vendedor
   if(filtroEfetivo){
     ganhos.splice(0,ganhos.length,...ganhos.filter(l=>l.responsavel===filtroEfetivo));
@@ -10503,12 +10534,29 @@ function rCrm(){
   </div>`;
 
   // Toolbar
-  const toolbarHtml=`<div class="crm-toolbar">
-    <select id="crm-filtro-resp" onchange="rCrm()">
+  const _chip=(lbl,val)=>`<button onclick="crmToggleQuick('${val}')" style="font-size:11.5px;border:1.5px solid ${_crmF.quick===val?'var(--p)':'var(--border)'};background:${_crmF.quick===val?'var(--p)':'transparent'};color:${_crmF.quick===val?'#fff':'var(--dark)'};border-radius:20px;padding:4px 11px;cursor:pointer;white-space:nowrap;">${lbl}</button>`;
+  const _temF=_crmF.resp||_crmF.origem||_crmF.quick;
+  const _views=_crmViews();
+  const toolbarHtml=`<div class="crm-toolbar" style="flex-wrap:wrap;gap:8px;align-items:center;">
+    ${isVend?'':`<select onchange="crmSetF('resp',this.value)">
       <option value="">Todos os responsáveis</option>
-      ${responsaveis.map(p=>`<option value="${_esc(p.nome)}" ${filtro===p.nome?'selected':''}>${_esc(p.nome)}</option>`).join('')}
+      ${responsaveis.map(p=>`<option value="${_esc(p.nome)}" ${_crmF.resp===p.nome?'selected':''}>${_esc(p.nome)}</option>`).join('')}
+    </select>`}
+    <select onchange="crmSetF('origem',this.value)">
+      <option value="">Todas as origens</option>
+      ${Object.keys(ORIG_LABEL).map(o=>`<option value="${o}" ${_crmF.origem===o?'selected':''}>${ORIG_LABEL[o]}</option>`).join('')}
     </select>
-    <span style="font-size:12px;color:var(--gl);">${visiveis.length} lead${visiveis.length!==1?'s':''} exibido${visiveis.length!==1?'s':''}</span>
+    ${_chip('⚠️ Atrasados','atrasados')}${_chip('📭 Sem próximo','semprox')}${_chip('🔥 Quentes','quentes')}
+    ${_temF?`<button onclick="crmLimparF()" style="font-size:11.5px;border:none;background:none;color:#DC2626;cursor:pointer;text-decoration:underline;">✕ Limpar</button>`:''}
+    <span style="font-size:12px;color:var(--gl);margin-left:auto;">${visiveis.length} lead${visiveis.length!==1?'s':''}</span>
+    <button onclick="crmSalvarView()" title="Salvar esta combinação de filtros" style="font-size:11.5px;border:1.5px solid var(--border);background:transparent;border-radius:7px;padding:4px 10px;cursor:pointer;white-space:nowrap;">💾 Salvar visão</button>
+    ${_views.length?`<div style="width:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:2px;">
+      <span style="font-size:10.5px;color:var(--gl);text-transform:uppercase;letter-spacing:.05em;">Visões:</span>
+      ${_views.map(v=>`<span style="display:inline-flex;align-items:center;gap:2px;background:#F5F0E8;border:1px solid var(--border);border-radius:20px;padding:2px 4px 2px 11px;font-size:11.5px;">
+        <button onclick="crmAplicarView('${v.id}')" style="border:none;background:none;cursor:pointer;color:var(--dark);font-weight:600;">${_esc(v.nome)}</button>
+        <button onclick="crmRemoverView('${v.id}')" title="Remover visão" style="border:none;background:none;cursor:pointer;color:#dc2626;font-size:11px;padding:0 4px;">✕</button>
+      </span>`).join('')}
+    </div>`:''}
   </div>`;
 
   // Kanban
