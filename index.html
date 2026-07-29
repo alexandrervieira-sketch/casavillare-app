@@ -2506,6 +2506,16 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div id="pd-pgfab-email-status" style="font-size:11px;color:#16A34A;margin-top:6px;text-align:center;display:none;"></div>
       </div>
 
+      <div id="pd-check-section" style="display:none;margin-top:16px;padding:16px;background:#F5F3F0;border:1.5px solid var(--border);border-radius:12px;">
+        <div id="pd-check-titulo" style="font-size:13px;font-weight:700;margin-bottom:4px;"></div>
+        <div style="font-size:11.5px;color:var(--gl);margin-bottom:10px;">Marque cada item conferido — fica salvo no pedido. Móvel planejado não tem margem de erro.</div>
+        <div id="pd-check-list"></div>
+        <div id="pd-check-obs-wrap" style="margin-top:10px;">
+          <label class="lbl" style="font-size:11px;">Observações da conferência</label>
+          <textarea class="inp" id="pd-check-obs" rows="2" placeholder="Ex.: pendência, medida atípica, avaria encontrada..." onchange="pdCheckObs(this.value)"></textarea>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-danger btn-sm" id="pd-btn-delete" onclick="excluirPedido()" style="display:none;margin-right:auto;">🗑 Excluir</button>
         <button class="btn btn-s" onclick="fecharModal('modal-pedido')">Cancelar</button>
@@ -12490,6 +12500,11 @@ function pedAvancar(id){
   if(!p) return;
   const idx=PED_ETAPAS.findIndex(e=>e.id===p.status);
   if(idx<0||idx>=PED_ETAPAS.length-1){toast('Já na última etapa');return;}
+  // Rede de segurança: avançar de Medição/Vistoria com o checklist incompleto pede confirmação
+  if((p.status==='medicao'||p.status==='vistoria')&&!_pdChecklistCompleto(p,p.status)){
+    const nome=p.status==='medicao'?'medição':'vistoria';
+    if(!confirm('⚠️ O checklist de '+nome+' deste pedido não está completo.\n\nAvançar mesmo assim?\n(Dá para preencher em ✏️ Editar.)')) return;
+  }
   p.status=PED_ETAPAS[idx+1].id;
   p.statusChangedAt=_hojeLocal();
   _pedBackfillMarcos(p); // grava as datas de marco atingidas (antes só o modal fazia, e sem cobrir pulos)
@@ -12937,6 +12952,52 @@ function pdOnStatusChange(){
   if(atSec) atSec.style.display=v==='assistencia'?'':'none';
   const pgfabSec=document.getElementById('pd-pgfab-section');
   if(pgfabSec) pgfabSec.style.display=v==='pg_fab'?'':'none';
+  pdRenderChecklist();
+}
+
+// ── Checklist de Medição / Vistoria (móvel planejado = erro zero em medida e acabamento) ──
+const CHECK_MEDICAO=[
+  {k:'m1',t:'Medidas conferidas no local (parede a parede)'},
+  {k:'m2',t:'Pé-direito e desníveis de piso/teto anotados'},
+  {k:'m3',t:'Pontos de água, gás e elétrica marcados'},
+  {k:'m4',t:'Tomadas e interruptores posicionados'},
+  {k:'m5',t:'Portas, janelas e batentes considerados'},
+  {k:'m6',t:'Registros, medidor e tubulações localizados'},
+  {k:'m7',t:'Fotos do ambiente tiradas'},
+  {k:'m8',t:'Cliente ciente das medidas finais'}
+];
+const CHECK_VISTORIA=[
+  {k:'v1',t:'Todos os módulos montados conforme projeto'},
+  {k:'v2',t:'Portas e gavetas alinhadas e funcionando'},
+  {k:'v3',t:'Puxadores e ferragens instalados'},
+  {k:'v4',t:'Acabamento sem riscos, trincas ou avarias'},
+  {k:'v5',t:'Iluminação e tomadas testadas (se houver)'},
+  {k:'v6',t:'Limpeza final feita'},
+  {k:'v7',t:'Cliente conferiu e aprovou'},
+  {k:'v8',t:'Fotos da entrega tiradas'}
+];
+let _pdCheck={};
+function _pdCheckDef(status){ return status==='medicao'?CHECK_MEDICAO:status==='vistoria'?CHECK_VISTORIA:null; }
+function _pdChecklistCompleto(p, status){ const def=_pdCheckDef(status); if(!def) return true; const st=(p&&p.checklists&&p.checklists[status])||{}; return def.every(it=>st[it.k]); }
+function pdCheckObs(v){ const st=document.getElementById('pd-status').value; if(st!=='medicao'&&st!=='vistoria') return; if(!_pdCheck[st]) _pdCheck[st]={}; _pdCheck[st].obs=v; }
+function pdToggleCheck(key, checked){ const st=document.getElementById('pd-status').value; if(st!=='medicao'&&st!=='vistoria') return; if(!_pdCheck[st]) _pdCheck[st]={}; _pdCheck[st][key]=!!checked; pdRenderChecklist(true); }
+function pdRenderChecklist(keepObs){
+  const sec=document.getElementById('pd-check-section'); if(!sec) return;
+  const st=document.getElementById('pd-status')?.value;
+  const def=_pdCheckDef(st);
+  if(!def){ sec.style.display='none'; return; }
+  sec.style.display='';
+  const state=_pdCheck[st]||{};
+  const done=def.filter(it=>state[it.k]).length;
+  const t=document.getElementById('pd-check-titulo');
+  if(t) t.innerHTML=(st==='medicao'?'📏 Checklist de Medição':'🔍 Checklist de Vistoria')+' <span style="font-weight:400;color:'+(done===def.length?'#166534':'var(--gl)')+';">('+done+'/'+def.length+')</span>';
+  const list=document.getElementById('pd-check-list');
+  if(list) list.innerHTML=def.map(it=>
+    '<label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;">'
+    +'<input type="checkbox" '+(state[it.k]?'checked':'')+' onchange="pdToggleCheck(\''+it.k+'\',this.checked)" style="margin-top:2px;width:15px;height:15px;flex-shrink:0;cursor:pointer;"/>'
+    +'<span style="'+(state[it.k]?'color:var(--gl);text-decoration:line-through;':'')+'">'+it.t+'</span></label>'
+  ).join('');
+  if(!keepObs){ const o=document.getElementById('pd-check-obs'); if(o) o.value=state.obs||''; }
 }
 
 function pdAtTipoChange(){
@@ -13192,6 +13253,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-status').value         =p.status||'projeto';
     document.getElementById('pd-lead').value           =p.leadId||'';
     document.getElementById('pd-obs').value            =p.obs||'';
+    _pdCheck=p.checklists?_deepClone(p.checklists):{};  // checklist medição/vistoria
     document.getElementById('pd-btn-delete').style.display='';
     // Campos AT
     _pdAtCompData=p.atComprovante||null;
@@ -13228,6 +13290,7 @@ function abrirModalPedido(id){
   } else {
     document.getElementById('pd-titulo').textContent='🏛️ Novo Showroom / Investimento';
     document.getElementById('pd-sub').textContent='Compra interna — venda de verdade entra pelo CRM';
+    _pdCheck={};
     document.getElementById('pd-cliente-sel').value='';
     document.getElementById('pd-cliente-txt').value='';
     document.getElementById('pd-ncontrato').value='';
@@ -13252,6 +13315,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-obs').value='';
     document.getElementById('pd-btn-delete').style.display='none';
     document.getElementById('pd-datas-real').style.display='none';
+    pdRenderChecklist();
   }
   abrirModal('modal-pedido');
 }
@@ -13305,7 +13369,8 @@ function salvarPedido(){
     atErroSubTipo:   document.getElementById('pd-at-subtipo')?.value||'',
     atCusto:         _parseBRL(document.getElementById('pd-at-custo')?.value||''),
     atComprovante:   _pdAtCompData||'',
-    atComprovanteNome: _pdAtCompNome||''
+    atComprovanteNome: _pdAtCompNome||'',
+    checklists:      _pdCheck||{}
   };
   if(!ST.pedidos) ST.pedidos=[];
   // Alerta se leadId já tem pedido vinculado (evita duplicidade de comissões)
