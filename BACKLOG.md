@@ -52,6 +52,7 @@
 - 📈 KPIs da Home com tendência ▲/▼ vs. mês anterior.
 - 📊 Aging de recebíveis (A Receber: faixas de atraso + maiores devedores).
 - 🚦 CI / portão de deploy: testes(73)+lint rodam ANTES de publicar (`_deploy.js`) + GitHub Actions.
+- 🧾 **Lembrete de emitir NFe no fim do mês** (dia ≥25) na Central de Alertas, com contagem de vendas sem nota (helper `_nfePendentes`, gestor/financeiro).
 
 **Alto impacto**
 - 💬 WhatsApp direto: follow-up do lead, aviso de status do pedido, cobrança de parcela — com mensagens editáveis (Config→Sistema).
