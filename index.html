@@ -2315,7 +2315,10 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div><label class="lbl">Projetista</label>
           <select class="inp" id="pd-projetista"><option value="">— Nenhum —</option></select></div>
         <div><label class="lbl">Montador</label>
-          <select class="inp" id="pd-montador"><option value="">— Nenhum —</option></select></div>
+          <div style="display:flex;gap:6px;">
+            <select class="inp" id="pd-montador" style="flex:1;min-width:0;"><option value="">— Nenhum —</option></select>
+            <button type="button" onclick="montNovoAbrir()" title="Cadastrar um montador freelance (nome, telefone, PIX) sem sair daqui" style="flex-shrink:0;background:var(--p);color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:16px;line-height:1;">➕</button>
+          </div></div>
       </div>
 
       <hr class="form-div"/>
@@ -2520,6 +2523,29 @@ textarea.inp{resize:vertical;min-height:68px;}
         <button class="btn btn-danger btn-sm" id="pd-btn-delete" onclick="excluirPedido()" style="display:none;margin-right:auto;">🗑 Excluir</button>
         <button class="btn btn-s" onclick="fecharModal('modal-pedido')">Cancelar</button>
         <button class="btn btn-p" onclick="salvarPedido()">Salvar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MINI-MODAL: novo montador freelance (cadastro leve pela equipe) ══ -->
+<div class="modal-bg hidden" id="modal-mont">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-hdr">
+      <div><div class="modal-title">➕ Novo montador freelance</div></div>
+      <button class="modal-close" onclick="fecharModal('modal-mont')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--gl);margin-bottom:14px;">Cadastro rápido do contato. <b>Salário e comissão continuam só com o gestor</b> (Configurações → Equipe).</div>
+      <div class="fr"><label class="lbl">Nome *</label>
+        <input class="inp" id="mont-nome" placeholder="Nome do montador"/></div>
+      <div class="fr"><label class="lbl">Telefone / WhatsApp *</label>
+        <input class="inp" id="mont-tel" placeholder="(19) 99999-9999" type="tel"/></div>
+      <div class="fr"><label class="lbl">Chave PIX (opcional)</label>
+        <input class="inp" id="mont-pix" placeholder="CPF, telefone, e-mail ou chave aleatória"/></div>
+      <div class="form-actions">
+        <button class="btn btn-s" onclick="fecharModal('modal-mont')">Cancelar</button>
+        <button class="btn btn-p" onclick="montNovoSalvar()">Salvar montador</button>
       </div>
     </div>
   </div>
@@ -13257,6 +13283,34 @@ function pdSetTipo(t){
   const cw=document.getElementById('pd-contrato-wrap'); if(cw) cw.style.display=show?'none':'';
   const cl=document.getElementById('pd-cliente-lbl'); if(cl) cl.textContent=show?'Identificação (ex.: Showroom Loja) *':'Nome do cliente *';
   const av=document.getElementById('pd-showroom-aviso'); if(av) av.style.display=show?'':'none';
+}
+// ── Cadastro leve de montador freelance pela equipe (sem salário/comissão — isso é só-gestor no Config) ──
+function montNovoAbrir(){
+  document.getElementById('mont-nome').value='';
+  document.getElementById('mont-tel').value='';
+  document.getElementById('mont-pix').value='';
+  abrirModal('modal-mont');
+  setTimeout(()=>{ const el=document.getElementById('mont-nome'); if(el) el.focus(); },80);
+}
+function montNovoSalvar(){
+  const nome=(document.getElementById('mont-nome').value||'').trim();
+  const telRaw=(document.getElementById('mont-tel').value||'').trim();
+  const pix=(document.getElementById('mont-pix').value||'').trim();
+  if(!nome){ toast('Informe o nome do montador'); return; }
+  if(_telNorm(telRaw).length<10){ toast('Informe um telefone válido (com DDD)'); return; }
+  if(todosFunc().some(p=>(p.nome||'').trim().toLowerCase()===nome.toLowerCase())){ toast('Já existe alguém com esse nome na equipe'); return; }
+  if(!ST.equipe) ST.equipe={};
+  if(!ST.equipe.obras) ST.equipe.obras=[];
+  ST.equipe.obras.push({nome, perfil:'montador', tel:normTel(telRaw), pix});
+  _cfgTouch('equipe'); save();
+  const sel=document.getElementById('pd-montador');
+  if(sel){
+    const montadores=(ST.equipe.obras||[]).filter(p=>p.perfil==='montador');
+    sel.innerHTML='<option value="">— Nenhum —</option>'+montadores.map(p=>`<option value="${_esc(p.nome)}">${_esc(p.nome)}</option>`).join('');
+    sel.value=nome;
+  }
+  fecharModal('modal-mont');
+  toast('✅ Montador cadastrado!');
 }
 function abrirModalPedido(id){
   _pdId=id||null;
