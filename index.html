@@ -14623,7 +14623,7 @@ function finSubTab(sub){
     } else if(sub==='fluxo'){
       actEl.innerHTML='';
     } else {
-      actEl.innerHTML=`<div class="mes-nav"><button onclick="crNavMes(-1)">‹</button><span class="mes-label" id="cr-mes-label">—</span><button onclick="crNavMes(1)">›</button></div>`;
+      actEl.innerHTML=''; // A Receber: o navegador de mês fica na área de Filtros (evita duplicar)
     }
   }
   if(sub==='dre')            rFinanceiro();
@@ -15559,10 +15559,13 @@ function rFinCR(){
   globalVencidas.forEach(p=>{ const c=p.cliente||'—'; _devMap[c]=(_devMap[c]||0)+(p.valor||0); });
   const _topDev=Object.entries(_devMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
-  // Filtro por período
+  // Filtro. Cliente selecionado → mostra TODAS as parcelas dele (todos os meses), ignorando o navegador
+  // de mês — senão as vencidas de outro mês sumiam. Sem cliente → filtra pelo mês do navegador.
   const usandoFiltro=!!(_crFiltroInicio||_crFiltroFim);
-  let parcelas=todasParcelas;
-  if(usandoFiltro){
+  let parcelas;
+  if(_crFiltroCliente){
+    parcelas=todasParcelas.filter(p=>p.cliente===_crFiltroCliente);
+  } else if(usandoFiltro){
     parcelas=todasParcelas.filter(p=>{
       const v=p.vencimento||'';
       if(_crFiltroInicio&&v<_crFiltroInicio) return false;
@@ -15573,8 +15576,6 @@ function rFinCR(){
     const mesStr=`${_crAno}-${String(_crMes+1).padStart(2,'0')}`;
     parcelas=todasParcelas.filter(p=>(p.vencimento||'').slice(0,7)===mesStr);
   }
-  // Filtro por cliente
-  if(_crFiltroCliente) parcelas=parcelas.filter(p=>p.cliente===_crFiltroCliente);
 
   const pendentes=parcelas.filter(p=>!p.pago);
   const recebidos=parcelas.filter(p=>p.pago);
@@ -15607,9 +15608,11 @@ function rFinCR(){
     </td></tr>`;
 
   // Label do período atual
-  const periodoLabel=usandoFiltro
-    ?`${_crFiltroInicio?new Date(_crFiltroInicio+'T12:00').toLocaleDateString('pt-BR'):'início'} até ${_crFiltroFim?new Date(_crFiltroFim+'T12:00').toLocaleDateString('pt-BR'):'hoje'}`
-    :mesNomeStr(_crMes,_crAno);
+  const periodoLabel=_crFiltroCliente
+    ?'todos os meses'
+    :(usandoFiltro
+      ?`${_crFiltroInicio?new Date(_crFiltroInicio+'T12:00').toLocaleDateString('pt-BR'):'início'} até ${_crFiltroFim?new Date(_crFiltroFim+'T12:00').toLocaleDateString('pt-BR'):'hoje'}`
+      :mesNomeStr(_crMes,_crAno));
   const lbl=document.getElementById('cr-mes-label');
   if(lbl) lbl.textContent=usandoFiltro?'Período personalizado':mesNomeStr(_crMes,_crAno);
 
@@ -15671,16 +15674,20 @@ function rFinCR(){
         ${[...new Set(todasParcelas.map(p=>p.cliente).filter(Boolean))].sort().map(c=>`<option value="${_esc(c)}" ${_crFiltroCliente===c?'selected':''}>${_esc(c)}</option>`).join('')}
       </select>
     </div>
-    <!-- Navegação por mês (por vencimento) -->
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <label style="font-size:12px;color:var(--gl);">Mês (por vencimento)</label>
-      <div class="mes-nav">
-        <button onclick="crNavMes(-1)">‹</button>
-        <span class="mes-label">${mesNomeStr(_crMes,_crAno)}</span>
-        <button onclick="crNavMes(1)">›</button>
-      </div>
-      ${_crFiltroCliente?`<button class="btn btn-s btn-sm" onclick="_crFiltroCliente='';rFinCR()" style="font-size:11px;">✕ Limpar cliente</button>`:''}
-    </div>
+    <!-- Navegação por mês (por vencimento) — só quando NÃO há cliente selecionado -->
+    ${_crFiltroCliente
+      ?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:12.5px;color:var(--gl);">📅 Mostrando <b>todas as parcelas</b> deste cliente (todos os meses).</span>
+          <button class="btn btn-s btn-sm" onclick="_crFiltroCliente='';rFinCR()" style="font-size:11px;">✕ Limpar cliente</button>
+        </div>`
+      :`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-size:12px;color:var(--gl);">Mês (por vencimento)</label>
+          <div class="mes-nav">
+            <button onclick="crNavMes(-1)">‹</button>
+            <span class="mes-label">${mesNomeStr(_crMes,_crAno)}</span>
+            <button onclick="crNavMes(1)">›</button>
+          </div>
+        </div>`}
   </div>
 
   <!-- Resultados do período -->
