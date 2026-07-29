@@ -892,6 +892,7 @@ textarea.inp{resize:vertical;min-height:68px;}
       <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
         <button class="fin-sub-btn active" id="rel-sub-resumo"       onclick="relSubTab('resumo')">🛒 Vendas</button>
         <button class="fin-sub-btn"        id="rel-sub-conversao"  onclick="relSubTab('conversao')">🔄 Funil de Conversão</button>
+        <button class="fin-sub-btn"        id="rel-sub-canais"     onclick="relSubTab('canais')">💸 Canais (CAC)</button>
         <button class="fin-sub-btn"        id="rel-sub-perda"      onclick="relSubTab('perda')">🔴 Análise de Perdas</button>
         <button class="fin-sub-btn"        id="rel-sub-rentab"     onclick="relSubTab('rentab')">💹 Rentabilidade</button>
         <button class="fin-sub-btn"        id="rel-sub-desempenho" onclick="relSubTab('desempenho')">📈 Desempenho</button>
@@ -6070,13 +6071,14 @@ let _relSubAtivo='resumo';
 
 function relSubTab(sub){
   _relSubAtivo=sub;
-  ['resumo','conversao','perda','rentab','desempenho'].forEach(k=>{
+  ['resumo','conversao','canais','perda','rentab','desempenho'].forEach(k=>{
     const btn=document.getElementById('rel-sub-'+k);
     if(btn) btn.classList.toggle('active', k===sub);
   });
   const nav=document.getElementById('rel-mes-nav');
   if(nav) nav.style.display='none'; // Vendas tem filtro de período próprio; demais abas não usam o nav de mês
   if(sub==='resumo')      rRelResumo();
+  else if(sub==='canais')  rRelCanais();
   else if(sub==='perda')   rRelAnalisePerda();
   else if(sub==='rentab')  rRelRentabilidade();
   else if(sub==='desempenho') rRelDesempenho();
@@ -6439,6 +6441,79 @@ function rRelResumo(){
     </div>`;
 }
 
+// ── CAC / ROI por canal (custo × retorno de cada origem de lead) ──
+let _cacMes=_mesLocal();
+function cacMesNav(delta){ const p=_cacMes.split('-').map(Number); const d=new Date(p[0],p[1]-1+delta,1); _cacMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); rRelCanais(); }
+function cacSetInvest(origem, val){
+  if(!_podeEditar('rel')){ toast('🔒 Você tem acesso somente de leitura.'); return; }
+  if(!ST.cacInvest||typeof ST.cacInvest!=='object') ST.cacInvest={};
+  if(!ST.cacInvest[_cacMes]||typeof ST.cacInvest[_cacMes]!=='object') ST.cacInvest[_cacMes]={};
+  ST.cacInvest[_cacMes][origem]=Math.max(0,_parseBRL(val)||0);
+  _cfgTouch('cacInvest'); save(); rRelCanais();
+}
+function rRelCanais(){
+  const el=document.getElementById('rel-content'); if(!el) return;
+  const mes=_cacMes, Y=parseInt(mes.slice(0,4)), M=parseInt(mes.slice(5,7));
+  const origens=Object.keys(ORIG_LABEL);
+  const oLeads={},oVendas={},oValor={};
+  origens.forEach(o=>{oLeads[o]=0;oVendas[o]=0;oValor[o]=0;});
+  (ST.leads||[]).forEach(l=>{
+    const o=origens.includes(l.origem)?l.origem:'outro';
+    if((l.dataCriacao||'').slice(0,7)===mes) oLeads[o]++;
+    if(l.status==='ganho'&&((l.dataFechamento||l.dataCriacao)||'').slice(0,7)===mes){ oVendas[o]++; oValor[o]+=_leadValorVenda(l); }
+  });
+  const inv=(ST.cacInvest&&ST.cacInvest[mes])||{};
+  const ativas=origens.filter(o=>oLeads[o]>0||oVendas[o]>0||(inv[o]>0));
+  const podeEd=_podeEditar('rel');
+  let tInv=0,tLeads=0,tVendas=0,tReceita=0;
+  ativas.forEach(o=>{ tInv+=(inv[o]||0); tLeads+=oLeads[o]; tVendas+=oVendas[o]; tReceita+=oValor[o]; });
+  const roiCor=r=>r>=3?'#16A34A':r>=1?'#B45309':r>0?'#DC2626':'var(--gl)';
+  const rows=ativas.sort((a,b)=>oValor[b]-oValor[a]).map(o=>{
+    const i=inv[o]||0, cpl=oLeads[o]>0?i/oLeads[o]:0, cac=oVendas[o]>0?i/oVendas[o]:0, roi=i>0?oValor[o]/i:0;
+    const conv=oLeads[o]>0?Math.round(oVendas[o]/oLeads[o]*100):0;
+    return `<tr>
+      <td style="padding:8px 10px;"><span class="orig-badge"><span class="orig-dot" style="background:${ORIG_COR[o]};"></span>${ORIG_LABEL[o]}</span></td>
+      <td style="padding:8px 10px;text-align:right;">${podeEd?`<input class="inp" style="width:108px;text-align:right;padding:4px 7px;" type="text" inputmode="decimal" value="${i?_fmtInputBRL(i):''}" placeholder="0,00" onchange="cacSetInvest('${o}',this.value)" oninput="_maskBRL(this)"/>`:(i?fmt(i):'—')}</td>
+      <td style="padding:8px 10px;text-align:center;">${oLeads[o]}</td>
+      <td style="padding:8px 10px;text-align:center;">${oVendas[o]}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:600;color:${conv>=30?'#16A34A':conv>=10?'#BFA87D':'var(--gl)'};">${oLeads[o]>0?conv+'%':'—'}</td>
+      <td style="padding:8px 10px;text-align:right;">${cpl>0?fmt(cpl):'—'}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:600;">${cac>0?fmt(cac):'—'}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:${roiCor(roi)};">${i>0?(roi>0?roi.toFixed(1)+'x':'—'):'—'}</td>
+      <td style="padding:8px 10px;text-align:right;">${oValor[o]>0?fmt(oValor[o]):'—'}</td>
+    </tr>`;
+  }).join('');
+  const roiTot=tInv>0?tReceita/tInv:0;
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <button class="btn btn-s btn-sm" onclick="cacMesNav(-1)">◀</button>
+      <div style="font-weight:700;font-size:15px;min-width:150px;text-align:center;">${mesNomeStr(M-1,Y)}</div>
+      <button class="btn btn-s btn-sm" onclick="cacMesNav(1)">▶</button>
+    </div>
+    <div style="font-size:12px;color:var(--gl);margin-bottom:12px;">Informe quanto investiu em cada canal no mês (tráfego pago, agência, BNI, etc.). O sistema calcula o <b>custo por lead</b>, o <b>CAC</b> (custo por venda fechada) e o <b>ROI</b> (retorno = receita ÷ investimento).</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#F5F3F0;">
+          ${['Canal','Investimento','Leads','Vendas','Conversão','Custo/lead','CAC','ROI','Receita'].map((h,idx)=>`<th style="padding:8px 10px;font-size:11px;color:var(--gl);text-transform:uppercase;text-align:${idx===0?'left':(idx===2||idx===3||idx===4)?'center':'right'};">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${rows||`<tr><td colspan="9" style="padding:22px;text-align:center;color:var(--gl);">Nenhum lead ou investimento neste mês.</td></tr>`}</tbody>
+        ${ativas.length?`<tfoot><tr style="border-top:2px solid var(--border);font-weight:700;background:#FAFAF8;">
+          <td style="padding:8px 10px;">Total</td>
+          <td style="padding:8px 10px;text-align:right;">${tInv?fmt(tInv):'—'}</td>
+          <td style="padding:8px 10px;text-align:center;">${tLeads}</td>
+          <td style="padding:8px 10px;text-align:center;">${tVendas}</td>
+          <td style="padding:8px 10px;text-align:center;">${tLeads>0?Math.round(tVendas/tLeads*100)+'%':'—'}</td>
+          <td style="padding:8px 10px;text-align:right;">${tLeads>0&&tInv>0?fmt(tInv/tLeads):'—'}</td>
+          <td style="padding:8px 10px;text-align:right;">${tVendas>0&&tInv>0?fmt(tInv/tVendas):'—'}</td>
+          <td style="padding:8px 10px;text-align:right;color:${roiCor(roiTot)};">${tInv>0?roiTot.toFixed(1)+'x':'—'}</td>
+          <td style="padding:8px 10px;text-align:right;">${fmt(tReceita)}</td>
+        </tr></tfoot>`:''}
+      </table></div>
+    </div>
+    <div style="font-size:11px;color:var(--gl);margin-top:10px;line-height:1.6;">
+      <b>Custo/lead</b> = investimento ÷ leads. &nbsp;<b>CAC</b> = investimento ÷ vendas fechadas. &nbsp;<b>ROI</b> = receita ÷ investimento (ex.: 4,0x = cada R$ 1 investido virou R$ 4 vendidos). Canais como <b>Indicação</b> e <b>Loja</b> costumam ter investimento 0 → ROI altíssimo, ótimo sinal.
+    </div>`;
+}
 function rRelOrigemChart(de,ate){
   // ── Agrupa leads e vendas por origem no PERÍODO (de..ate) ──
   const origens=Object.keys(ORIG_LABEL);
