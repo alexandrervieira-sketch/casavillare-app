@@ -1851,6 +1851,21 @@ textarea.inp{resize:vertical;min-height:68px;}
       <hr class="form-div"/>
       <div class="fr"><label class="lbl">Observações</label>
         <textarea class="inp" id="ld-obs" rows="3" placeholder="Anotações importantes sobre o cliente..."></textarea></div>
+      <div class="fr" id="ld-hist-wrap" style="display:none;">
+        <label class="lbl">🕓 Histórico de atividades</label>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <select class="inp" id="ld-ativ-tipo" style="flex:0 0 132px;">
+            <option value="ligacao">📞 Ligação</option>
+            <option value="visita">📍 Visita</option>
+            <option value="whatsapp">💬 WhatsApp</option>
+            <option value="orcamento">📄 Orçamento</option>
+            <option value="nota">📝 Nota</option>
+          </select>
+          <input class="inp" id="ld-ativ-texto" placeholder="O que aconteceu com este lead?" style="flex:1;min-width:0;" onkeydown="if(event.key==='Enter'){event.preventDefault();ldAddAtividade();}"/>
+          <button type="button" class="btn btn-p btn-sm" onclick="ldAddAtividade()" style="flex-shrink:0;">+ Registrar</button>
+        </div>
+        <div id="ld-atividades-feed" style="max-height:260px;overflow:auto;"></div>
+      </div>
       <div class="fr"><label class="lbl">Tags</label>
         <input class="inp" id="ld-tags" placeholder="Ex: VIP, urgente, reforma — separadas por vírgula"/></div>
 
@@ -9838,10 +9853,13 @@ function leadWhats(id){
   const l=(ST.leads||[]).find(x=>String(x.id)===String(id));
   if(!l){ toast('Lead não encontrado'); return; }
   _waAbrir(l.telefone, _waMsgFollowup(l.nome));
+  if(_telNorm(l.telefone).length>=10){ _leadLogAtividade(id,'whatsapp','WhatsApp aberto',ST.nome,true); save(); }
 }
 // Botão dentro do modal do lead: usa o que está digitado (telefone/nome podem ter mudado)
 function ldWhatsModal(){
-  _waAbrir(document.getElementById('ld-tel')?.value||'', _waMsgFollowup(document.getElementById('ld-nome')?.value||''));
+  const tel=document.getElementById('ld-tel')?.value||'';
+  _waAbrir(tel, _waMsgFollowup(document.getElementById('ld-nome')?.value||''));
+  if(_ldId && _telNorm(tel).length>=10){ _leadLogAtividade(_ldId,'whatsapp','WhatsApp aberto',ST.nome,true); save(); ldRenderAtividades(); }
 }
 // Card do pedido: avisa o cliente conforme a ETAPA atual
 function pedWhats(id){
@@ -9933,6 +9951,67 @@ document.addEventListener('keydown', function(e){
   if((e.ctrlKey||e.metaKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); _bgAbrir(); return; }
   if(e.key==='Escape'){ const ov=document.getElementById('busca-global'); if(ov&&ov.style.display!=='none') _bgFechar(); }
 });
+
+// ══ Histórico de atividades do lead (append-only: ligação/visita/WhatsApp/orçamento/nota + etapa automática) ══
+const _ATIV_META={
+  ligacao:{lbl:'Ligação',ic:'📞'}, visita:{lbl:'Visita',ic:'📍'}, whatsapp:{lbl:'WhatsApp',ic:'💬'},
+  orcamento:{lbl:'Orçamento',ic:'📄'}, nota:{lbl:'Nota',ic:'📝'}, etapa:{lbl:'Etapa',ic:'➡️'}
+};
+// Registra uma atividade SEM sobrescrever nada (empilha). auto=true → registro do sistema (etapa/WhatsApp),
+// com anti-repetição: não duplica o mesmo tipo automático em menos de 5 min.
+function _leadLogAtividade(leadId, tipo, texto, autor, auto){
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
+  if(!l) return;
+  if(!Array.isArray(l.atividades)) l.atividades=[];
+  if(auto){
+    const ult=l.atividades[l.atividades.length-1];
+    if(ult&&ult._auto&&ult.tipo===tipo&&ult.texto===texto&&(Date.now()-new Date(ult.em).getTime())<300000) return;
+  }
+  l.atividades.push({ id:_newId(), em:new Date().toISOString(), tipo:tipo||'nota', texto:String(texto||'').slice(0,1000), autor:autor||ST.nome||'', _auto:!!auto });
+  l._uAt=Date.now();
+}
+function ldAddAtividade(){
+  if(!_ldId){ toast('Salve o lead antes de registrar atividades.'); return; }
+  const tipo=document.getElementById('ld-ativ-tipo')?.value||'nota';
+  const inp=document.getElementById('ld-ativ-texto');
+  const txt=(inp?inp.value:'').trim();
+  if(!txt){ toast('Escreva o que aconteceu.'); return; }
+  _leadLogAtividade(_ldId, tipo, txt, ST.nome, false);
+  save();
+  if(inp) inp.value='';
+  ldRenderAtividades();
+}
+function ldRemoverAtividade(id){
+  const l=_ldId?(ST.leads||[]).find(x=>String(x.id)===String(_ldId)):null;
+  if(!l||!Array.isArray(l.atividades)) return;
+  if(!confirm('Remover esta atividade do histórico?')) return;
+  l.atividades=l.atividades.filter(a=>String(a.id)!==String(id));
+  l._uAt=Date.now(); save(); ldRenderAtividades();
+}
+function ldRenderAtividades(){
+  const box=document.getElementById('ld-atividades-feed'); if(!box) return;
+  const l=_ldId?(ST.leads||[]).find(x=>String(x.id)===String(_ldId)):null;
+  const lista=(l&&Array.isArray(l.atividades))?l.atividades.slice():[];
+  let html='';
+  lista.reverse().forEach(a=>{
+    const m=_ATIV_META[a.tipo]||_ATIV_META.nota;
+    const dt=a.em?new Date(a.em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+    html+='<div style="display:flex;gap:9px;padding:8px 0;border-top:.5px solid var(--border);">'
+      +'<span style="flex:0 0 auto;font-size:15px;">'+m.ic+'</span>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;line-height:1.45;">'+_esc(a.texto)+'</div>'
+      +'<div style="font-size:11px;color:var(--gl);margin-top:1px;">'+m.lbl+(a._auto?' · auto':'')+' · '+_esc(a.autor||'—')+' · '+dt+'</div></div>'
+      +(a._auto?'':'<button onclick="ldRemoverAtividade(\''+a.id+'\')" title="Remover" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px;flex-shrink:0;">✕</button>')
+      +'</div>';
+  });
+  const obs=(l&&l.obs)?String(l.obs).trim():'';
+  if(obs){
+    html+='<div style="display:flex;gap:9px;padding:8px 0;border-top:.5px solid var(--border);">'
+      +'<span style="flex:0 0 auto;font-size:15px;">📝</span>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;line-height:1.45;color:var(--gl);">'+_esc(obs)+'</div>'
+      +'<div style="font-size:11px;color:var(--gl);margin-top:1px;">Observação (campo acima)</div></div></div>';
+  }
+  box.innerHTML=html||'<div style="font-size:12px;color:var(--gl);padding:8px 0;">Nenhuma atividade ainda. Registre a primeira acima.</div>';
+}
 const MOTIVOS_PERDA=[
   {id:'concorrente',  label:'Fechou com concorrente', cor:'#EF4444'},
   {id:'preco',        label:'Preço acima do orçamento',cor:'#F97316'},
@@ -10541,6 +10620,10 @@ function abrirModalLead(id, etapaInicial){
   { const _dg=document.getElementById('ld-datas-gestor'); if(_dg) _dg.style.display=(ST.perfil==='gestor')?'':'none'; } // datas retroativas só p/ gestor
   const _curResp = id ? (((ST.leads||[]).find(x=>String(x.id)===String(id))||{}).responsavel||'') : '';
   document.getElementById('ld-resp').innerHTML=_respOpts(_curResp); // esconde desligados; mantém o responsável atual
+  // Histórico de atividades: só p/ lead JÁ salvo (novo lead ainda não tem id p/ anexar)
+  { const _hw=document.getElementById('ld-hist-wrap'); if(_hw) _hw.style.display=id?'':'none';
+    const _ai=document.getElementById('ld-ativ-texto'); if(_ai) _ai.value='';
+    if(id) ldRenderAtividades(); }
   // Popular especificadores (parceiros)
   const espSel=document.getElementById('ld-especificador');
   if(espSel){
@@ -12027,6 +12110,7 @@ function avancarEtapa(id){
   const _prevEtapa=l.etapa;
   l.etapa=proximaEtapa.id;
   l._uAt=Date.now();
+  _leadLogAtividade(id, 'etapa', 'Avançou para '+proximaEtapa.label, ST.nome, true);
   _syncAgendaLead(l, {etapa:_prevEtapa}); // cria/remove o evento de Apresentação ao mover pelo kanban
   save(); toast('→ '+proximaEtapa.label); rCrm();
 }
@@ -12043,6 +12127,7 @@ function voltarEtapa(id){
   const _prevEtapa=l.etapa;
   l.etapa=anterior.id;
   l._uAt=Date.now();
+  _leadLogAtividade(id, 'etapa', 'Voltou para '+anterior.label, ST.nome, true);
   _syncAgendaLead(l, {etapa:_prevEtapa}); // remove/cria o evento de Apresentação ao recuar pelo kanban
   save(); toast('← '+anterior.label); rCrm();
 }
