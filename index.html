@@ -4213,12 +4213,31 @@ function rHome(){
 
 // ── Central de Alertas / Pendências ───────────────────────────────────
 // Calcula pendências acionáveis filtradas pelo perfil. Tudo client-side.
+// Vendas FECHADAS ainda SEM nota fiscal (mesmo critério da aba Fiscal › Pendentes).
+function _nfePendentes(){
+  return (ST.pedidos||[]).filter(p=>{
+    if(_pedShowroom(p)) return false;                              // showroom/investimento não emite NFe
+    if(p.nfe&&p.nfe.status!=='rejeitada') return false;            // já tem nota emitida/em processamento
+    const l=p.leadId?(ST.leads||[]).find(x=>String(x.id)===String(p.leadId)):null;
+    return !l || l.status==='ganho';                               // venda fechada (ganho) ou pedido manual
+  });
+}
 function _calcAlertas(){
   const hoje=_hojeLocal();
   const _add=(d,n)=>{const x=new Date(hoje+'T12:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
   const lim7=_add(hoje,7), ago7=_add(hoje,-7), ago2=_add(hoje,-2);
   const perfil=ST.perfil, nome=ST.nome, area=ST.area, isG=perfil==='gestor';
-  const out={leads:[],pedidos:[],pagar:[],receber:[]};
+  const out={leads:[],pedidos:[],pagar:[],receber:[],fiscal:[]};
+
+  // 0) Fim do mês (dia ≥25) — lembrete de emitir NFe das vendas fechadas (gestor/financeiro)
+  if(isG||_temPermFC('fiscal')){
+    const _n=new Date(hoje+'T12:00'), _diaMes=_n.getDate();
+    if(_diaMes>=25){
+      const _ult=new Date(_n.getFullYear(),_n.getMonth()+1,0).getDate();
+      const _pend=_nfePendentes();
+      if(_pend.length) out.fiscal.push({n:_pend.length,info:_pend.length+(_pend.length===1?' venda sem nota — emita':' vendas sem nota — emita')+' antes de fechar o mês (dia '+_ult+')'});
+    }
+  }
 
   // 1) Contatos atrasados, leads parados e CAIXA DE TRIAGEM (comercial vê os seus; gestor vê todos + os não-atribuídos)
   if(isG||area==='comercial'){
@@ -4298,7 +4317,7 @@ function _calcAlertas(){
       _chk(nome, mm.vendedores?.[nome]||0, 'Sua meta','');
     }
   }
-  out.total=out.leads.length+out.pedidos.length+out.pagar.length+out.receber.length+out.metas.length;
+  out.total=out.leads.length+out.pedidos.length+out.pagar.length+out.receber.length+out.metas.length+out.fiscal.length;
   return out;
 }
 
@@ -4333,6 +4352,7 @@ function rHomeAlertas(){
   const pedsH =a.pedidos.slice(0,6).map(p=>linha('📦',_esc2(p.nome),_esc2(p.info),`abrirModalPedido('${_sid(p.id)}')`,true)).join('');
   const pagH  =a.pagar.slice(0,6).map(c=>linha('💸',_esc2(c.desc)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc),`abrirModalCP('${_sid(c.id)}')`,c.vencida)).join('');
   const recH  =a.receber.slice(0,6).map(c=>linha('💰',_esc2(c.cliente)+' · '+fmtL(c.valor),(c.vencida?'Venceu ':'Vence ')+_fmtDateBR(c.venc)+' · '+_esc2(c.desc),`navTo('tab-fin');setTimeout(()=>finSubTab('cr'),120)`,c.vencida)).join('');
+  const fiscalH=(a.fiscal||[]).map(f=>linha('🧾','Emitir NFe antes de fechar o mês',_esc2(f.info),`navTo('tab-fiscal');setTimeout(()=>fiscalSubTab('pendentes'),120)`,true)).join('');
 
   el.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04);">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
@@ -4341,6 +4361,7 @@ function rHomeAlertas(){
       <span style="margin-left:6px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 9px;">${a.total}</span>
       ${ST.perfil==='gestor'?`<button onclick="resumoDiaWhats()" title="Abre o WhatsApp com o resumo do dia pronto — você escolhe para quem enviar (ex.: grupo da equipe)" style="margin-left:auto;background:#25D366;color:#fff;border:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">📋 Resumo no WhatsApp</button>`:''}
     </div>
+    ${_temPermFC('fiscal')?bloco('🧾 Nota Fiscal — fim do mês','#7C3AED',a.fiscal||[],fiscalH):''}
     ${bloco('🎯 Metas em risco','#9333EA',a.metas||[],metasH)}
     ${_temPerm('crm')?bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH):''}
     ${bloco('📦 Pedidos atrasados','#9A3412',a.pedidos,pedsH)}
@@ -18062,12 +18083,7 @@ function rFiscalPendentes(){
 
   // Critério = CRM: toda VENDA FECHADA (lead ganho, ou pedido manual) ainda SEM nota.
   // NÃO depende do estágio de produção — a nota sai na venda, não no fim da montagem.
-  const todos=(ST.pedidos||[]).filter(p=>{
-    if(_pedShowroom(p)) return false;                             // showroom/investimento não emite NFe
-    if(p.nfe&&p.nfe.status!=='rejeitada') return false;            // já tem nota emitida/em processamento
-    const l=p.leadId?(ST.leads||[]).find(x=>String(x.id)===String(p.leadId)):null;
-    return !l || l.status==='ganho';                               // venda fechada (ganho) ou pedido manual
-  }).slice().reverse();
+  const todos=_nfePendentes().slice().reverse();                  // fonte única (mesmo critério do lembrete de fim de mês)
   const busca=document.getElementById('fiscal-busca-pend')?.value?.toLowerCase()||'';
   const pedidos=busca?todos.filter(p=>(p.clienteNome||'').toLowerCase().includes(busca)||String(p.id).includes(busca)):todos;
   const fmtBRL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
