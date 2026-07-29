@@ -9899,6 +9899,14 @@ const CRM_ETAPAS_COM_PGTO=['projeto','apresentacao','negociacao','fechamento'];
 const ORIG_LABEL={instagram:'Instagram',indicacao:'Indicação',loja:'Loja',trafego:'Tráfego Pago',site:'Site',bni:'BNI',recompra:'Recompra',outro:'Outro'};
 const ORIG_COR  ={instagram:'#E1306C',indicacao:'#A78B6D',loja:'#4CAF50',trafego:'#7C3AED',site:'#4285F4',bni:'#1E40AF',recompra:'#0D9488',outro:'#888'};
 function _telNorm(t){ return String(t==null?'':t).replace(/\D/g,''); }
+// Formata um telefone (digits, com ou sem DDI 55) para leitura: (19) 99999-9999
+function _telFmt(t){
+  let d=_telNorm(t); if(!d) return '';
+  if((d.length===13||d.length===12)&&d.slice(0,2)==='55') d=d.slice(2);
+  if(d.length===11) return '('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);
+  if(d.length===10) return '('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6);
+  return d;
+}
 // Cliente já registrado antes? (mesmo telefone em OUTRO lead, ou num cadastro) — usado no selo do card.
 function _leadJaRegistrado(l){
   const t=_telNorm(l&&l.telefone); if(t.length<8) return false;
@@ -10033,6 +10041,18 @@ function _buscaGlobal(termo){
     const nome=p.clienteNome||p.cliente||'';
     if(mt(nome)||mt(p.descricao)||mt(String(p.id)))
       res.push({t:'Pedido',ic:'📦',nome:nome||'—',sub:p.descricao||'',fn:"abrirModalPedido('"+_sid(p.id)+"')"});
+  });
+  // Equipe (montadores, projetistas, vendedores...) — pra achar o CONTATO de um freelance/colaborador.
+  // Mostra só nome + telefone + função (NUNCA salário/comissão). Aberto a todos: a equipe precisa do contato.
+  const _perfLbl={montador:'Montador',projetista:'Projetista',supervisor:'Supervisor',vendedor:'Vendedor',gestor:'Gestor',financeiro:'Financeiro',prestador:'Prestador'};
+  ['obras','comercial','gestor','outros'].forEach(function(area){
+    ((ST.equipe&&ST.equipe[area])||[]).forEach(function(pe){
+      if(!pe||!pe.nome) return;
+      if(mt(pe.nome)||mtel(pe.tel)){
+        const tel=_telFmt(pe.tel);
+        res.push({t:_perfLbl[pe.perfil]||'Equipe',ic:'🧰',nome:pe.nome,sub:tel||'sem telefone cadastrado',fn:tel?"_waAbrir('"+_telNorm(pe.tel)+"','')":""});
+      }
+    });
   });
   return res.slice(0,40);
 }
