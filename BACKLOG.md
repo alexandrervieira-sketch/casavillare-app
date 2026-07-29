@@ -1,6 +1,6 @@
 # Backlog & Plano de Trabalho — ERP Casa Villare
 
-> Documento vivo. Consolida tudo que levantamos (auditoria 27/06, segurança, NFe) — o que já foi feito e o que falta. Atualizado em 28/07/2026 (add: D4 cache/XML→IndexedDB, H1 prazos editáveis, H2 dark mode).
+> Documento vivo. Consolida tudo que levantamos (auditoria 27/06, segurança, NFe, roteiro de melhorias 27/07) — o que já foi feito e o que falta. Atualizado em 29/07/2026 (sessão de melhorias: 14 features + bug grave do contrato; add frentes I Estratégicas, J IA própria/envios automáticos, K polimentos).
 > Legenda esforço: **P** pequeno · **M** médio · **G** grande. Risco: 🟢 baixo · 🟡 médio · 🔴 alto.
 
 ---
@@ -36,7 +36,38 @@
 - Guarda de navegação do dashboard (não-CRM não cai no lead/CRM).
 
 **Engenharia**
-- Suíte de testes (23) rodando antes de cada deploy.
+- Suíte de testes (73) rodando antes de cada deploy.
+
+---
+
+## ✅ CONCLUÍDO — Sessão de melhorias (jul/2026, roteiro do painel de especialistas)
+
+**Correção crítica**
+- 🐛 **Nome do ambiente no contrato** — vinha tudo "Projeto - QUARTO 2" (Promob grava o nome do PROJETO no DESCRIPTION). Agora vem do NOME DO ARQUIVO; contratos antigos corrigidos na exibição sem reimportar. Ver memória `promobambientenomefix`.
+
+**Ganhos rápidos**
+- ⏱️ Prazos das etapas de Pedidos **editáveis** (Config→Sistema) — era o H1.
+- 🔒 Limpeza LGPD no logout (apaga `cvp_pay`) — era o E5.
+- 🐞 Monitor de erros (coleção `_erros`, gestor vê em Config→Sistema).
+- 📈 KPIs da Home com tendência ▲/▼ vs. mês anterior.
+- 📊 Aging de recebíveis (A Receber: faixas de atraso + maiores devedores).
+- 🚦 CI / portão de deploy: testes(73)+lint rodam ANTES de publicar (`_deploy.js`) + GitHub Actions.
+
+**Alto impacto**
+- 💬 WhatsApp direto: follow-up do lead, aviso de status do pedido, cobrança de parcela — com mensagens editáveis (Config→Sistema).
+- 🔍 Busca global (Ctrl+K) — lead/cliente/pedido de qualquer tela.
+- 🕓 Histórico de atividades do lead (timeline append-only + registros automáticos).
+- 💸 CAC/ROI por canal (Relatórios → Canais).
+- 📏 Checklist de Medição/Vistoria (modal do pedido, confirma ao avançar incompleto).
+- 🔎 Filtros ricos + visões salvas no CRM.
+- 📋 Resumo do dia no WhatsApp (on-demand, Central de Alertas).
+
+**Operacional / acesso da equipe**
+- 🧰 **Montador freelance cadastrado pela equipe** (botão ➕ no modal do Pedido: nome+telefone+PIX+CPF) + **👁️ Ver dados** + busca inclui a equipe. Salário/comissão continuam só-gestor. Resolve "equipe não achava o contato do montador".
+- 🔍 Busca global inclui a **equipe** (montadores/projetistas) com telefone/PIX/CPF.
+
+**Guia**
+- 📖 Guia prático completo (artifact web navegável). Ver memória `treinamentoguia`.
 
 ---
 
@@ -92,7 +123,7 @@
 | E2 | **Exclusão só-gestor no servidor** (exige repensar o mecanismo de tombstones) | G | 🔴 |
 | E3 | **`_audit` à prova de forja** no servidor (Cloud Function / trigger) | M | 🟡 |
 | E4 | CDNs com **SRI** + Content-Security-Policy | P | 🟢 |
-| E5 | Limpar dados sensíveis do cache no **logout** (LGPD) | P | 🟢 |
+| ~~E5~~ | ~~Limpar dados sensíveis do cache no **logout** (LGPD)~~ ✅ **FEITO (jul/2026)** — `sair()` apaga `cvp_pay`. | ✅ | ✅ |
 
 ### F) Maturidade de engenharia
 | # | Item | Esforço | Risco |
@@ -111,8 +142,33 @@
 ### H) UX / Interface (pedidos do gestor — 27/07/2026)
 | # | Item | Esforço | Risco |
 |---|------|---------|-------|
-| H1 | **Editar por tela os prazos (SLA) das etapas de Pedidos** — hoje `PED_PRAZOS` é fixo no código (Medição 5, Proj. Exec. 10, Exec. Assinado 2, Em Produção 23…). Fazer editável em Configurações. | P | 🟢 |
+| ~~H1~~ | ~~**Editar por tela os prazos (SLA) das etapas de Pedidos**~~ ✅ **FEITO (jul/2026)** — editável em Config→Sistema. | ✅ | ✅ |
 | ~~H2~~ | ~~**Modo escuro (dark mode)**~~ ❌ **DESCARTADO pelo gestor (28/07/2026)** — não fazer. (Cores fixas inline pervasivas tornariam o esforço grande e arriscado; os "temas de destaque" já tinham sido feitos e revertidos.) | — | — |
+
+### I) Estratégicas (roteiro do painel de especialistas, 27/07 — projetos maiores)
+| # | Item | Esforço | Risco |
+|---|------|---------|-------|
+| I1 | **Calendário de capacidade** — agenda de campo por montador/dia (medição/entrega/montagem), com alerta de sobrecarga. Maior buraco operacional. | G | 🟡 |
+| I2 | **Conciliação bancária (OFX)** — importar extrato e cruzar com contas a pagar/receber. | G | 🟡 |
+| I3 | **Garantia e assistência técnica pós-entrega** — janela de garantia (visita grátis × cobrada), chamados sem mexer no status do pedido. | M | 🟡 |
+| I4 | **Fechamento mensal com trava** — impedir editar mês já fechado (DRE/comissões). | M | 🟡 |
+| I5 | **Scorecard de fornecedor/fábrica** — % de atraso e AT por fornecedor (poder de negociação). | M | 🟢 |
+
+### J) IA de atendimento própria + envios automáticos (destrava a infra de ENVIO)
+| # | Item | Esforço | Risco |
+|---|------|---------|-------|
+| J1 | **IA de atendimento própria no WhatsApp** — substituir/complementar o provedor atual. O worker `cv-leads` já está blindado (canal, múltiplas chaves, idempotência). Dá o **canal de envio** que hoje falta. | G | 🔴 |
+| J2 | **Envios automáticos** (dependem de J1 ou de uma API de WhatsApp): resumo diário 7h30, aviso de status do pedido, cobrança automática. *(O on-demand — clique e envia — já está feito.)* | M | 🟡 |
+| J3 | **E-mail do comprovante à fábrica pelo servidor** — remetente definido + anexo automático. Precisa de serviço de e-mail (ex.: Resend, grátis) + DNS do domínio (SPF/DKIM). *(Hoje é `mailto:`, que não permite nem remetente nem anexo.)* Ver memória `comprovanteemailremetente`. | M | 🟡 |
+
+### K) Polimentos novos (jul/2026)
+| # | Item | Esforço | Risco |
+|---|------|---------|-------|
+| K1 | Atualizar o **guia prático** com os novos (checklist, filtros/visões, resumo, montador). | P | 🟢 |
+| K2 | **Filtros/visões salvas nos Pedidos** também (feito só no CRM). | P | 🟢 |
+| K3 | **Foto por item** no checklist de medição/vistoria. | M | 🟡 |
+| K4 | **App Check: impor** (Firestore+Storage) — está em modo monitorar. | P | 🟢 |
+| K5 | CPF do montador cadastrado pelo **gestor** (form completo) também na entrada `equipe.obras` (hoje o CPF do form completo vai pro `_cfgpriv` só-gestor; o cadastro leve da equipe já grava na equipe). | P | 🟢 |
 
 ---
 
@@ -128,3 +184,10 @@
 8. **F1** — modularização, **por último** (com a suíte de testes cobrindo o que mexemos).
 
 > Princípios mantidos: uma mudança por vez · testes verdes + commit antes de cada deploy · rollback em segundos · mudanças de sync/login testadas numa máquina antes da equipe.
+
+### 🆕 Onde estamos agora (jul/2026)
+Ganhos rápidos e alto impacto do roteiro de melhorias: **TODOS feitos**. Restam três blocos, a atacar passo a passo:
+- **K (polimentos)** — rápidos, baixo risco. Bom para intercalar. Começar por K1 (guia) e K4 (App Check impor).
+- **I (estratégicas)** — projetos maiores; o **I1 calendário de capacidade** é o de maior valor operacional.
+- **J (IA própria + envios automáticos)** — o **J1 (IA de atendimento própria)** destrava o canal de envio de WhatsApp e, com ele, J2 (resumo/status/cobrança automáticos) e ajuda no J3 (e-mail do comprovante). É a aposta estratégica do Alexandre.
+- **Técnicas B/C/D/E** (robustez de sync, lógica CRM/pedidos, performance, segurança fase 2) — manutenção invisível, intercalar conforme aparecerem sintomas.
