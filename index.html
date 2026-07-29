@@ -2009,6 +2009,27 @@ textarea.inp{resize:vertical;min-height:68px;}
   </div>
 </div>
 
+<!-- ══ MODAL: registrar recebimento (permite PARCIAL) ══ -->
+<div class="modal-bg hidden" id="modal-cr-receber">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-hdr">
+      <div><div class="modal-title">✅ Registrar recebimento</div><div class="modal-sub" id="crr-sub"></div></div>
+      <button class="modal-close" onclick="fecharModal('modal-cr-receber')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fr"><label class="lbl">Valor da parcela</label>
+        <input class="inp" id="crr-total" readonly style="background:#f5f4f1;"/></div>
+      <div class="fr"><label class="lbl">Valor recebido agora (R$)</label>
+        <input class="inp" id="crr-recebido" type="text" inputmode="decimal" placeholder="0,00" oninput="_maskBRL(this);crrPreview()"/></div>
+      <div id="crr-info" style="font-size:12.5px;margin-top:2px;min-height:18px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+        <button class="btn btn-s" onclick="fecharModal('modal-cr-receber')">Cancelar</button>
+        <button class="btn btn-p" onclick="crrConfirmar()">Confirmar recebimento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg hidden" id="modal-cp">
   <div class="modal" style="max-width:500px;">
     <div class="modal-hdr">
@@ -15291,8 +15312,9 @@ function rBipartido(tgt){
 let _crMes=new Date().getMonth(), _crAno=new Date().getFullYear();
 let _crFiltroCliente='';
 function crNavMes(d){
+  _crFiltroInicio=''; _crFiltroFim='';   // o navegador de mês manda no período
   _crMes+=d; if(_crMes<0){_crMes=11;_crAno--;} if(_crMes>11){_crMes=0;_crAno++;}
-  finSubTab('cr');
+  rFinCR();
 }
 function crFiltroClienteChange(){
   _crFiltroCliente=document.getElementById('cr-filtro-cliente')?.value||'';
@@ -15417,17 +15439,50 @@ function crSalvarParcela(){
   l._uAt=Date.now(); // carimba a versão (mesma proteção dos recebimentos)
   save(); fecharModal('modal-cr-parc'); toast('✅ Parcela atualizada'); rFinCR();
 }
+let _crrLeadId=null, _crrCondId=null;
 function crReceberParcela(leadId, condId){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
-  if(!l||!l.condicoesPgto) return;
-  const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
-  if(!c) return;
-  if(!confirm(`Confirmar recebimento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.desc}?`)) return;
-  c.pago=true;
-  c.dataPagamento=_hojeLocal();
-  l._uAt=Date.now(); // carimba a versão: sem isso, editar o lead depois apaga o recebimento sem disparar a trava de conflito
-  save(); toast('✅ Recebimento registrado!'); rFinCR();
+  const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(condId));
+  if(!c){ toast('Parcela não encontrada'); return; }
+  _crrLeadId=leadId; _crrCondId=condId;
+  const fLbl=(typeof PGTO_FORMAS!=='undefined'&&PGTO_FORMAS[c.forma])?PGTO_FORMAS[c.forma].label:(c.forma||'');
+  document.getElementById('crr-sub').textContent=(l.nome||'')+(c.desc?' · '+c.desc:'')+(fLbl?' · '+fLbl:'');
+  document.getElementById('crr-total').value=_fmtInputBRL(c.valor);
+  document.getElementById('crr-recebido').value=_fmtInputBRL(c.valor); // padrão: valor cheio (quitação); edite p/ receber parcial
+  abrirModal('modal-cr-receber');
+  crrPreview();
+}
+function crrPreview(){
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(_crrLeadId));
+  const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(_crrCondId));
+  const el=document.getElementById('crr-info'); if(!c||!el) return;
+  const total=c.valor||0, rec=_parseBRL(document.getElementById('crr-recebido').value)||0;
+  if(rec<=0){ el.innerHTML='<span style="color:#B45309;">Informe o valor recebido.</span>'; return; }
+  if(rec>total+0.005){ el.innerHTML='<span style="color:#DC2626;">O valor recebido não pode ser maior que a parcela.</span>'; return; }
+  if(Math.abs(rec-total)<0.005){ el.innerHTML='<span style="color:#166534;">✅ Quitação total desta parcela.</span>'; return; }
+  const saldo=total-rec;
+  el.innerHTML='<span style="color:#B45309;">Recebimento <b>PARCIAL</b>. Fica <b>'+saldo.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+'</b> pendente (o sistema cria uma parcela de saldo).</span>';
+}
+function crrConfirmar(){
+  if(!_podeEditar('fin')){ toast('🔒 Sem permissão.'); return; }
+  const l=(ST.leads||[]).find(x=>String(x.id)===String(_crrLeadId));
+  const c=l&&(l.condicoesPgto||[]).find(x=>String(x.id)===String(_crrCondId));
+  if(!c){ toast('Parcela não encontrada'); return; }
+  const total=c.valor||0, rec=_parseBRL(document.getElementById('crr-recebido').value)||0;
+  if(rec<=0){ toast('Informe o valor recebido'); return; }
+  if(rec>total+0.005){ toast('O valor recebido não pode ser maior que a parcela'); return; }
+  if(Math.abs(rec-total)<0.005){
+    c.pago=true; c.dataPagamento=_hojeLocal();                          // quitação total
+  } else {
+    const base=c.desc||'Parcela';
+    const paga={ ...c, id:_newId(), valor:Math.round(rec*100)/100, pago:true, dataPagamento:_hojeLocal(), desc:base+' (recebido parcial)' };
+    c.valor=Math.round((total-rec)*100)/100;                            // a original vira o SALDO pendente
+    c.desc=base+' (saldo)'; c.pago=false; c.dataPagamento=null;
+    l.condicoesPgto.push(paga);
+  }
+  l._uAt=Date.now();
+  save(); fecharModal('modal-cr-receber'); toast('✅ Recebimento registrado!'); rFinCR();
 }
 function crEstornarParcela(leadId, condId){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
@@ -15616,22 +15671,15 @@ function rFinCR(){
         ${[...new Set(todasParcelas.map(p=>p.cliente).filter(Boolean))].sort().map(c=>`<option value="${_esc(c)}" ${_crFiltroCliente===c?'selected':''}>${_esc(c)}</option>`).join('')}
       </select>
     </div>
-    <!-- Filtro por período -->
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <label style="font-size:12px;color:var(--gl);">De</label>
-        <input type="date" id="cr-filtro-ini" value="${_crFiltroInicio}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;"/>
-        <label style="font-size:12px;color:var(--gl);">até</label>
-        <input type="date" id="cr-filtro-fim" value="${_crFiltroFim}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;"/>
-        <button class="btn btn-p btn-sm" onclick="crFiltroAplicar()">Filtrar</button>
-        ${(usandoFiltro||_crFiltroCliente)?`<button class="btn btn-s btn-sm" onclick="_crFiltroCliente='';crFiltroLimpar()">✕ Limpar tudo</button>`:''}
+    <!-- Navegação por mês (por vencimento) -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <label style="font-size:12px;color:var(--gl);">Mês (por vencimento)</label>
+      <div class="mes-nav">
+        <button onclick="crNavMes(-1)">‹</button>
+        <span class="mes-label">${mesNomeStr(_crMes,_crAno)}</span>
+        <button onclick="crNavMes(1)">›</button>
       </div>
-      <div style="display:flex;gap:6px;margin-left:auto;">
-        <button class="btn btn-s btn-sm" onclick="crFiltroRapido(1)" style="font-size:11px;">+1 mês</button>
-        <button class="btn btn-s btn-sm" onclick="crFiltroRapido(3)" style="font-size:11px;">+3 meses</button>
-        <button class="btn btn-s btn-sm" onclick="crFiltroRapido(6)" style="font-size:11px;">+6 meses</button>
-        <button class="btn btn-s btn-sm" onclick="crFiltroRapido(12)" style="font-size:11px;">+12 meses</button>
-      </div>
+      ${_crFiltroCliente?`<button class="btn btn-s btn-sm" onclick="_crFiltroCliente='';rFinCR()" style="font-size:11px;">✕ Limpar cliente</button>`:''}
     </div>
   </div>
 
