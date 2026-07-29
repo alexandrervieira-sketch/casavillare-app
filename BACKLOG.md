@@ -63,6 +63,10 @@
 - 🔎 Filtros ricos + visões salvas no CRM.
 - 📋 Resumo do dia no WhatsApp (on-demand, Central de Alertas).
 
+**Operacional / pedidos**
+- 🧩 **Itens Complementares** por pedido (LED, dobradiças, corrediças, botão liga/desliga...): seção no modal + selo no card + **🖨️ Lista de compras** consolidada das montagens em aberto (imprimível, com checkbox). Resolve a lista mensal feita à mão.
+- ⚖️ Balões Responsável/Projetista/Montador igualados (botões 👁️/➕ do montador foram pro rótulo).
+
 **Operacional / acesso da equipe**
 - 🧰 **Montador freelance cadastrado pela equipe** (botão ➕ no modal do Pedido: nome+telefone+PIX+CPF) + **👁️ Ver dados** + busca inclui a equipe. Salário/comissão continuam só-gestor. Resolve "equipe não achava o contato do montador".
 - 🔍 Busca global inclui a **equipe** (montadores/projetistas) com telefone/PIX/CPF.
