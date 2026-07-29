@@ -2317,7 +2317,8 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div><label class="lbl">Montador</label>
           <div style="display:flex;gap:6px;">
             <select class="inp" id="pd-montador" style="flex:1;min-width:0;"><option value="">— Nenhum —</option></select>
-            <button type="button" onclick="montNovoAbrir()" title="Cadastrar um montador freelance (nome, telefone, PIX) sem sair daqui" style="flex-shrink:0;background:var(--p);color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:16px;line-height:1;">➕</button>
+            <button type="button" onclick="montVerDados()" title="Ver dados do montador (telefone, PIX, CPF)" style="flex-shrink:0;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:0 11px;cursor:pointer;font-size:15px;line-height:1;">👁️</button>
+            <button type="button" onclick="montNovoAbrir()" title="Cadastrar um montador freelance (nome, telefone, PIX, CPF) sem sair daqui" style="flex-shrink:0;background:var(--p);color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:16px;line-height:1;">➕</button>
           </div></div>
       </div>
 
@@ -2543,6 +2544,8 @@ textarea.inp{resize:vertical;min-height:68px;}
         <input class="inp" id="mont-tel" placeholder="(19) 99999-9999" type="tel"/></div>
       <div class="fr"><label class="lbl">Chave PIX (opcional)</label>
         <input class="inp" id="mont-pix" placeholder="CPF, telefone, e-mail ou chave aleatória"/></div>
+      <div class="fr"><label class="lbl">CPF (opcional)</label>
+        <input class="inp" id="mont-cpf" placeholder="000.000.000-00"/></div>
       <div class="form-actions">
         <button class="btn btn-s" onclick="fecharModal('modal-mont')">Cancelar</button>
         <button class="btn btn-p" onclick="montNovoSalvar()">Salvar montador</button>
@@ -10076,7 +10079,9 @@ function _buscaGlobal(termo){
       if(!pe||!pe.nome) return;
       if(mt(pe.nome)||mtel(pe.tel)){
         const tel=_telFmt(pe.tel);
-        res.push({t:_perfLbl[pe.perfil]||'Equipe',ic:'🧰',nome:pe.nome,sub:tel||'sem telefone cadastrado',fn:tel?"_waAbrir('"+_telNorm(pe.tel)+"','')":""});
+        const cpf=pe.cpf||((ST.configs&&ST.configs[pe.nome]&&ST.configs[pe.nome].cpf)||'');
+        const parts=[tel||'sem telefone']; if(pe.pix) parts.push('PIX '+pe.pix); if(cpf) parts.push('CPF '+cpf);
+        res.push({t:_perfLbl[pe.perfil]||'Equipe',ic:'🧰',nome:pe.nome,sub:parts.join(' · '),fn:tel?"_waAbrir('"+_telNorm(pe.tel)+"','')":""});
       }
     });
   });
@@ -13286,22 +13291,34 @@ function pdSetTipo(t){
 }
 // ── Cadastro leve de montador freelance pela equipe (sem salário/comissão — isso é só-gestor no Config) ──
 function montNovoAbrir(){
-  document.getElementById('mont-nome').value='';
-  document.getElementById('mont-tel').value='';
-  document.getElementById('mont-pix').value='';
+  ['mont-nome','mont-tel','mont-pix','mont-cpf'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   abrirModal('modal-mont');
   setTimeout(()=>{ const el=document.getElementById('mont-nome'); if(el) el.focus(); },80);
+}
+// Mostra os dados do montador SELECIONADO no pedido (equipe acessa sem entrar no Config). Só dados do prestador — nunca salário/comissão.
+function montVerDados(){
+  const nome=document.getElementById('pd-montador')?.value||'';
+  if(!nome){ toast('Selecione um montador primeiro'); return; }
+  const m=(ST.equipe.obras||[]).find(p=>p.nome===nome)||{};
+  const cfg=(ST.configs&&ST.configs[nome])||{};
+  const cpf=m.cpf||cfg.cpf||'';
+  const pix=m.pix||'';
+  alert('🧰 '+nome
+    +'\n\n📞 Telefone: '+(m.tel?_telFmt(m.tel):'—')
+    +'\n💠 PIX: '+(pix||'—')
+    +'\n🪪 CPF: '+(cpf||'—'));
 }
 function montNovoSalvar(){
   const nome=(document.getElementById('mont-nome').value||'').trim();
   const telRaw=(document.getElementById('mont-tel').value||'').trim();
   const pix=(document.getElementById('mont-pix').value||'').trim();
+  const cpf=(document.getElementById('mont-cpf').value||'').trim();
   if(!nome){ toast('Informe o nome do montador'); return; }
   if(_telNorm(telRaw).length<10){ toast('Informe um telefone válido (com DDD)'); return; }
   if(todosFunc().some(p=>(p.nome||'').trim().toLowerCase()===nome.toLowerCase())){ toast('Já existe alguém com esse nome na equipe'); return; }
   if(!ST.equipe) ST.equipe={};
   if(!ST.equipe.obras) ST.equipe.obras=[];
-  ST.equipe.obras.push({nome, perfil:'montador', tel:normTel(telRaw), pix});
+  ST.equipe.obras.push({nome, perfil:'montador', tel:normTel(telRaw), pix, cpf});
   _cfgTouch('equipe'); save();
   const sel=document.getElementById('pd-montador');
   if(sel){
