@@ -15599,13 +15599,13 @@ function rFinCR(){
     <td style="font-weight:700;color:var(--p);">${fmtL(p.valor)}</td>
     <td style="${!isPago&&p.vencimento&&p.vencimento<hoje?'color:#DC2626;font-weight:600;':''}">${p.vencimento?new Date(p.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—'}${!isPago&&p.vencimento&&p.vencimento<hoje?' ⚠️':''}</td>
     <td>${isPago?`<span style="color:#166534;font-size:11px;">✅ ${p.dataPagamento?new Date(p.dataPagamento+'T12:00').toLocaleDateString('pt-BR'):'Recebido'}</span>`:'<span style="color:#92400E;font-size:11px;">⏳ Pendente</span>'}</td>
-    <td>${isPago
+    <td><div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">${isPago
       ?`<button class="btn btn-p btn-sm" onclick="crGerarRecibo('${p.leadId}','${p.id}')" title="Gerar recibo de pagamento">🧾 Recibo</button>
         <button class="btn btn-s btn-sm" onclick="crEstornarParcela('${p.leadId}','${p.id}')">↩ Estornar</button>`
       :`${_telNorm((( (ST.leads||[]).find(l=>String(l.id)===String(p.leadId))||{}).telefone)).length>=10?`<button class="btn btn-s btn-sm" onclick="crWhats('${p.leadId}','${p.id}')" title="Cobrar no WhatsApp">💬</button>`:''}
         <button class="btn btn-s btn-sm" onclick="crEditarParcela('${p.leadId}','${p.id}')" title="Editar valor/vencimento">✏️</button>
         <button class="btn btn-p btn-sm" onclick="crReceberParcela('${p.leadId}','${p.id}')">✅ Receber</button>`}
-    </td></tr>`;
+    </div></td></tr>`;
 
   // Label do período atual
   const periodoLabel=_crFiltroCliente
