@@ -4310,6 +4310,7 @@ function rHomeAlertas(){
       <span style="font-size:16px;">🔔</span>
       <span style="font-size:15px;font-weight:800;color:#1F2937;">Central de Alertas</span>
       <span style="margin-left:6px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 9px;">${a.total}</span>
+      ${ST.perfil==='gestor'?`<button onclick="resumoDiaWhats()" title="Abre o WhatsApp com o resumo do dia pronto — você escolhe para quem enviar (ex.: grupo da equipe)" style="margin-left:auto;background:#25D366;color:#fff;border:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">📋 Resumo no WhatsApp</button>`:''}
     </div>
     ${bloco('🎯 Metas em risco','#9333EA',a.metas||[],metasH)}
     ${_temPerm('crm')?bloco('🎯 Leads a seguir','#B45309',a.leads,leadsH):''}
@@ -4318,6 +4319,24 @@ function rHomeAlertas(){
     ${_temPermFC('fin')?bloco('💰 A receber','#166534',a.receber,recH):''}
   </div>`;
 }
+
+// Resumo do dia em texto (para enviar no WhatsApp) — reaproveita o motor de alertas _calcAlertas().
+function _resumoDiaTexto(){
+  const a=_calcAlertas();
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const emp=(ST.empresa&&ST.empresa.nome)||'Casa Villare';
+  const fmtL=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  let t='📋 Resumo do dia — '+emp+' ('+hoje+')\n';
+  if(!a.total) return t+'\n✅ Tudo em dia — nenhuma pendência no momento.';
+  const sec=(titulo,itens,fn)=>{ if(!itens||!itens.length) return ''; let s='\n'+titulo+' ('+itens.length+'):\n'; itens.slice(0,6).forEach(x=>{ s+='• '+fn(x)+'\n'; }); if(itens.length>6) s+='• +'+(itens.length-6)+' mais…\n'; return s; };
+  t+=sec('🎯 Metas em risco', a.metas, m=>m.label+(m.resp?' ('+m.resp+')':'')+' — '+m.info);
+  t+=sec('🎯 Leads a cuidar', a.leads, l=>l.nome+' — '+l.info+(l.resp?' ('+l.resp+')':''));
+  t+=sec('📦 Pedidos atrasados', a.pedidos, p=>p.nome+' — '+p.info);
+  t+=sec('💸 Contas a pagar', a.pagar, c=>c.desc+' '+fmtL(c.valor)+' ('+(c.vencida?'venceu ':'vence ')+_fmtDateBR(c.venc)+')');
+  t+=sec('💰 A receber', a.receber, c=>c.cliente+' '+fmtL(c.valor)+' ('+(c.vencida?'venceu ':'vence ')+_fmtDateBR(c.venc)+')');
+  return t.trim();
+}
+function resumoDiaWhats(){ window.open('https://wa.me/?text='+encodeURIComponent(_resumoDiaTexto()),'_blank'); }
 
 // Selo de tendência mês-a-mês para os KPIs (mais é melhor → ▲ verde). Vazio se não há base de comparação.
 function _kpiTrend(cur, prev, labelMes){
