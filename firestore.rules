@@ -43,7 +43,7 @@ service cloud.firestore {
     }
     function isFinanceira(c) {
       return c == 'dre' || c == 'folhas' || c == 'comissoes' || c == 'vendasCom'
-          || c == 'tributario' || c == 'notasCompra';
+          || c == 'tributario' || c == 'notasCompra' || c == 'comPagamentos';
     }
 
     // ── Trilha de auditoria: leitura só gestor; cria sim; edita/apaga NUNCA ──

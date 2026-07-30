@@ -3782,7 +3782,7 @@ function load(){
         }
       });
     });
-    ['comissoes','vendas','folhas','agenda','eventos','vendasCom','ausencias','leads','pedidos','cadastros','avisos','dre','treinamentos','repositorio'].forEach(k=>{if(!ST[k])ST[k]=[];});
+    ['comissoes','vendas','folhas','agenda','eventos','vendasCom','ausencias','leads','pedidos','cadastros','avisos','dre','treinamentos','repositorio','comPagamentos'].forEach(k=>{if(!ST[k])ST[k]=[];});
     // Migração: origem 'whatsapp' renomeada para 'trafego' (Tráfego Pago) — idempotente
     (ST.leads||[]).forEach(l=>{ if(l.origem==='whatsapp'){ l.origem='trafego'; l._uAt=Date.now(); } });
     if(!ST.configs)    ST.configs={};
@@ -8033,6 +8033,47 @@ function montQuitar(pedidoId){
   rComissoes();
 }
 
+// ── Pagamento da comissão do VENDEDOR (mês inteiro de uma vez) → registra no ledger ST.comPagamentos ──
+// Recalcula o total do mês (não confia em valor vindo do onclick). Mesma conta do card.
+function _comVendedorMes(nome, mesRef){
+  const itens=[]; let valor=0;
+  (ST.leads||[]).filter(l=>l.status==='ganho' && (l.dataFechamento||l.dataCriacao||'').startsWith(mesRef) && l.responsavel===nome).forEach(l=>{
+    const {pct}=_calcComVendaPontos(_descEfetivoComissao(l));
+    const {liquido}=_vendaLiquido(l);
+    const vc=_round2(_aplicarMargemErro(liquido)*(pct/100));
+    valor+=vc; itens.push({desc:(l.nome||'Cliente'), valor:vc});
+  });
+  (ST.vendasCom||[]).filter(v=>v.mesAno===mesRef && v.pessoa===nome).forEach(v=>{
+    valor+=(v.valorCom||0); itens.push({desc:(v.cliente||'Venda avulsa'), valor:(v.valorCom||0)});
+  });
+  return {valor:_round2(valor), itens};
+}
+function _comPagVendedor(nome, mesRef){ return (ST.comPagamentos||[]).find(p=>p.escopo==='vendedor_mes' && p.pessoa===nome && p.mesRef===mesRef); }
+function comPagarVendedor(encNome, mesRef){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor registra pagamento.'); return; }
+  const nome=decodeURIComponent(encNome);
+  if(_comPagVendedor(nome, mesRef)){ toast('Comissão deste mês já paga.'); return; }
+  const {valor, itens}=_comVendedorMes(nome, mesRef);
+  if(valor<=0){ toast('Sem comissão a pagar neste mês.'); return; }
+  if(!confirm(`Registrar pagamento de ${fmt(valor)} de comissão para ${nome} (ref. ${mesRef})?`)) return;
+  if(!ST.comPagamentos) ST.comPagamentos=[];
+  ST.comPagamentos.push({
+    id:_newId(), pessoa:nome, perfil:'vendedor', escopo:'vendedor_mes',
+    mesRef, valor, data:_hojeLocal(), itens,
+    criadoEm:new Date().toISOString(), _uAt:Date.now()
+  });
+  save(); toast(`✅ Comissão de ${fmt(valor)} paga.`); rComissoes();
+}
+function comEstornarVendedor(encNome, mesRef){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor.'); return; }
+  const nome=decodeURIComponent(encNome);
+  const rec=_comPagVendedor(nome, mesRef); if(!rec) return;
+  if(!confirm('Desmarcar o pagamento da comissão deste mês?')) return;
+  _tombAdd('comPagamentos', rec.id);
+  ST.comPagamentos=(ST.comPagamentos||[]).filter(p=>p.id!==rec.id);
+  save(); toast('Pagamento desmarcado.'); rComissoes();
+}
+
 function excluirVendaCom(){
   if(!_gestorPodeExcluir()) return;
   if(!_vcId||!confirm('Excluir esta venda?')) return;
@@ -8138,6 +8179,7 @@ function rComissoes(){
       const totalVenda =minhasVendas.reduce((a,v)=>a+_vendaComExib(v),0);
       const totalLiq   =minhasVendas.reduce((a,v)=>a+(v.valorLiq||0),0);
       const totalCom   =minhasVendas.reduce((a,v)=>a+(v.valorCom||0),0);
+      const pagoVendRec=_comPagVendedor(p.nome, mesStr);
       const mediaPontos=minhasVendas.length?
         (minhasVendas.reduce((a,v)=>a+(v.pontos||0),0)/minhasVendas.length).toFixed(2):null;
 
@@ -8163,7 +8205,13 @@ function rComissoes(){
             <div class="com-name">${_esc(p.nome)}</div>
             <div class="com-role">${iconeFunc(p.perfil)} ${p.perfil}</div>
           </div>
-          ${isG?`<button class="btn btn-p btn-sm" onclick="abrirModalVendaCom(null,'${_jsq(p.nome)}')">+ Lançar venda</button>`:''}
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+            ${isG?`<button class="btn btn-s btn-sm" onclick="abrirModalVendaCom(null,'${_jsq(p.nome)}')" style="font-size:11px;">+ Lançar venda</button>`:''}
+            ${isG&&totalCom>0?(pagoVendRec
+               ?`<span style="font-size:11px;color:#1D4ED8;background:#DBEAFE;padding:3px 8px;border-radius:6px;" title="Pago em ${_fmtDateBR(pagoVendRec.data)}">💰 Comissão paga</span><button onclick="comEstornarVendedor('${encodeURIComponent(p.nome)}','${mesStr}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`
+               :`<button class="btn btn-p btn-sm" onclick="comPagarVendedor('${encodeURIComponent(p.nome)}','${mesStr}')" style="font-size:11px;" title="Registra o pagamento da comissão do mês inteiro">💰 Pagar comissão</button>`
+             ):''}
+          </div>
         </div>
         <div class="com-resumo-row">
           <div class="com-resumo-item">
