@@ -7713,7 +7713,9 @@ function _descEfetivoComissao(lead){
 }
 
 // ── Comissão montador: 10% valor líquido, liberada em concluído, adiantamento parcial permitido ──
-const _MONT_ETAPAS_VISIVEIS=['montagem','vistoria','assistencia','concluido'];
+// Visível a partir de "Pedido à Fábrica" (p/ negociar/adiantar cedo com a equipe de montagem); a LIBERAÇÃO
+// total do pagamento continua só na conclusão. Antes só aparecia a partir de "montagem" (tarde demais).
+const _MONT_ETAPAS_VISIVEIS=['pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
 function _calcComMontador(pedido){
   const valorBase=_pedidoValorBase(pedido);
   const pct=_getComMont();
