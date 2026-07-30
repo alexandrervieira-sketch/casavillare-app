@@ -10820,13 +10820,20 @@ function rCrm(){
 
   const responsaveis=[...(ST.equipe.comercial||[]),...(ST.equipe.gestor||[])];
 
-  // Stats
-  const statsHtml=`<div class="stats-grid" style="margin-bottom:20px;">
-    <div class="stat-card"><div class="sc-label">Leads ativos</div><div class="sc-val">${ativos.length}</div></div>
-    <div class="stat-card"><div class="sc-label">Valor no pipeline</div><div class="sc-val gold">${fmt(valorPipe)}</div></div>
-    <div class="stat-card"><div class="sc-label">Fechamentos</div><div class="sc-val ok">${ganhos.length}</div></div>
-    <div class="stat-card"><div class="sc-label">Contatos atrasados</div><div class="sc-val ${atrasados?'warn':'ok'}">${atrasados}</div></div>
-    ${parados?`<div class="stat-card"><div class="sc-label">Leads parados +12m</div><div class="sc-val warn">${parados}</div></div>`:''}
+  // Stats — "Valor no pipeline" em destaque (grande); os demais (contadores) compactos, tudo em UMA linha (flex, não quebra)
+  const _kpiMini=(lbl,val,cls)=>`<div class="stat-card" style="flex:1 1 110px;min-width:0;padding:13px 15px;display:flex;flex-direction:column;justify-content:center;">
+    <div class="sc-label" style="margin-bottom:4px;">${lbl}</div>
+    <div class="sc-val ${cls||''}" style="font-size:19px;">${val}</div>
+  </div>`;
+  const statsHtml=`<div style="display:flex;gap:12px;margin-bottom:20px;align-items:stretch;flex-wrap:wrap;">
+    <div class="stat-card" style="flex:2.2 1 240px;min-width:0;padding:18px 22px;display:flex;flex-direction:column;justify-content:center;">
+      <div class="sc-label" style="margin-bottom:6px;">Valor no pipeline</div>
+      <div class="sc-val gold" style="font-size:30px;">${fmt(valorPipe)}</div>
+    </div>
+    ${_kpiMini('Leads ativos', ativos.length)}
+    ${_kpiMini('Fechamentos', ganhos.length, 'ok')}
+    ${_kpiMini('Contatos atrasados', atrasados, atrasados?'warn':'ok')}
+    ${parados?_kpiMini('Leads parados +12m', parados, 'warn'):''}
   </div>`;
 
   // Toolbar
