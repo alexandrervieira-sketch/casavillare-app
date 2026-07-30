@@ -7623,14 +7623,17 @@ function _calcComProjetista(pedido){
   const idx=_PED_ETAPAS_ORDER.indexOf(pedido.status);
   const libA=idx>=_PED_ETAPAS_ORDER.indexOf('exec_assn');
   const libB=idx>=_PED_ETAPAS_ORDER.indexOf('pedido');
-  const libC=pedido.status==='concluido';
+  // Assistência com Erro da Loja no setor Projetos retém os 0,5% da última parcela (custeia o erro da projetista).
+  // Erro de Fábrica (ou erro da loja em outro setor) segue o fluxo normal.
+  const retidoC=pedido.atErroTipo==='nosso' && pedido.atErroSubTipo==='projetos';
+  const libC=pedido.status==='concluido' && !retidoC;
   const totalLiberado=(libA?comA:0)+(libB?comB:0)+(libC?comC:0);
   const totalPendente=(libA?0:comA)+(libB?0:comB)+(libC?0:comC);
   // Meses de cada parcela (para filtro mensal)
   const mesA=(pedido.dateExecAssn||pedido.data||'').substring(0,7);
   const mesB=(pedido.datePedidoFab||pedido.data||'').substring(0,7);
   const mesC=(pedido.dateConcluido||pedido.data||'').substring(0,7);
-  return{valorBase,comA,comB,comC,libA,libB,libC,totalLiberado,totalPendente,mesA,mesB,mesC,semValor:valorBase===0};
+  return{valorBase,comA,comB,comC,libA,libB,libC,retidoC,totalLiberado,totalPendente,mesA,mesB,mesC,semValor:valorBase===0};
 }
 
 // ── Registro de pagamento da comissão do projetista, por parcela (A=Exec, B=Fáb, C=Conc) ──
@@ -8270,12 +8273,13 @@ function rComissoes(){
       let projHtml='';
       if(isProj&&pedidosProj.length){
         const _parcs=[['A','Exec.','comA','libA'],['B','Fáb.','comB','libB'],['C','Conc.','comC','libC']];
-        // Estados por parcela: 🔒 pendente (não liberada) · ✅ a pagar (liberada, não paga) · 💰 pago
-        let totalApagar=0, totalPago=0, totalPend=0;
+        // Estados por parcela: 🔒 pendente (não liberada) · ✅ a pagar (liberada, não paga) · 💰 pago · 🚫 retido (erro loja/projetos)
+        let totalApagar=0, totalPago=0, totalPend=0, totalRetido=0;
         pedidosProj.forEach(pd=>{
           const c=_calcComProjetista(pd), pago=pd.comProjPago||{};
-          _parcs.forEach(pa=>{ const val=c[pa[2]], lib=c[pa[3]];
-            if(!lib) totalPend+=val; else if(pago[pa[0]]) totalPago+=val; else totalApagar+=val; });
+          _parcs.forEach(pa=>{ const val=c[pa[2]], lib=c[pa[3]], k=pa[0];
+            if(k==='C'&&c.retidoC){ totalRetido+=val; return; }
+            if(!lib) totalPend+=val; else if(pago[k]) totalPago+=val; else totalApagar+=val; });
         });
         const totalPrevisto=totalApagar+totalPago+totalPend;
         // Só mostra projetos que ainda têm parcela A PAGAR ou PENDENTE (os totalmente pagos somem)
@@ -8284,6 +8288,7 @@ function rComissoes(){
         const nPagosOcultos=pedidosProj.length-pedsAtivos.length;
         const badgeParc=(pd,c,pago,pa)=>{
           const k=pa[0], lbl=pa[1], val=c[pa[2]], lib=c[pa[3]], pg=pago[k];
+          if(k==='C'&&c.retidoC) return `<span style="font-size:11px;color:#9F1239;background:#FFE4E6;padding:2px 6px;border-radius:4px;" title="Retido — assistência técnica por Erro da Loja (setor Projetos)">🚫 ${lbl} ${fmt(val)} retido</span>`;
           if(!lib) return `<span style="font-size:11px;color:#9CA3AF;background:#F3F4F6;padding:2px 6px;border-radius:4px;">🔒 ${lbl} ${fmt(val)}</span>`;
           if(pg) return `<span style="font-size:11px;color:#1D4ED8;background:#DBEAFE;padding:2px 6px;border-radius:4px;" title="Pago em ${_fmtDateBR(pg)}">💰 ${lbl} ${fmt(val)}</span>${isG?`<button onclick="event.stopPropagation();comProjEstornar('${_sid(pd.id)}','${k}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`:''}`;
           return `<span style="font-size:11px;color:#166534;background:#DCFCE7;padding:2px 6px;border-radius:4px;">✅ ${lbl} ${fmt(val)}</span>${isG?`<button onclick="event.stopPropagation();comProjPagar('${_sid(pd.id)}','${k}')" title="Registrar pagamento desta parcela" style="border:1px solid #16A34A;background:#fff;color:#166534;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 6px;">💰 Pagar</button>`:''}`;
@@ -8307,6 +8312,7 @@ function rComissoes(){
           <div class="com-resumo-item"><div class="com-resumo-lbl">✅ A pagar</div><div class="com-resumo-val" style="color:var(--ok);">${fmt(totalApagar)}</div></div>
           <div class="com-resumo-item"><div class="com-resumo-lbl">💰 Pago</div><div class="com-resumo-val" style="color:#1D4ED8;">${fmt(totalPago)}</div></div>
           <div class="com-resumo-item"><div class="com-resumo-lbl">🔒 Pendente</div><div class="com-resumo-val" style="color:#9CA3AF;">${fmt(totalPend)}</div></div>
+          ${totalRetido>0?`<div class="com-resumo-item"><div class="com-resumo-lbl">🚫 Retido</div><div class="com-resumo-val" style="color:#9F1239;" title="Retido por assistência (Erro da Loja / setor Projetos)">${fmt(totalRetido)}</div></div>`:''}
           <div class="com-resumo-item"><div class="com-resumo-lbl">Total previsto</div><div class="com-resumo-val" style="color:var(--p);font-size:15px;">${fmt(totalPrevisto)}</div></div>
         </div>
         ${isG&&totalApagar>0?`<div style="text-align:right;margin-top:8px;"><button class="btn btn-s btn-sm" onclick="comProjQuitarTudo('${encodeURIComponent(p.nome)}')" style="font-size:11px;" title="Marca como pago tudo que está liberado agora — use pra limpar o histórico já pago">✓ Marcar tudo liberado como pago</button></div>`:''}
