@@ -8218,7 +8218,17 @@ function rComissoes(){
 
       // ── Projetista ──
       const isProj=p.perfil==='projetista';
-      const pedidosProj=isProj?(ST.pedidos||[]).filter(pd=>pd.projetista===p.nome):[];
+      // Só interessa o que ainda tem etapa pendente OU concluiu no mês selecionado. Projetos concluídos em
+      // meses ANTERIORES (comissão já liberada/paga) somem. Usa statusChangedAt (data real, confiável) p/ o
+      // mês da conclusão — evita o problema das datas de marco antigas preenchidas com "hoje".
+      const pedidosProj=isProj?(ST.pedidos||[]).filter(pd=>{
+        if(pd.projetista!==p.nome) return false;
+        if(pd.status==='concluido'){
+          const mesConcl=(pd.statusChangedAt||pd.dateConcluido||pd.data||'').slice(0,7);
+          if(mesConcl && mesConcl<mesStr) return false; // concluído e pago em mês anterior → não aparece
+        }
+        return true;
+      }):[];
       let projHtml='';
       if(isProj&&pedidosProj.length){
         // Cálculo por parcela
