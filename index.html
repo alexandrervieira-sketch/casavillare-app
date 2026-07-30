@@ -14720,10 +14720,10 @@ function calcDRE(mesAno){
   };
   // Particiona cada folha operacional em FIXO (→Pessoal) + COMISSÃO (→Custo Variável), preservando o total exato
   // da folha (comEff capado no total: fixo>=0 e fixo+comEff === total, inclusive p/ folha PAGA com valorPago).
-  let despPessoalOp=0, cvComissao=0;
+  let despPessoalOp=0, comEffTotal=0;
   folhasMes.filter(f=>!_areasPrestador.includes(infoFunc(f.pessoa).area)).forEach(f=>{
     const tot=_despFolha(f), comEff=Math.min(_comEmbFolha(f),tot);
-    despPessoalOp+=tot-comEff; cvComissao+=comEff;
+    despPessoalOp+=tot-comEff; comEffTotal+=comEff;
   });
   const despPrestadoresFolha=folhasMes.filter(f=>_areasPrestador.includes(infoFunc(f.pessoa).area)).reduce((a,f)=>a+_despFolha(f),0);
   // Prestadores sem folha no mês: inclui salarioBase cadastrado automaticamente
@@ -14781,7 +14781,33 @@ function calcDRE(mesAno){
   const cvAdm   =soma('cv_adm');
   const cvRH    =soma('cv_rh');
   const cvOutras=soma('cv_outras')+soma('outra_desp');
-  const totalCV =cvMkt+cvTaxas+cvOp+cvAdm+cvRH+cvOutras+cvComissao; // comissão reclassificada de Pessoal → Desp. Variável
+  // ── B-2: comissões AUTOMÁTICAS (projetista/supervisor/montador) que NÃO estão em folha, por COMPETÊNCIA ──
+  // Aditivo ao comEff e disjunto dele (essas comissões auto nunca são gravadas em ST.comissoes). NÃO usa as
+  // datas de marco corrompidas do projetista: comA/comB ancoram no FECHAMENTO do lead; comC/supervisor/montador
+  // na CONCLUSÃO (statusChangedAt). Montador soma só o SALDO não-pago (o adiantamento já entra via comEff/folha).
+  let cvComProj=0, cvComSup=0, cvComMont=0;
+  const _leadDe=p=>p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+  (ST.pedidos||[]).forEach(p=>{
+    if(_pedShowroom(p)) return;
+    if(p.projetista && infoFunc(p.projetista).perfil==='projetista'){
+      const c=_calcComProjetista(p), lead=_leadDe(p);
+      const ancoraAB=((lead&&lead.dataFechamento)||p.data||'').slice(0,7);
+      if(c.libA && ancoraAB===mesAno) cvComProj+=c.comA;   // 1% exec. assinado
+      if(c.libB && ancoraAB===mesAno) cvComProj+=c.comB;   // 0,5% pedido à fábrica
+      const ancoraC=(p.statusChangedAt||'').slice(0,7);
+      if(c.libC && !c.retidoC && ancoraC===mesAno) cvComProj+=c.comC;  // 0,5% conclusão (retido não vira despesa)
+    }
+    if(p.responsavel && infoFunc(p.responsavel).perfil==='supervisor'){
+      const c=_calcComSupervisor(p);
+      if(c.liberada && c.mesAno===mesAno) cvComSup+=c.valorCom;   // 1% na conclusão
+    }
+    if(p.montador && infoFunc(p.montador).perfil==='montador'){
+      const c=_calcComMontador(p);
+      if(c.liberada && c.mesAno===mesAno) cvComMont+=c.saldo;     // só o saldo não-pago (adiantamento já no comEff)
+    }
+  });
+  const cvComissao=comEffTotal+cvComProj+cvComSup+cvComMont;
+  const totalCV =cvMkt+cvTaxas+cvOp+cvAdm+cvRH+cvOutras+cvComissao; // comissão (folha + auto por competência) como Desp. Variável
 
   const recBruta   =recCRM+recOutra;
   const recLiq     =recBruta-ded;
@@ -14794,7 +14820,7 @@ function calcDRE(mesAno){
   return {recCRM,recOutra,recBruta,ded,dasPrevisto,recLiq,cpv,cpvManual,cpvPedidos,lucroBruto,
           despPessoal,despPessoalOp,despPrestadores,
           cfAluguel,cfEnergia,cfAgua,cfInternet,cfSistema,cfDiarista,cfHigiene,cfManutencao,cfOutras,totalCF,
-          cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,cvComissao,totalCV,
+          cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,cvComissao,comEffTotal,cvComProj,cvComSup,cvComMont,totalCV,
           investShowroom,
           totalDesp,resultado,margemBruta,margemOp};
 }
