@@ -14706,7 +14706,25 @@ function calcDRE(mesAno){
   const _areasPrestador=['outros'];
   // Para folhas pagas: usar valorPago (snapshot do desembolso real) em vez de recalcular ao vivo
   const _despFolha=f=>(f.status==='pago'&&f.valorPago>0)?f.valorPago:liquidoFolha(f);
-  const despPessoalOp    =folhasMes.filter(f=>!_areasPrestador.includes(infoFunc(f.pessoa).area)).reduce((a,f)=>a+_despFolha(f),0);
+  // Comissão EMBUTIDA na folha = MESMO termo `com` do liquidoFolha (espelho fiel). Serve p/ reclassificar
+  // a comissão de "Pessoal (fixo)" para "Despesa Variável de Vendas" sem duplicar (partição preserva o total).
+  const _comEmbFolha=f=>{
+    const info=infoFunc(f.pessoa); let com;
+    if(info.area==='comercial'){
+      const base=(f.comissaoBase!=null)?f.comissaoBase:(f.vendas||[]).reduce((a,v)=>a+(v.valor||0)-(v.taxas||0),0)*((f.pct||0)/100);
+      com=base+(f.recuperados||0)+(f.bonus||0)-(f.desconto||0);
+    } else {
+      com=(ST.comissoes||[]).filter(c=>c.pessoa===f.pessoa&&c.mesAno===f.mesAno).reduce((a,c)=>a+(c.valor||0),0);
+    }
+    return Math.max(0,com);
+  };
+  // Particiona cada folha operacional em FIXO (→Pessoal) + COMISSÃO (→Custo Variável), preservando o total exato
+  // da folha (comEff capado no total: fixo>=0 e fixo+comEff === total, inclusive p/ folha PAGA com valorPago).
+  let despPessoalOp=0, cvComissao=0;
+  folhasMes.filter(f=>!_areasPrestador.includes(infoFunc(f.pessoa).area)).forEach(f=>{
+    const tot=_despFolha(f), comEff=Math.min(_comEmbFolha(f),tot);
+    despPessoalOp+=tot-comEff; cvComissao+=comEff;
+  });
   const despPrestadoresFolha=folhasMes.filter(f=>_areasPrestador.includes(infoFunc(f.pessoa).area)).reduce((a,f)=>a+_despFolha(f),0);
   // Prestadores sem folha no mês: inclui salarioBase cadastrado automaticamente
   const nomesComFolha=new Set(folhasMes.map(f=>f.pessoa));
@@ -14763,7 +14781,7 @@ function calcDRE(mesAno){
   const cvAdm   =soma('cv_adm');
   const cvRH    =soma('cv_rh');
   const cvOutras=soma('cv_outras')+soma('outra_desp');
-  const totalCV =cvMkt+cvTaxas+cvOp+cvAdm+cvRH+cvOutras;
+  const totalCV =cvMkt+cvTaxas+cvOp+cvAdm+cvRH+cvOutras+cvComissao; // comissão reclassificada de Pessoal → Desp. Variável
 
   const recBruta   =recCRM+recOutra;
   const recLiq     =recBruta-ded;
@@ -14776,7 +14794,7 @@ function calcDRE(mesAno){
   return {recCRM,recOutra,recBruta,ded,dasPrevisto,recLiq,cpv,cpvManual,cpvPedidos,lucroBruto,
           despPessoal,despPessoalOp,despPrestadores,
           cfAluguel,cfEnergia,cfAgua,cfInternet,cfSistema,cfDiarista,cfHigiene,cfManutencao,cfOutras,totalCF,
-          cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,totalCV,
+          cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,cvComissao,totalCV,
           investShowroom,
           totalDesp,resultado,margemBruta,margemOp};
 }
@@ -16026,6 +16044,7 @@ function rFinanceiro(){
 
     <div class="dre-sec-hdr"><span>Custos Variáveis</span></div>
     ${[
+      ['🤝 Comissões (equipe de vendas)',  d.cvComissao],
       ['📣 Marketing / Publicidade',       d.cvMkt],
       ['🏦 Taxas Financeiras / Bancárias', d.cvTaxas],
       ['⚙️ Despesas Operacionais',         d.cvOp],
