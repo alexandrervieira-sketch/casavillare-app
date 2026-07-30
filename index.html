@@ -8770,7 +8770,7 @@ function rConfig(){
         const cfg=(ST.configs||{})[p.nome]||{};
         return `<div class="cfg-row">
           <div style="flex:1;">
-            <div class="cfg-name">${iconeFunc(p.perfil)} ${_esc(p.nome)}</div>
+            <div class="cfg-name">${iconeFunc(p.perfil)} ${_esc(p.nome)}${p.perfil==='montador'&&!cfg.salarioBase?' <span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:8px;font-weight:600;" title="Montador freelance — sem salário/ajuda de custo mensal">🔧 Freelance</span>':''}</div>
             <div class="cfg-info">
               ${p.perfil}${cfg.cargo?' · '+_esc(cfg.cargo):''}${p.tel?' · '+_esc(p.tel.slice(2)):''}
               ${p.email?'<br><span style="font-size:11px;color:var(--gl);">'+_esc(p.email)+'</span>':''}
@@ -9821,6 +9821,12 @@ async function cfgSalvarColab(){
   if(!_cfgConflOk('equipe','O cadastro de equipe')) return; // outra máquina mexeu na equipe enquanto o modal estava aberto (S4)
   const nome=document.getElementById('colab-nome').value.trim();
   if(!nome){toast('Informe o nome');return;}
+  // TRAVA ANTI-DUPLICADO: bloqueia nome que já existe em QUALQUER área (a não ser que seja a própria pessoa em edição).
+  {
+    const _atual=(_colabIdx>=0 && ST.equipe[_colabArea] && ST.equipe[_colabArea][_colabIdx])?(ST.equipe[_colabArea][_colabIdx].nome||''):'';
+    const _dup=todosFunc().some(p=>(p.nome||'').trim().toLowerCase()===nome.toLowerCase()) && _atual.trim().toLowerCase()!==nome.toLowerCase();
+    if(_dup){ toast('⚠️ Já existe um colaborador "'+nome+'". Edite o existente em vez de criar outro.'); return; }
+  }
   const perfil=document.getElementById('colab-perfil').value;
   const tel=normTel(document.getElementById('colab-tel').value.trim());
   const email=document.getElementById('colab-email').value.trim().toLowerCase()||
