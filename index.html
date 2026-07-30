@@ -8099,7 +8099,7 @@ function _comRecebedorDados(nome){
   const cfg=(ST.configs&&ST.configs[nome])||{};
   return { nome, doc:(pe&&pe.cpf)||cfg.cpf||'', pix:(pe&&pe.pix)||cfg.pix||'' };
 }
-function _comMesRefLabel(mesRef){ if(!mesRef) return ''; const [a,mm]=mesRef.split('-'); return (typeof mesNomeStr==='function')?mesNomeStr(+mm,+a):(mm+'/'+a); }
+function _comMesRefLabel(mesRef){ if(!mesRef) return ''; const [a,mm]=mesRef.split('-'); return (typeof mesNomeStr==='function')?mesNomeStr(+mm-1,+a):(mm+'/'+a); }
 // Abre o recibo de PAGAMENTO de comissão (empresa paga → colaborador recebe/assina). Reaproveita _gerarReciboDoc.
 function comReciboAbrir(pagId){
   const pg=(ST.comPagamentos||[]).find(p=>String(p.id)===String(pagId));
