@@ -13345,7 +13345,7 @@ function pdPgfabEnviarEmail(){
   setTimeout(()=>{ window.location.href=`mailto:${_emailsParaMailto(fab.email)}?subject=${assunto}&body=${corpo}`; },500);
   if(_pdId){
     const idx=(ST.pedidos||[]).findIndex(x=>String(x.id)===String(_pdId));
-    if(idx>=0){ ST.pedidos[idx].emailFabricaEnviado=hoje; ST.pedidos[idx]._uAt=Date.now(); save(); }
+    if(idx>=0){ ST.pedidos[idx].emailFabricaEnviado=hoje; ST.pedidos[idx]._uAt=Date.now(); _pdBaseUAt=ST.pedidos[idx]._uAt; save(); } // atualiza a base p/ o Salvar não achar que "outra pessoa" mexeu
   }
   const stEl=document.getElementById('pd-pgfab-email-status');
   if(stEl){ stEl.textContent='✅ E-mail enviado em '+hoje; stEl.style.display=''; }
@@ -13773,7 +13773,10 @@ function rCadastros(){
 
   // Atualiza badges das sub-abas
   const buscaEl=document.getElementById('cad-busca');
-  const busca=(buscaEl?buscaEl.value:'').toLowerCase().trim();
+  const _buscaRaw=buscaEl?buscaEl.value:'';
+  const busca=_buscaRaw.toLowerCase().trim();
+  const _buscaFocada=!!(buscaEl && document.activeElement===buscaEl); // preserva foco/cursor no re-render (senão o cursor sai a cada letra)
+  const _buscaCaret=buscaEl?buscaEl.selectionStart:null;
 
   // Contadores nas abas
   ['cliente','parceiro','funcionario','fornecedor'].forEach(t=>{
@@ -13903,12 +13906,14 @@ function rCadastros(){
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
       <div style="position:relative;flex:1;max-width:360px;">
         <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gl);">🔍</span>
-        <input type="text" id="cad-busca" value="${busca}" placeholder="Buscar por nome, telefone, CPF..." oninput="rCadastros()"
+        <input type="text" id="cad-busca" value="${_esc(_buscaRaw)}" placeholder="Buscar por nome, telefone, CPF..." oninput="rCadastros()"
           style="width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;background:var(--card);">
       </div>
       <span style="font-size:12px;color:var(--gl);">${busca?lista.length+' resultado'+(lista.length!==1?'s':''):countLabel[tipo]}</span>
     </div>
     ${tabelaHtml}`;
+  // Restaura o foco e a posição do cursor no campo de busca (sem isso, o cursor sai a cada letra digitada)
+  if(_buscaFocada){ const nb=document.getElementById('cad-busca'); if(nb){ nb.focus(); try{ const pos=_buscaCaret!=null?_buscaCaret:nb.value.length; nb.setSelectionRange(pos,pos); }catch(e){} } }
 }
 
 function cadToggleTipo(){
