@@ -3192,6 +3192,18 @@ function _cfgTouch(key){ if(!ST._cfgUAt||typeof ST._cfgUAt!=='object') ST._cfgUA
 // Sem isto, um salvar pré-sync carimba mais novo que a nuvem e a sobrescreve (metas/equipe "somem").
 // Offline puro (sem Firebase) continua liberado — é edição local legítima.
 function _cfgSyncPronto(){ if(_fbReady&&!_fsPrimed){ toast('⏳ Sincronizando com a nuvem — aguarde alguns segundos e tente de novo.'); return false; } return true; }
+// Espera a nuvem primar (_fsPrimed) por até `ms`. Resolve true assim que primar (ou já estava);
+// false se estourar o tempo. Usado p/ não perder um "salvar" feito logo após abrir o app.
+function _aguardarPrimed(ms){
+  return new Promise(res=>{
+    if(!_fbReady || _fsPrimed) return res(true);
+    const t0=Date.now();
+    const iv=setInterval(()=>{
+      if(_fsPrimed){ clearInterval(iv); res(true); }
+      else if(Date.now()-t0>ms){ clearInterval(iv); res(false); }
+    }, 250);
+  });
+}
 // Anti-clobber legado: um config VAZIO ({}) vindo da nuvem NUNCA apaga um local com dados.
 function _cfgVazio(v){ return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===0; }
 function _cfgLocalTemDados(k){ const v=ST[k]; return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0; }
@@ -9773,9 +9785,14 @@ function rConfigComBlock(){
   return html;
 }
 
-function salvarTabelaCom(){
+async function salvarTabelaCom(){
   if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor pode alterar a tabela de comissões.'); return; }
-  if(!_cfgSyncPronto()) return;
+  // Em vez de abortar quando a nuvem ainda não primou (janela logo após abrir o app), ESPERA primar
+  // até 12s e salva sozinho — assim o clique não se perde (evita o "não salva" reportado).
+  if(_fbReady && !_fsPrimed){
+    toast('⏳ Sincronizando com a nuvem — vou salvar assim que terminar…');
+    if(!(await _aguardarPrimed(12000))){ toast('⚠️ Não sincronizou a tempo. Verifique a conexão e tente de novo.'); return; }
+  }
   const g=id=>parseFloat(document.getElementById(id)?.value)||0;
   if(!ST.configsCom) ST.configsCom={};
   ST.configsCom.faixas=COM_DEFAULTS.faixas.map((_,i)=>({
@@ -9891,7 +9908,7 @@ function cfgEditPessoa(area,i){
 
 async function cfgSalvarColab(){
   if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor edita a equipe.'); return; }
-  if(!_cfgSyncPronto()) return;
+  if(_fbReady && !_fsPrimed){ toast('⏳ Sincronizando com a nuvem — salvando em seguida…'); if(!(await _aguardarPrimed(12000))){ toast('⚠️ Não sincronizou a tempo. Tente de novo em instantes.'); return; } }
   if(!_cfgConflOk('equipe','O cadastro de equipe')) return; // outra máquina mexeu na equipe enquanto o modal estava aberto (S4)
   const nome=document.getElementById('colab-nome').value.trim();
   if(!nome){toast('Informe o nome');return;}
