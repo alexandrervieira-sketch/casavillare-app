@@ -8053,6 +8053,80 @@ function montQuitar(pedidoId){
   rComissoes();
 }
 
+// ── Relatório de Montagem (por montador): pedidos visíveis + comissão 10% + etapa + adiantado × saldo ──
+function _montRelDados(nome){
+  const peds=(ST.pedidos||[]).filter(pd=>pd.montador===nome && _calcComMontador(pd).visivel);
+  const rows=peds.map(pd=>{ const c=_calcComMontador(pd);
+    return { cliente:pd.clienteNome||pd.cliente||'—', ambiente:pd.descricao||'',
+      etapa:(PED_ETAPAS.find(e=>e.id===pd.status)||{}).label||pd.status||'',
+      valorCom:c.valorCom, adiant:c.totalAdiant, saldo:c.saldo, liberada:c.liberada, semValor:c.semValor }; });
+  const tot={ com:rows.reduce((a,r)=>a+r.valorCom,0), adiant:rows.reduce((a,r)=>a+r.adiant,0),
+    saldo:rows.reduce((a,r)=>a+r.saldo,0),
+    aReceber:rows.filter(r=>r.liberada).reduce((a,r)=>a+r.saldo,0),
+    aLiberar:rows.filter(r=>!r.liberada).reduce((a,r)=>a+r.saldo,0) };
+  return {rows,tot};
+}
+function montRelatorio(encNome){
+  const nome=decodeURIComponent(encNome);
+  const {rows,tot}=_montRelDados(nome);
+  if(!rows.length){ toast('Sem pedidos de montagem visíveis para '+nome); return; }
+  const emp=ST.empresa||{};
+  const nomeEmp=emp.nome||'Casa Villare Ambientes Planejados';
+  const cidEmp=emp.cidade||'Valinhos — SP';
+  const f=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const nomeArq=('Relatorio_Montagem_'+nome).replace(/[^\w.-]+/g,'_');
+  const linhas=rows.map(r=>`<tr>
+    <td>${_esc(r.cliente)}${r.ambiente?'<br><span style="font-size:10px;color:#666;">'+_esc(r.ambiente)+'</span>':''}</td>
+    <td>${_esc(r.etapa)}</td>
+    <td style="text-align:right;">${r.semValor?'⚠️ s/ valor':'R$ '+f(r.valorCom)}</td>
+    <td style="text-align:right;color:#2563EB;">${r.adiant>0?'R$ '+f(r.adiant):'—'}</td>
+    <td style="text-align:right;font-weight:700;">R$ ${f(r.saldo)}</td>
+    <td style="text-align:center;font-size:10px;">${r.liberada?'<b style="color:#166534;">Liberado</b>':'A liberar'}</td>
+  </tr>`).join('');
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Relatório de Montagem — ${_esc(nome)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000;background:#fff;}
+.page{width:210mm;padding:12mm 14mm;margin:0 auto;}
+.hd{border:1px solid #000;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+.hd .co{font-size:10px;text-align:center;line-height:1.5;}
+.hd .ti{font-weight:bold;font-size:13px;}
+.sub{border:1px solid #000;border-top:none;padding:8px 12px;display:flex;justify-content:space-between;font-size:12px;background:#f7f7f7;}
+table{width:100%;border-collapse:collapse;margin-top:0;}
+th,td{border:1px solid #000;padding:6px 8px;font-size:11px;vertical-align:top;}
+th{background:#eee;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px;}
+tfoot td{font-weight:700;background:#f7f7f7;}
+.tot{border:1px solid #000;border-top:none;padding:10px 12px;display:flex;gap:20px;flex-wrap:wrap;justify-content:flex-end;font-size:12px;}
+.tot b{font-size:15px;}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:9;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;padding:8px 20px;gap:10px;}
+.toolbar span{color:#fff;font-size:13px;font-weight:600;}.tb{border:none;border-radius:6px;padding:7px 16px;font-weight:600;cursor:pointer;}
+body.tb-on{padding-top:48px;}@media print{.toolbar{display:none!important;}body{padding-top:0!important;}}</style></head>
+<body class="tb-on"><div class="toolbar"><span>🔧 Relatório de Montagem — ${_esc(nome)}</span>
+<div style="display:flex;gap:8px;"><button class="tb" style="background:#e0e0e0;" onclick="window.print()">🖨 Imprimir</button>
+<button class="tb" style="background:#c0392b;color:#fff;" onclick="var t=document.title;document.title='${nomeArq}';window.print();setTimeout(()=>document.title=t,300);">📥 Salvar PDF</button></div></div>
+<div class="page">
+  <div class="hd"><div class="ti">RELATÓRIO<br>DE MONTAGEM</div><div class="co"><strong>${_esc(nomeEmp.toUpperCase())}</strong><br>${_esc(cidEmp)}</div><div style="text-align:right;font-size:11px;"><strong>${_esc(nome)}</strong><br>${hoje}</div></div>
+  <div class="sub"><span>Montador: <strong>${_esc(nome)}</strong></span><span>Comissão: <strong>10% do valor líquido</strong></span></div>
+  <table><thead><tr><th>Cliente / Ambiente</th><th>Etapa</th><th style="text-align:right;">Comissão 10%</th><th style="text-align:right;">Adiantado</th><th style="text-align:right;">Saldo</th><th style="text-align:center;">Status</th></tr></thead>
+  <tbody>${linhas}</tbody>
+  <tfoot><tr><td colspan="2" style="text-align:right;">TOTAIS</td><td style="text-align:right;">R$ ${f(tot.com)}</td><td style="text-align:right;">R$ ${f(tot.adiant)}</td><td style="text-align:right;">R$ ${f(tot.saldo)}</td><td></td></tr></tfoot></table>
+  <div class="tot"><span>✅ Liberado (a receber já): <b style="color:#166534;">R$ ${f(tot.aReceber)}</b></span><span>⏳ A liberar (na conclusão): <b style="color:#92400E;">R$ ${f(tot.aLiberar)}</b></span><span>Saldo total: <b>R$ ${f(tot.saldo)}</b></span></div>
+  <div style="font-size:10px;color:#666;margin-top:14px;">* "Liberado" = pedido concluído, comissão liberada para pagamento. "A liberar" = comissão será liberada na conclusão do pedido. Adiantamentos podem ser feitos antes. Documento gerado em ${hoje}.</div>
+</div></body></html>`;
+  const w=window.open('','_blank','width=900,height=720');
+  if(w){ w.document.write(html); w.document.close(); } else toast('❌ Popup bloqueado — permita pop-ups');
+}
+function montRelatorioWhats(encNome){
+  const nome=decodeURIComponent(encNome);
+  const {rows,tot}=_montRelDados(nome);
+  if(!rows.length){ toast('Sem pedidos de montagem visíveis para '+nome); return; }
+  const tel=((ST.equipe.obras||[]).find(p=>p.nome===nome)||{}).tel||'';
+  const B=v=>'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  let msg='*Casa Villare — Comissão de Montagem*\n'+nome+'\n\n';
+  rows.forEach(r=>{ msg+='• '+r.cliente+(r.ambiente?' ('+r.ambiente+')':'')+' — '+r.etapa+'\n   Comissão '+B(r.valorCom)+(r.adiant>0?' · adiantado '+B(r.adiant):'')+' · saldo '+B(r.saldo)+(r.liberada?' ✅':'')+'\n'; });
+  msg+='\n✅ A receber já: *'+B(tot.aReceber)+'*\n⏳ A liberar: '+B(tot.aLiberar)+'\nSaldo total: *'+B(tot.saldo)+'*';
+  _waAbrir(tel, msg);
+}
+
 // ── Pagamento da comissão do VENDEDOR (mês inteiro de uma vez) → registra no ledger ST.comPagamentos ──
 // Recalcula o total do mês (não confia em valor vindo do onclick). Mesma conta do card.
 function _comVendedorMes(nome, mesRef){
@@ -8426,7 +8500,11 @@ function rComissoes(){
             <div class="com-name">${_esc(p.nome)}</div>
             <div class="com-role">${iconeFunc(p.perfil)} ${p.perfil}</div>
           </div>
-          ${isG&&!isSup&&!isProj?`<button class="btn btn-p btn-sm" onclick="abrirModalComissao(null)">+ Lançar comissão</button>`:''}
+          ${isG&&!isSup&&!isProj?`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="montRelatorio('${encodeURIComponent(p.nome)}')" title="Relatório de montagem (imprimir/PDF)">📄 Relatório</button>
+            <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="montRelatorioWhats('${encodeURIComponent(p.nome)}')" title="Enviar resumo no WhatsApp do montador">💬 WhatsApp</button>
+            <button class="btn btn-p btn-sm" onclick="abrirModalComissao(null)">+ Lançar comissão</button>
+          </div>`:''}
         </div>
         ${isProj?projHtml:isSup?`
         <div class="com-resumo-row">
