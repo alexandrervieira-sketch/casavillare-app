@@ -13025,15 +13025,21 @@ function _rPedPipe(ped,hoje,statsHtml){
           <span class="ped-card-date" style="${atrasado?'color:var(--fail);font-weight:600;':''}">${dtLabel}</span>
         </div>
         ${p.itensComp&&p.itensComp.length?`<div style="margin-top:4px;padding:3px 8px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:6px;font-size:10px;color:#075985;">🧩 ${p.itensComp.length} ${p.itensComp.length===1?'item complementar':'itens complementares'}</div>`:''}
-        ${p.valorFabrica?`<div style="display:flex;justify-content:space-between;align-items:center;background:#1C1A19;border-radius:5px;padding:3px 7px;margin-top:4px;"><span style="font-size:10px;color:#9CA3AF;">Custo Fáb.</span><span style="font-size:12px;font-weight:700;color:#F59E0B;">${fmt(p.valorFabrica)}</span></div>`:''}
         ${(()=>{
+          // Fábrica num chip só (custo direto e/ou bipartido) — clicável, abre a aba Fábrica.
           const lead=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
           const fins=(lead?.condicoesPgto||[]).filter(c=>c.forma==='financiamento');
-          if(!fins.length) return '';
           const totBip=fins.reduce((a,c)=>a+_bipartidoCond(c),0); // 40% do líquido (financiado − retenção da loja)
-          return `<div style="margin-top:4px;padding:3px 8px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;font-size:10px;color:#92400E;">
-            🏭 Bipartido: <strong>R$ ${fmt(totBip)}</strong>
-            <button onclick="event.stopPropagation();navTo('tab-fabrica');setTimeout(()=>fabSubTab('bipartido'),100);" style="border:none;background:none;font-size:10px;color:#92400E;cursor:pointer;text-decoration:underline;padding:0;margin-left:4px;">ver</button>
+          const custo=p.valorFabrica||0;
+          if(!custo && !totBip) return '';
+          const fab=_esc((p.fornecedor||'').trim()||_fabricaPrincipal()||'Fábrica');
+          const partes=[];
+          if(custo) partes.push(`Custo <strong style="color:#F59E0B;">${fmt(custo)}</strong>`);
+          if(totBip) partes.push(`Bip. <strong style="color:#B45309;">${fmt(totBip)}</strong>`);
+          const sub=totBip?'bipartido':'pagamentos';
+          return `<div onclick="event.stopPropagation();navTo('tab-fabrica');setTimeout(()=>fabSubTab('${sub}'),100);" title="Abrir a aba Fábrica" style="margin-top:4px;padding:4px 8px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;font-size:11px;color:#92400E;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:space-between;">
+            <span>🏭 ${fab} · ${partes.join(' · ')}</span>
+            <span style="font-size:10px;text-decoration:underline;white-space:nowrap;">ver ›</span>
           </div>`;
         })()}
         ${(isG||ST.configsCom?.comissaoVisivel)?comBadge:''}
@@ -13046,16 +13052,9 @@ function _rPedPipe(ped,hoje,statsHtml){
           ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
           ${e.id!=='concluido'?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
         </div>
-        ${e.id==='proj_exec'?(p.valorFabrica
-          ?`<div class="ped-card-comp">
-              <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
-                <span style="font-size:10px;color:#9CA3AF;">Custo Fáb.</span>
-                <span style="font-size:12px;font-weight:700;color:#F59E0B;">${fmt(p.valorFabrica)}</span>
-                ${p.valor?`<span style="font-size:10px;color:#92400E;font-weight:600;">${Math.round((p.valorFabrica/p.valor)*100)}%</span>`:''}
-              </div>
-            </div>`
-          :`<div class="ped-card-comp"><span class="comp-pend" style="cursor:pointer;" onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">📄 Importar XML via ✏️ Editar</span></div>`)
-        :''}
+        ${e.id==='proj_exec'&&!p.valorFabrica
+          ?`<div class="ped-card-comp"><span class="comp-pend" style="cursor:pointer;" onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">📄 Importar XML via ✏️ Editar</span></div>`
+          :''}
         ${e.id==='assistencia'?(()=>{
           if(!p.atErroTipo) return `<div class="ped-card-comp"><span class="comp-pend" style="cursor:pointer;" onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">🛠️ Classificar AT</span></div>`;
           const isFab=p.atErroTipo==='fabrica';
