@@ -898,6 +898,7 @@ textarea.inp{resize:vertical;min-height:68px;}
         <button class="fin-sub-btn"        id="rel-sub-perda"      onclick="relSubTab('perda')">🔴 Análise de Perdas</button>
         <button class="fin-sub-btn"        id="rel-sub-rentab"     onclick="relSubTab('rentab')">💹 Rentabilidade</button>
         <button class="fin-sub-btn"        id="rel-sub-desempenho" onclick="relSubTab('desempenho')">📈 Desempenho</button>
+        <button class="fin-sub-btn"        id="rel-sub-assistencia" onclick="relSubTab('assistencia')">🛡️ Assistências & Garantia</button>
       </div>
       <div id="rel-content"></div>
     </div>
@@ -6231,7 +6232,7 @@ let _relSubAtivo='resumo';
 
 function relSubTab(sub){
   _relSubAtivo=sub;
-  ['resumo','conversao','canais','perda','rentab','desempenho'].forEach(k=>{
+  ['resumo','conversao','canais','perda','rentab','desempenho','assistencia'].forEach(k=>{
     const btn=document.getElementById('rel-sub-'+k);
     if(btn) btn.classList.toggle('active', k===sub);
   });
@@ -6242,12 +6243,69 @@ function relSubTab(sub){
   else if(sub==='perda')   rRelAnalisePerda();
   else if(sub==='rentab')  rRelRentabilidade();
   else if(sub==='desempenho') rRelDesempenho();
+  else if(sub==='assistencia') rRelAssistencia();
   else rRelConversao();
 }
 
 function rRel(){
   if(!_temPermFC('rel')){document.getElementById('rel-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   relSubTab(_relSubAtivo||'resumo');
+}
+
+// ── PÓS-VENDA: Assistências (etapa) + Garantia (MDF/Ferragens, períodos editáveis pelo gestor) ──
+function _getGarantia(){ const g=ST.garantia||{}; return {mdf:(g.mdf!=null?g.mdf:10), ferragens:(g.ferragens!=null?g.ferragens:1)}; }
+function salvarGarantia(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor edita a garantia.'); return; }
+  const mdf=parseInt(document.getElementById('gar-mdf')?.value)||0;
+  const fer=parseInt(document.getElementById('gar-fer')?.value)||0;
+  ST.garantia={mdf,ferragens:fer}; _cfgTouch('garantia'); save(); toast('Garantia salva ✓'); rRelAssistencia();
+}
+function _garantiaVence(start, anos){ if(!start)return null; const d=new Date(start+'T12:00'); if(isNaN(d.getTime()))return null; d.setFullYear(d.getFullYear()+(anos||0)); return d; }
+function rRelAssistencia(){
+  const el=document.getElementById('rel-content'); if(!el) return;
+  const isG=ST.perfil==='gestor';
+  const g=_getGarantia();
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  const fD=d=>d?d.toLocaleDateString('pt-BR'):'—';
+  const subLabels={projetos:'Projetos',medicao:'Medição',supervisao:'Supervisão',montagem:'Montagem'};
+  const cfgG=`<div class="dre-card" style="padding:14px 18px;margin-bottom:18px;">
+    <div style="font-size:12px;font-weight:700;color:var(--dark);margin-bottom:10px;">🛡️ Períodos de Garantia (contados da data de montagem)</div>
+    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+      <div><label class="lbl">MDF (anos)</label><input class="inp" type="number" min="0" id="gar-mdf" value="${g.mdf}" style="width:100px;" ${isG?'':'disabled'}/></div>
+      <div><label class="lbl">Ferragens (anos)</label><input class="inp" type="number" min="0" id="gar-fer" value="${g.ferragens}" style="width:100px;" ${isG?'':'disabled'}/></div>
+      ${isG?`<button class="btn btn-p btn-sm" onclick="salvarGarantia()">💾 Salvar</button>`:''}
+    </div>
+  </div>`;
+  const abertas=(ST.pedidos||[]).filter(p=>p.status==='assistencia');
+  const linhasAt=abertas.map(p=>{
+    const tipo = p.atErroTipo==='fabrica'?'🏭 Erro Fábrica' : p.atErroTipo==='nosso'?('🏬 Erro Loja'+(p.atErroSubTipo?' · '+(subLabels[p.atErroSubTipo]||p.atErroSubTipo):'')) : '<span style="color:#B45309;">⚠️ classificar</span>';
+    const dt=p.statusChangedAt||p.data||'';
+    return `<tr onclick="abrirModalPedido('${_sid(p.id)}')" style="cursor:pointer;">
+      <td class="td-bold">${_esc(p.clienteNome||p.cliente||'—')}</td>
+      <td style="font-size:12px;">${_esc(p.descricao||'')}</td>
+      <td style="font-size:12px;">${tipo}</td>
+      <td style="text-align:right;">${p.atErroTipo==='nosso'&&p.atCusto?fmt(p.atCusto):'—'}</td>
+      <td style="font-size:12px;white-space:nowrap;">${dt?_fmtDateBR(dt):'—'}</td>
+    </tr>`;
+  }).join('');
+  const secAt=`<div style="font-size:14px;font-weight:600;color:var(--dark);margin-bottom:10px;">🛠️ Assistências em aberto <span style="color:var(--gl);font-size:12px;">(${abertas.length})</span></div>
+    ${abertas.length?`<div class="tbl-wrap"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Tipo</th><th style="text-align:right;">Custo (loja)</th><th>Desde</th></tr></thead><tbody>${linhasAt}</tbody></table></div>`
+      :`<div style="text-align:center;padding:24px;color:var(--gl);border:1px dashed var(--border);border-radius:12px;">✅ Nenhuma assistência em aberto (pedidos na etapa "Assistência" aparecem aqui).</div>`}`;
+  const comMont=(ST.pedidos||[]).filter(p=>p.dataMontagem).map(p=>{
+    const vFer=_garantiaVence(p.dataMontagem,g.ferragens), vMdf=_garantiaVence(p.dataMontagem,g.mdf);
+    return {p, vFer, vMdf, ferAtiva:vFer&&vFer>=hoje, mdfAtiva:vMdf&&vMdf>=hoje};
+  }).sort((a,b)=>(a.vMdf&&b.vMdf)?(a.vMdf-b.vMdf):0);
+  const badge=(ativa,venc)=>ativa?`<span style="color:#166534;">✅ até ${fD(venc)}</span>`:`<span style="color:#9CA3AF;">⚪ vencida (${fD(venc)})</span>`;
+  const linhasGar=comMont.map(x=>`<tr onclick="abrirModalPedido('${_sid(x.p.id)}')" style="cursor:pointer;">
+      <td class="td-bold">${_esc(x.p.clienteNome||x.p.cliente||'—')}</td>
+      <td style="font-size:12px;white-space:nowrap;">${x.p.dataMontagem?_fmtDateBR(x.p.dataMontagem):'—'}</td>
+      <td style="font-size:12px;">${badge(x.ferAtiva,x.vFer)}</td>
+      <td style="font-size:12px;">${badge(x.mdfAtiva,x.vMdf)}</td>
+    </tr>`).join('');
+  const secGar=`<div style="font-size:14px;font-weight:600;color:var(--dark);margin:26px 0 10px;">🛡️ Garantia — pedidos montados <span style="color:var(--gl);font-size:12px;">(${comMont.length})</span></div>
+    ${comMont.length?`<div class="tbl-wrap"><table><thead><tr><th>Cliente</th><th>Montado em</th><th>Ferragens (${g.ferragens} ano${g.ferragens!==1?'s':''})</th><th>MDF (${g.mdf} anos)</th></tr></thead><tbody>${linhasGar}</tbody></table></div>`
+      :`<div style="text-align:center;padding:24px;color:var(--gl);border:1px dashed var(--border);border-radius:12px;">Nenhum pedido com "Data montagem real" preenchida ainda — a garantia conta a partir dela.</div>`}`;
+  el.innerHTML=cfgG+secAt+secGar;
 }
 
 // ── Custos Fábrica ──────────────────────────────────────
