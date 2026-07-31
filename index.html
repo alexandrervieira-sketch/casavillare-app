@@ -6253,12 +6253,14 @@ function rRel(){
 }
 
 // ── PÓS-VENDA: Assistências (etapa) + Garantia (MDF/Ferragens, períodos editáveis pelo gestor) ──
-function _getGarantia(){ const g=ST.garantia||{}; return {mdf:(g.mdf!=null?g.mdf:10), ferragens:(g.ferragens!=null?g.ferragens:1)}; }
+const _GARANTIA_TEXTO_DEF='A CASA VILLARE garante os móveis planejados contra defeitos de fabricação, a contar da data de finalização da montagem, pelos prazos indicados acima (painéis/MDF e ferragens/acessórios).\n\nA garantia é válida desde que os produtos tenham sido instalados por técnicos autorizados pela CASA VILLARE e utilizados conforme o Manual de Uso e Conservação.\n\nNÃO estão cobertos pela garantia: o desgaste natural decorrente do uso; danos por mau uso, manuseio ou limpeza inadequada; serviços ou manutenção executados por pessoa não credenciada; alteração do local de instalação original sem assessoria da CASA VILLARE; danos causados por agentes externos (umidade excessiva, pragas, insetos, cupins); e situações fora das especificações do fabricante e do Manual de Uso e Conservação.';
+function _getGarantia(){ const g=ST.garantia||{}; return {mdf:(g.mdf!=null?g.mdf:10), ferragens:(g.ferragens!=null?g.ferragens:1), texto:(g.texto||_GARANTIA_TEXTO_DEF)}; }
 function salvarGarantia(){
   if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor edita a garantia.'); return; }
   const mdf=parseInt(document.getElementById('gar-mdf')?.value)||0;
   const fer=parseInt(document.getElementById('gar-fer')?.value)||0;
-  ST.garantia={mdf,ferragens:fer}; _cfgTouch('garantia'); save(); toast('Garantia salva ✓'); rRelAssistencia();
+  const texto=(document.getElementById('gar-texto')?.value||'').trim()||_GARANTIA_TEXTO_DEF;
+  ST.garantia={mdf,ferragens:fer,texto}; _cfgTouch('garantia'); save(); toast('Garantia salva ✓'); rRelAssistencia();
 }
 function _garantiaVence(start, anos){ if(!start)return null; const d=new Date(start+'T12:00'); if(isNaN(d.getTime()))return null; d.setFullYear(d.getFullYear()+(anos||0)); return d; }
 function rRelAssistencia(){
@@ -6273,8 +6275,10 @@ function rRelAssistencia(){
     <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
       <div><label class="lbl">MDF (anos)</label><input class="inp" type="number" min="0" id="gar-mdf" value="${g.mdf}" style="width:100px;" ${isG?'':'disabled'}/></div>
       <div><label class="lbl">Ferragens (anos)</label><input class="inp" type="number" min="0" id="gar-fer" value="${g.ferragens}" style="width:100px;" ${isG?'':'disabled'}/></div>
-      ${isG?`<button class="btn btn-p btn-sm" onclick="salvarGarantia()">💾 Salvar</button>`:''}
     </div>
+    ${isG?`<div style="margin-top:12px;"><label class="lbl">Texto do Termo de Garantia (aparece no PDF)</label>
+      <textarea class="inp" id="gar-texto" rows="5" style="width:100%;font-size:12px;">${_esc(g.texto)}</textarea>
+      <div style="text-align:right;margin-top:8px;"><button class="btn btn-p btn-sm" onclick="salvarGarantia()">💾 Salvar garantia</button></div></div>`:''}
   </div>`;
   const abertas=(ST.pedidos||[]).filter(p=>p.status==='assistencia');
   const linhasAt=abertas.map(p=>{
@@ -6296,16 +6300,73 @@ function rRelAssistencia(){
     return {p, vFer, vMdf, ferAtiva:vFer&&vFer>=hoje, mdfAtiva:vMdf&&vMdf>=hoje};
   }).sort((a,b)=>(a.vMdf&&b.vMdf)?(a.vMdf-b.vMdf):0);
   const badge=(ativa,venc)=>ativa?`<span style="color:#166534;">✅ até ${fD(venc)}</span>`:`<span style="color:#9CA3AF;">⚪ vencida (${fD(venc)})</span>`;
-  const linhasGar=comMont.map(x=>`<tr onclick="abrirModalPedido('${_sid(x.p.id)}')" style="cursor:pointer;">
-      <td class="td-bold">${_esc(x.p.clienteNome||x.p.cliente||'—')}</td>
+  const linhasGar=comMont.map(x=>`<tr>
+      <td class="td-bold" onclick="abrirModalPedido('${_sid(x.p.id)}')" style="cursor:pointer;">${_esc(x.p.clienteNome||x.p.cliente||'—')}</td>
       <td style="font-size:12px;white-space:nowrap;">${x.p.dataMontagem?_fmtDateBR(x.p.dataMontagem):'—'}</td>
       <td style="font-size:12px;">${badge(x.ferAtiva,x.vFer)}</td>
       <td style="font-size:12px;">${badge(x.mdfAtiva,x.vMdf)}</td>
+      <td style="white-space:nowrap;"><button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 7px;" onclick="_termoGarantia('${_sid(x.p.id)}')" title="Termo de garantia (imprimir/PDF)">📄 Termo</button> <button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 7px;" onclick="_termoGarantiaEmail('${_sid(x.p.id)}')" title="Enviar termo por e-mail">📧</button></td>
     </tr>`).join('');
   const secGar=`<div style="font-size:14px;font-weight:600;color:var(--dark);margin:26px 0 10px;">🛡️ Garantia — pedidos montados <span style="color:var(--gl);font-size:12px;">(${comMont.length})</span></div>
-    ${comMont.length?`<div class="tbl-wrap"><table><thead><tr><th>Cliente</th><th>Montado em</th><th>Ferragens (${g.ferragens} ano${g.ferragens!==1?'s':''})</th><th>MDF (${g.mdf} anos)</th></tr></thead><tbody>${linhasGar}</tbody></table></div>`
+    ${comMont.length?`<div class="tbl-wrap"><table><thead><tr><th>Cliente</th><th>Montado em</th><th>Ferragens (${g.ferragens} ano${g.ferragens!==1?'s':''})</th><th>MDF (${g.mdf} anos)</th><th>Termo</th></tr></thead><tbody>${linhasGar}</tbody></table></div>`
       :`<div style="text-align:center;padding:24px;color:var(--gl);border:1px dashed var(--border);border-radius:12px;">Nenhum pedido com "Data montagem real" preenchida ainda — a garantia conta a partir dela.</div>`}`;
   el.innerHTML=cfgG+secAt+secGar;
+}
+// ── Termo de Garantia (por pedido) — imprimível/PDF + e-mail ──
+function _termoGarantia(pedId){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p){toast('Pedido não encontrado');return;}
+  const ini=p.dataMontagem; if(!ini){ toast('Este pedido não tem "Data montagem real" — a garantia conta a partir dela.'); return; }
+  const g=_getGarantia();
+  const emp=ST.empresa||{}; const nomeEmp=emp.nome||'Casa Villare Ambientes Planejados'; const cnpj=emp.cnpj||'63.120.610/0001-49'; const cidEmp=emp.cidade||'Valinhos — SP';
+  const cliente=p.clienteNome||p.cliente||'—';
+  const vFer=_garantiaVence(ini,g.ferragens), vMdf=_garantiaVence(ini,g.mdf);
+  const bd=iso=>iso?(iso+'T12:00').split('T')[0].split('-').reverse().join('/'):'—';
+  const dd=d=>d?d.toLocaleDateString('pt-BR'):'—';
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const nomeArq=('Termo_Garantia_'+cliente).replace(/[^\w.-]+/g,'_');
+  const paras=(g.texto||_GARANTIA_TEXTO_DEF).split('\n').filter(s=>s.trim()).map(s=>`<p style="margin-bottom:8px;text-align:justify;">${_esc(s)}</p>`).join('');
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Termo de Garantia — ${_esc(cliente)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000;background:#fff;}
+.page{width:210mm;padding:12mm 16mm;margin:0 auto;}
+.hd{border:1px solid #000;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+.hd .ti{font-weight:bold;font-size:14px;}.hd .co{font-size:10px;text-align:center;line-height:1.5;}
+.info{border:1px solid #000;border-top:none;padding:10px 12px;font-size:12px;line-height:1.7;}
+.gar{border:1px solid #000;border-top:none;display:grid;grid-template-columns:1fr 1fr;}
+.gar>div{padding:12px 14px;}.gar>div:first-child{border-right:1px solid #000;}
+.gar .l{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#555;font-weight:700;}
+.gar .v{font-size:16px;font-weight:800;color:#166534;margin-top:3px;}.gar .s{font-size:11px;color:#444;margin-top:2px;}
+.corpo{border:1px solid #000;border-top:none;padding:14px;font-size:12px;line-height:1.6;}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:9;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;padding:8px 20px;gap:10px;}
+.toolbar span{color:#fff;font-size:13px;font-weight:600;}.tb{border:none;border-radius:6px;padding:7px 16px;font-weight:600;cursor:pointer;}
+body.tb-on{padding-top:48px;}@media print{.toolbar{display:none!important;}body{padding-top:0!important;}}</style></head>
+<body class="tb-on"><div class="toolbar"><span>🛡️ Termo de Garantia — ${_esc(cliente)}</span>
+<div style="display:flex;gap:8px;"><button class="tb" style="background:#e0e0e0;" onclick="window.print()">🖨 Imprimir</button>
+<button class="tb" style="background:#c0392b;color:#fff;" onclick="var t=document.title;document.title='${nomeArq}';window.print();setTimeout(()=>document.title=t,300);">📥 Salvar PDF</button></div></div>
+<div class="page">
+  <div class="hd"><div class="ti">TERMO DE<br>GARANTIA</div><div class="co"><strong>${_esc(nomeEmp.toUpperCase())}</strong><br>CNPJ: ${_esc(cnpj)}<br>${_esc(cidEmp)}</div><div style="text-align:right;font-size:11px;">${hoje}</div></div>
+  <div class="info"><strong>Cliente:</strong> ${_esc(cliente)}${p.descricao?' &nbsp;·&nbsp; <strong>Ambiente:</strong> '+_esc(p.descricao):''}<br><strong>Montagem finalizada em:</strong> ${bd(ini)}</div>
+  <div class="gar">
+    <div><div class="l">Painéis / MDF</div><div class="v">${g.mdf} ano${g.mdf!==1?'s':''}</div><div class="s">Válida até ${dd(vMdf)}</div></div>
+    <div><div class="l">Ferragens / Acessórios</div><div class="v">${g.ferragens} ano${g.ferragens!==1?'s':''}</div><div class="s">Válida até ${dd(vFer)}</div></div>
+  </div>
+  <div class="corpo">${paras}</div>
+  <div style="text-align:right;font-size:11px;margin-top:16px;">${_esc(cidEmp)}, ${hoje}</div>
+  <div style="margin-top:44px;text-align:center;"><div style="border-top:1px solid #000;width:60%;margin:0 auto;padding-top:6px;font-size:11px;"><strong>${_esc(nomeEmp.toUpperCase())}</strong></div></div>
+</div></body></html>`;
+  const w=window.open('','_blank','width=920,height=800');
+  if(w){ w.document.write(html); w.document.close(); } else toast('❌ Popup bloqueado — permita pop-ups');
+}
+function _termoGarantiaEmail(pedId){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p){toast('Pedido não encontrado');return;}
+  const ini=p.dataMontagem; if(!ini){ toast('Este pedido não tem "Data montagem real".'); return; }
+  const g=_getGarantia();
+  const cliente=p.clienteNome||p.cliente||'—';
+  const vFer=_garantiaVence(ini,g.ferragens), vMdf=_garantiaVence(ini,g.mdf);
+  const dd=d=>d?d.toLocaleDateString('pt-BR'):'—';
+  const bd=(ini+'T12:00').split('T')[0].split('-').reverse().join('/');
+  const assunto='Termo de Garantia — Casa Villare — '+cliente;
+  const corpo='TERMO DE GARANTIA — Casa Villare\n\nCliente: '+cliente+'\nMontagem finalizada em: '+bd+'\n\nGARANTIA:\n• Painéis/MDF: '+g.mdf+' ano(s) — válida até '+dd(vMdf)+'\n• Ferragens/Acessórios: '+g.ferragens+' ano(s) — válida até '+dd(vFer)+'\n\n'+(g.texto||_GARANTIA_TEXTO_DEF);
+  window.location.href='mailto:?subject='+encodeURIComponent(assunto)+'&body='+encodeURIComponent(corpo);
 }
 
 // ── Custos Fábrica ──────────────────────────────────────
