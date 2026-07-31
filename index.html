@@ -18737,14 +18737,13 @@ initFirebase();
   });
   if(n>0){ save(); console.log('[CVP] Migração: '+n+' lead(s) ganho sem dataFechamento corrigido(s).'); }
 })();
-// Retoma sessão apenas se token de sessão existe (protege contra cópia de localStorage)
+// Retoma a sessão enquanto o usuário NÃO fez logout. sair() apaga o cvp_pay (localStorage),
+// então se ele existe com nome/perfil a sessão é legítima. Antes exigíamos um token no
+// sessionStorage — mas ele se perdia em alguns F5/Ctrl+Shift+R e derrubava o usuário pro
+// login toda hora. A segurança dos DADOS continua no Firebase Auth (regras C1 exigem sessão
+// autenticada p/ ler/gravar) — este token não era a proteção real. entrar() reemite o token.
 if(ST.nome&&ST.perfil&&ST.area){
-  if(sessionStorage.getItem('cvp_token')){
-    entrar(ST.nome,ST.perfil,ST.area);
-  } else {
-    // Sem token → nova aba ou localStorage copiado → exige re-login
-    ST.nome=''; ST.perfil=''; ST.area='';
-  }
+  entrar(ST.nome,ST.perfil,ST.area);
 }
 // Decisão tomada (app restaurado OU login à mostra): remove o splash de carregamento.
 try{const _sp=document.getElementById('cv-splash');if(_sp)_sp.remove();}catch(e){}
