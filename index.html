@@ -15507,6 +15507,77 @@ function bipAtualizarStatus(leadId,condId,status){
   save(); rBipartido();
 }
 
+// ── Crédito DISPONÍVEL na fábrica (bipartido de pedidos que ainda NÃO foram feitos à fábrica) ──
+function _bipCreditoDados(){
+  const idxPed=_PED_ETAPAS_ORDER.indexOf('pedido');
+  const rows=[];
+  (ST.leads||[]).filter(l=>l.status==='ganho' && (l.condicoesPgto||[]).some(c=>c.forma==='financiamento')).forEach(l=>{
+    const p=(ST.pedidos||[]).find(x=>String(x.leadId)===String(l.id));
+    const i=p?_PED_ETAPAS_ORDER.indexOf(p.status):-1;
+    if(i>=0 && i>=idxPed) return; // já consumido (baixado) — fora do crédito disponível
+    (l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').forEach(c=>{
+      rows.push({ cliente:l.nome||'—', resp:l.responsavel||'', venc:c.vencimento||'',
+        valorFin:c.valor||0, valorBip:_bipartidoCond(c),
+        etapa:p?((PED_ETAPAS.find(e=>e.id===p.status)||{}).label||p.status):'Sem pedido' });
+    });
+  });
+  rows.sort((a,b)=>(a.venc||'').localeCompare(b.venc||''));
+  return { rows, totalBip:rows.reduce((a,r)=>a+r.valorBip,0), totalFin:rows.reduce((a,r)=>a+r.valorFin,0) };
+}
+function bipRelatorioCredito(){
+  const {rows,totalBip,totalFin}=_bipCreditoDados();
+  if(!rows.length){ toast('Nenhum crédito disponível na fábrica no momento.'); return; }
+  const emp=ST.empresa||{}; const nomeEmp=emp.nome||'Casa Villare Ambientes Planejados'; const cidEmp=emp.cidade||'Valinhos — SP';
+  const f=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fD=v=>{if(!v)return'—';const p=(v+'T12:00').split('T')[0].split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const linhas=rows.map(r=>`<tr>
+    <td>${_esc(r.cliente)}${r.resp?'<br><span style="font-size:10px;color:#666;">'+_esc(r.resp)+'</span>':''}</td>
+    <td>${_esc(r.etapa)}</td>
+    <td style="text-align:center;">${fD(r.venc)}</td>
+    <td style="text-align:right;">R$ ${f(r.valorFin)}</td>
+    <td style="text-align:right;font-weight:700;color:#166534;">R$ ${f(r.valorBip)}</td>
+  </tr>`).join('');
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Crédito na Fábrica — ${_esc(nomeEmp)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000;background:#fff;}
+.page{width:210mm;padding:12mm 14mm;margin:0 auto;}
+.hd{border:1px solid #000;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+.hd .ti{font-weight:bold;font-size:13px;}.hd .co{font-size:10px;text-align:center;line-height:1.5;}
+.big{border:1px solid #000;border-top:none;background:#F0FFF4;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;}
+.big .l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}.big .v{font-size:22px;font-weight:900;color:#166534;}
+table{width:100%;border-collapse:collapse;}th,td{border:1px solid #000;padding:6px 8px;font-size:11px;vertical-align:top;}
+th{background:#eee;text-align:left;font-size:10px;text-transform:uppercase;}tfoot td{font-weight:700;background:#f7f7f7;}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:9;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;padding:8px 20px;gap:10px;}
+.toolbar span{color:#fff;font-size:13px;font-weight:600;}.tb{border:none;border-radius:6px;padding:7px 16px;font-weight:600;cursor:pointer;}
+body.tb-on{padding-top:48px;}@media print{.toolbar{display:none!important;}body{padding-top:0!important;}}</style></head>
+<body class="tb-on"><div class="toolbar"><span>🏭 Crédito Disponível na Fábrica</span>
+<div style="display:flex;gap:8px;"><button class="tb" style="background:#e0e0e0;" onclick="window.print()">🖨 Imprimir</button>
+<button class="tb" style="background:#c0392b;color:#fff;" onclick="var t=document.title;document.title='Credito_Fabrica_${hoje.replace(/\//g,'-')}';window.print();setTimeout(()=>document.title=t,300);">📥 Salvar PDF</button></div></div>
+<div class="page">
+  <div class="hd"><div class="ti">CRÉDITO DISPONÍVEL<br>NA FÁBRICA</div><div class="co"><strong>${_esc(nomeEmp.toUpperCase())}</strong><br>${_esc(cidEmp)}</div><div style="text-align:right;font-size:11px;">${hoje}</div></div>
+  <div class="big"><span class="l">Saldo disponível na fábrica</span><span class="v">R$ ${f(totalBip)}</span></div>
+  <table><thead><tr><th>Cliente / Responsável</th><th>Etapa do pedido</th><th style="text-align:center;">Vencimento</th><th style="text-align:right;">Valor Financiado</th><th style="text-align:right;">Bipartido 40%</th></tr></thead>
+  <tbody>${linhas}</tbody>
+  <tfoot><tr><td colspan="3" style="text-align:right;">TOTAL</td><td style="text-align:right;">R$ ${f(totalFin)}</td><td style="text-align:right;color:#166534;">R$ ${f(totalBip)}</td></tr></tfoot></table>
+  <div style="font-size:10px;color:#666;margin-top:14px;">* Crédito disponível = 40% (bipartido) dos financiamentos de vendas fechadas cujo pedido AINDA NÃO foi feito à fábrica (não deu baixa). Ao entrar em "Pedido à Fábrica", o valor sai deste saldo (foi usado). Gerado em ${hoje}.</div>
+</div></body></html>`;
+  const w=window.open('','_blank','width=920,height=740');
+  if(w){ w.document.write(html); w.document.close(); } else toast('❌ Popup bloqueado — permita pop-ups');
+}
+function bipRelatorioEmail(){
+  const {rows,totalBip}=_bipCreditoDados();
+  if(!rows.length){ toast('Nenhum crédito disponível na fábrica no momento.'); return; }
+  const B=v=>'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fD=v=>{if(!v)return'—';const p=(v+'T12:00').split('T')[0].split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  let corpo='Crédito disponível na fábrica (Casa Villare) — '+hoje+'\n\n';
+  corpo+='SALDO DISPONÍVEL: '+B(totalBip)+'\n\n';
+  rows.forEach(r=>{ corpo+='• '+r.cliente+' — '+r.etapa+' — venc. '+fD(r.venc)+' — bipartido '+B(r.valorBip)+'\n'; });
+  corpo+='\n* 40% dos financiamentos cujos pedidos ainda não foram feitos à fábrica.';
+  const assunto='Crédito disponível na fábrica — Casa Villare ('+hoje+')';
+  window.location.href='mailto:?subject='+encodeURIComponent(assunto)+'&body='+encodeURIComponent(corpo);
+}
+
 function rBipartido(tgt){
   const _tgt=tgt||'fin-content'; // reutilizável (Financeiro e aba Fábrica)
   ['bip-mes-label','fab-mes-label'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=mesNomeStr(_bipMes,_bipAno);});
@@ -15582,7 +15653,13 @@ function rBipartido(tgt){
   // Bloco ACUMULADO (todos os meses) — só some se nunca houve financiamento
   const blocoAcum = regTodos.length ? `
     <div style="border-top:2px solid var(--border);margin-top:8px;padding-top:20px;">
-      <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:600;color:var(--dark);margin-bottom:14px;">📊 Acumulado — todos os meses</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <div style="font-family:'Sora',sans-serif;font-size:14px;font-weight:600;color:var(--dark);">📊 Acumulado — todos os meses</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="bipRelatorioCredito()" title="Relatório do crédito disponível na fábrica (imprimir/PDF)">📄 Relatório do saldo</button>
+          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="bipRelatorioEmail()" title="Abrir e-mail com o resumo do crédito disponível">📧 E-mail</button>
+        </div>
+      </div>
       <div class="stats-grid" style="margin-bottom:16px;">
         <div class="stat-card" style="border-left:4px solid #16A34A;">
           <div class="sc-label">🟢 Crédito disponível na fábrica</div>
