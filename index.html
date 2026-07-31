@@ -9805,27 +9805,33 @@ function cfgSalvarMetasFabrica(){
 
 // Soma valorFabrica de pedidos que pagaram a fábrica no mês (mes = 'YYYY-MM')
 const _FAB_ETAPAS_PAGAS=['pg_fab','pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
-// Pagamentos DIRETOS à fábrica no mês (valorFabrica lançado em pedidos já na etapa de pagamento)
+// Fábrica PRINCIPAL = a que tem as metas de desconto (Configurações → Fábrica → Nome, ex.: Casimiro).
+// Vazio (não configurado) = conta TODAS as fábricas (retrocompatível).
+function _fabricaPrincipal(){ return ((ST.fabrica&&ST.fabrica.nome)||'').trim(); }
+// Conta na meta da Casimiro: se não há principal definida, OU o pedido não tem fábrica marcada
+// (padrão = Casimiro), OU a fábrica é a principal. Só EXCLUI quem está marcado como outra fábrica.
+function _ehFabricaPrincipal(p){ const fp=_fabricaPrincipal(); const f=(p.fornecedor||'').trim(); return !fp || !f || f===fp; }
+// Pagamentos DIRETOS à fábrica PRINCIPAL no mês (não financiados) — competência = pagamento (datePgFab, editável).
 function _totalFabricaMes(mes){
   return (ST.pedidos||[])
     .filter(p=>{
-      if(_pedShowroom(p)) return false;    // showroom/investimento não conta na meta fábrica
+      if(_pedShowroom(p)) return false;        // showroom/investimento não conta na meta
       if(!p.valorFabrica) return false;
-      if(_bipartidoPed(p)>0) return false; // financiado → conta no bipartido (evita dupla contagem na Meta) — item C
+      if(_bipartidoPed(p)>0) return false;     // financiado → conta no bipartido (sem dupla contagem)
+      if(!_ehFabricaPrincipal(p)) return false;// só a fábrica principal (Casimiro) — item Casimiro
       if(!_FAB_ETAPAS_PAGAS.includes(p.status)) return false;
-      const d=(p.datePgFab||p.data||'').slice(0,7); // competência = quando pagou (ou data do pedido)
-      return d===mes;
+      return (p.datePgFab||p.data||'').slice(0,7)===mes; // competência = quando pagou (ou data do pedido)
     })
     .reduce((s,p)=>s+(p.valorFabrica||0),0);
 }
-// Bipartido do mês = 40% líquido dos financiamentos das vendas FECHADAS no mês (a financeira envia à fábrica)
+// Bipartido do mês = 40% líquido dos financiamentos das vendas FECHADAS no mês. ENTRA na venda (o crédito
+// existe desde o fechamento); a BAIXA do crédito é só quando o pedido vai a "Pedido Fábrica" (ver rBipartido).
 function _bipartidoTotalMes(mes){
   return (ST.leads||[])
     .filter(l=>l.status==='ganho' && (l.dataFechamento||l.dataCriacao||'').slice(0,7)===mes)
     .reduce((s,l)=>s+(l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').reduce((a,c)=>a+_bipartidoCond(c),0),0);
 }
 // Volume TOTAL de compras da fábrica no mês (Meta Fábrica) = pagamentos diretos + bipartido.
-// São mutuamente exclusivos na prática (venda à vista → pagamento; financiada → bipartido, valorFabrica=0).
 function _volumeFabricaMes(mes){ return _totalFabricaMes(mes)+_bipartidoTotalMes(mes); }
 
 // Retorna tiers configurados da fábrica (com defaults)
@@ -15702,14 +15708,18 @@ function rFabPagamentos(){
   ['bip-mes-label','fab-mes-label'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=mesNomeStr(_bipMes,_bipAno);});
   // Só os pagamentos DO MÊS (mesma competência da Meta Fábrica: etapa paga + mês do datePgFab/data).
   // Pedido financiado NÃO entra aqui (aparece na aba Bipartido) — evita dupla contagem (item C).
-  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && _bipartidoPed(p)<=0 && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr)
+  // Diretos (não financiados) + financiados QUE TÊM comprovante (caso misto: parte direta paga à fábrica).
+  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr && (_bipartidoPed(p)<=0 || !!p.comprovante))
     .sort((a,b)=>(b.valorFabrica||0)-(a.valorFabrica||0));
-  const total=peds.reduce((s,p)=>s+(p.valorFabrica||0),0);
+  // Total = só os DIRETOS (financiado não soma aqui — já conta nas abas Custos e Bipartido).
+  const total=peds.filter(p=>_bipartidoPed(p)<=0).reduce((s,p)=>s+(p.valorFabrica||0),0);
+  const nFin=peds.filter(p=>_bipartidoPed(p)>0).length;
   const comComp=peds.filter(p=>p.comprovante).length;
-  const semComp=peds.length-comComp;
+  const semComp=peds.filter(p=>_bipartidoPed(p)<=0&&!p.comprovante).length;
   const linhas=peds.map(p=>{
     const fab=p.fornecedor||'—';
     const temComp=!!p.comprovante;
+    const isFin=_bipartidoPed(p)>0;
     const compCell=(temComp
       ? `<button class="btn btn-s btn-sm" onclick="verComprovante('${p.id}')">👁️ Ver</button>
          <button class="btn btn-s btn-sm" onclick="enviarComprovanteEmail('${p.id}')" title="Enviar à fábrica por e-mail">📧</button>`
@@ -15717,9 +15727,9 @@ function rFabPagamentos(){
       + `<button class="btn btn-p btn-sm" onclick="fabGerarRecibo('${p.id}')" title="Gerar recibo de pagamento à fábrica">🧾 Recibo</button>`;
     const et=PED_ETAPAS.find(e=>e.id===p.status)||{label:p.status||'—',cor:'#6B7280',icon:''};
     return `<tr>
-      <td style="padding:7px 10px;font-size:13px;">${_esc(p.clienteNome||p.cliente||'—')}</td>
+      <td style="padding:7px 10px;font-size:13px;">${_esc(p.clienteNome||p.cliente||'—')}${isFin?' <span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 6px;border-radius:8px;font-weight:700;" title="Pedido financiado (bipartido) — o valor não soma no total desta aba; veja a aba Bipartido">🔗 Financiado</span>':''}</td>
       <td style="padding:7px 10px;font-size:12px;color:#6B7280;">${_esc(fab)}</td>
-      <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:700;color:#B45309;">${fmt(p.valorFabrica)}</td>
+      <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:700;color:${isFin?'#9CA3AF':'#B45309'};" title="${isFin?'Valor total do pedido de fábrica (financiado — não soma no total desta aba)':''}">${fmt(p.valorFabrica)}</td>
       <td style="padding:7px 10px;"><span class="badge" style="background:${et.cor}20;color:${et.cor};border:1px solid ${et.cor}40;white-space:nowrap;font-size:11px;">${et.icon} ${et.label}</span></td>
       <td style="padding:7px 10px;">${temComp?'<span style="font-size:11px;color:#166534;font-weight:700;">✅ anexado</span>':'<span style="font-size:11px;color:#B45309;font-weight:700;">⏳ pendente</span>'}</td>
       <td style="padding:7px 10px;white-space:nowrap;">${compCell}</td>
@@ -15729,9 +15739,9 @@ function rFabPagamentos(){
   <div style="padding:8px 0;">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;">
       <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
-        <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total à Fábrica</div>
+        <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total à Fábrica (direto)</div>
         <div style="font-size:18px;font-weight:800;color:#B45309;">${fmt(total)}</div>
-        <div style="font-size:10px;color:#9CA3AF;">${peds.length} pedido(s)</div>
+        <div style="font-size:10px;color:#9CA3AF;">${peds.length-nFin} direto(s)${nFin>0?` · <span style="color:#6D28D9;">${nFin} financiado(s) 🔗</span>`:''}</div>
       </div>
       <div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:12px;padding:14px 16px;">
         <div style="font-size:11px;color:#166534;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Comprovante anexado</div>
@@ -17232,8 +17242,8 @@ function rMetas(){
     <div style="background:var(--card);border:1.5px solid #E9D5FF;border-radius:14px;padding:18px 20px;margin-top:18px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
         <div>
-          <div style="font-size:13px;font-weight:800;color:#7E22CE;">🏭 Meta Fábrica — ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
-          <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Volume de compras da fábrica no mês · pagamentos ${fmt(_pagFab)} + bipartido ${fmt(_bipFab)}</div>
+          <div style="font-size:13px;font-weight:800;color:#7E22CE;">🏭 Meta Fábrica${_fabricaPrincipal()?' — '+_esc(_fabricaPrincipal()):''} · ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Volume de compras no mês · pagamentos ${fmt(_pagFab)} + bipartido ${fmt(_bipFab)}${_fabricaPrincipal()?'':' <span style="color:#DC2626;">⚠️ defina a fábrica principal em Config → Fábrica</span>'}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:22px;font-weight:800;color:#7E22CE;">${fmt(totalFab)}</div>

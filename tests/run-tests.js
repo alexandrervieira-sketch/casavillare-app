@@ -457,12 +457,20 @@ test('E1: pessoa sem campos sensíveis não gera doc priv', () => {
   assert(!T._cfgprivDocs().find(d => d.id === 'SoPublicoE1'), 'sem sensível → sem doc priv');
 });
 
-// ── Meta Fábrica = pagamentos diretos + bipartido do mês ──
+// ── Meta Fábrica = pagamentos diretos (fábrica principal) + bipartido do mês (por venda) ──
 test('bipartidoTotalMes/volumeFabricaMes: inclui o bipartido dos financiamentos fechados no mês', () => {
   T.ST.leads = T.ST.leads || [];
   T.ST.leads.push({ id: 'LvolX', status: 'ganho', dataFechamento: '2030-05-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
   assert(_close(T._bipartidoTotalMes('2030-05'), 40000), 'cliente assume → 40% de 100000');
   assert(_close(T._volumeFabricaMes('2030-05'), T._totalFabricaMes('2030-05') + 40000), 'volume = pagamentos + bipartido');
+});
+test('totalFabricaMes: pagamento direto só conta pra fábrica principal (Casimiro)', () => {
+  T.ST.fabrica = { nome: 'Casimiro' };
+  T.ST.pedidos = T.ST.pedidos || [];
+  T.ST.pedidos.push({ id: 'PfabA', fornecedor: 'Casimiro',      valorFabrica: 50000, status: 'pedido', datePgFab: '2030-08-05' });
+  T.ST.pedidos.push({ id: 'PfabB', fornecedor: 'Outra Fábrica', valorFabrica: 30000, status: 'pedido', datePgFab: '2030-08-06' });
+  assert(_close(T._totalFabricaMes('2030-08'), 50000), 'só a Casimiro (50k); a outra fábrica (30k) fica de fora');
+  T.ST.fabrica = {}; // restaura p/ não afetar outros testes
 });
 test('bipartidoTotalMes: mês sem financiamento fechado = 0', () => {
   assertEq(T._bipartidoTotalMes('2031-01'), 0);
@@ -481,6 +489,7 @@ test('E1 P0-A: overwrite pelo configs público + re-merge preserva sensível E p
 
 // ── C: pedido financiado não conta 2× na Meta Fábrica (bipartido + valorFabrica) ──
 test('C: pedido financiado com valorFabrica não duplica na Meta Fábrica', () => {
+  T.ST.fabrica = {};
   T.ST.leads = T.ST.leads || []; T.ST.pedidos = T.ST.pedidos || [];
   T.ST.leads.push({ id: 'LdcC', status: 'ganho', dataFechamento: '2032-04-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
   T.ST.pedidos.push({ id: 'PdcC', leadId: 'LdcC', valorFabrica: 120000, status: 'concluido', datePgFab: '2032-04-15' });
