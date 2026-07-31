@@ -5976,6 +5976,12 @@ function rejeitarAusencia(id){
 
 function _agRenderCal(){
   const eventos=ST.eventos||[];
+  // Carga de MONTAGENS/ENTREGAS por dia (das datas previstas no card do pedido) — visão de capacidade
+  const _montDia={}, _entrDia={};
+  (ST.pedidos||[]).forEach(p=>{
+    if(p.prevMontagem){ (_montDia[p.prevMontagem]=_montDia[p.prevMontagem]||[]).push(p); }
+    if(p.prevEntrega){  (_entrDia[p.prevEntrega] =_entrDia[p.prevEntrega]||[]).push(p); }
+  });
   const hoje=new Date(); hoje.setHours(0,0,0,0);
   const hojeStr=hoje.toISOString().slice(0,10);
   // primeiro dia do mês
@@ -6005,8 +6011,10 @@ function _agRenderCal(){
       chips+=`<div class="ag-chip ${tp.chip}" onclick="event.stopPropagation();abrirModalEvento('${_sid(ev.id)}')" title="${_esc(ev.titulo)}">${tp.icon} ${_esc(ev.titulo)}</div>`;
     });
     if(evsDia.length>max) chips+=`<div class="ag-chip" style="background:var(--border);color:var(--mid);">+${evsDia.length-max} mais</div>`;
+    const _nm=(_montDia[dStr]||[]).length, _ne=(_entrDia[dStr]||[]).length;
+    const _load=(_nm||_ne)?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:2px;">${_nm?`<span title="${_nm} montagem(ns) neste dia" style="font-size:9px;background:#FEF3C7;color:#92400E;border-radius:4px;padding:0 4px;font-weight:700;">🔧${_nm}</span>`:''}${_ne?`<span title="${_ne} entrega(s) neste dia" style="font-size:9px;background:#DBEAFE;color:#1D4ED8;border-radius:4px;padding:0 4px;font-weight:700;">📦${_ne}</span>`:''}</div>`:'';
     html+=`<div class="ag-cal-day${isHoje?' ag-today':''}${isSel?' ag-sel':''}" onclick="agDiaSel('${dStr}')">
-      <div class="ag-day-num">${dia}</div>${chips}</div>`;
+      <div class="ag-day-num">${dia}</div>${_load}${chips}</div>`;
   }
   // completar última linha
   const total=offset+ultimoDia.getDate();
@@ -6057,6 +6065,20 @@ function _agRenderDia(){
         </div>
       </div>`;
     });
+  }
+  // ── Montagens & Entregas do dia (datas previstas no card do pedido) ──
+  const _monts=(ST.pedidos||[]).filter(p=>p.prevMontagem===_agDiaSel);
+  const _entrs=(ST.pedidos||[]).filter(p=>p.prevEntrega===_agDiaSel);
+  if(_monts.length||_entrs.length){
+    html+=`<div style="margin-top:16px;margin-bottom:6px;font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.5px;">🔧 Montagens (${_monts.length}) · 📦 Entregas (${_entrs.length})</div>`;
+    const _row=(p,rot,cor)=>`<div class="ag-ev-card" onclick="abrirModalPedido('${_sid(p.id)}')" style="cursor:pointer;">
+      <div class="ag-ev-bar" style="background:${cor};"></div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:var(--dark);">${rot} · ${_esc(p.clienteNome||p.cliente||'—')}</div>
+        <div style="font-size:11px;color:var(--gl);">${_esc(p.descricao||'')}${p.montador?' · 🔧 '+_esc(p.montador):''}${p.cidade?' · 📍 '+_esc(p.cidade):''}</div>
+      </div></div>`;
+    _monts.forEach(p=>html+=_row(p,'🔧 Montagem','#F59E0B'));
+    _entrs.forEach(p=>html+=_row(p,'📦 Entrega','#2563EB'));
   }
   el.innerHTML=html;
 }
