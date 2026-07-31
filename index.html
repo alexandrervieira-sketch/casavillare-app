@@ -848,6 +848,7 @@ textarea.inp{resize:vertical;min-height:68px;}
           <button class="btn btn-p" onclick="abrirModalEvento(null)">+ Novo Evento</button>
         </div>
       </div>
+      <div id="ag-filtro-tipo" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
       <div id="ag-cal-container"></div>
       <div id="ag-day-eventos" style="margin-top:4px;"></div>
       <!-- AUSÊNCIAS -->
@@ -5754,6 +5755,13 @@ function excluirComissao(){
 // ── Agenda — Calendário de Eventos ──
 let _agMes=new Date().getMonth(), _agAno=new Date().getFullYear();
 let _agEvId=null, _agDiaSel=null;
+let _agFiltroTipo='tudo'; // filtro da carga: 'tudo' | 'montagem' | 'entrega'
+function agFiltroTipo(t){ _agFiltroTipo=t; _agRenderFiltro(); _agRenderCal(); _agRenderDia(); }
+function _agRenderFiltro(){
+  const el=document.getElementById('ag-filtro-tipo'); if(!el) return;
+  const btn=(t,lbl)=>`<button onclick="agFiltroTipo('${t}')" style="font-size:11.5px;border:1.5px solid ${_agFiltroTipo===t?'var(--p)':'var(--border)'};background:${_agFiltroTipo===t?'var(--p)':'transparent'};color:${_agFiltroTipo===t?'#fff':'var(--dark)'};border-radius:20px;padding:4px 12px;cursor:pointer;white-space:nowrap;">${lbl}</button>`;
+  el.innerHTML=`<span style="font-size:11px;color:var(--gl);align-self:center;margin-right:2px;">Carga:</span>`+btn('tudo','Tudo')+btn('montagem','🔧 Só montagens')+btn('entrega','📦 Só entregas');
+}
 
 const _tipoEv={
   reuniao:  {label:'Reunião',       icon:'🤝', chip:'ag-chip-reuniao',  bar:'ag-ev-bar-reuniao'},
@@ -5850,6 +5858,7 @@ function _limparAgendaOrfas(){
 function rAgenda(){
   _limparAgendaOrfas();
   document.getElementById('ag-mes-label').textContent=mesNomeStr(_agMes,_agAno);
+  _agRenderFiltro();
   _agRenderCal();
   _agRenderDia();
   rAgendaAusencias();
@@ -6011,7 +6020,7 @@ function _agRenderCal(){
       chips+=`<div class="ag-chip ${tp.chip}" onclick="event.stopPropagation();abrirModalEvento('${_sid(ev.id)}')" title="${_esc(ev.titulo)}">${tp.icon} ${_esc(ev.titulo)}</div>`;
     });
     if(evsDia.length>max) chips+=`<div class="ag-chip" style="background:var(--border);color:var(--mid);">+${evsDia.length-max} mais</div>`;
-    const _nm=(_montDia[dStr]||[]).length, _ne=(_entrDia[dStr]||[]).length;
+    const _nm=_agFiltroTipo==='entrega'?0:(_montDia[dStr]||[]).length, _ne=_agFiltroTipo==='montagem'?0:(_entrDia[dStr]||[]).length;
     const _load=(_nm||_ne)?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:2px;">${_nm?`<span title="${_nm} montagem(ns) neste dia" style="font-size:9px;background:#FEF3C7;color:#92400E;border-radius:4px;padding:0 4px;font-weight:700;">🔧${_nm}</span>`:''}${_ne?`<span title="${_ne} entrega(s) neste dia" style="font-size:9px;background:#DBEAFE;color:#1D4ED8;border-radius:4px;padding:0 4px;font-weight:700;">📦${_ne}</span>`:''}</div>`:'';
     html+=`<div class="ag-cal-day${isHoje?' ag-today':''}${isSel?' ag-sel':''}" onclick="agDiaSel('${dStr}')">
       <div class="ag-day-num">${dia}</div>${_load}${chips}</div>`;
@@ -6067,8 +6076,8 @@ function _agRenderDia(){
     });
   }
   // ── Montagens & Entregas do dia (datas previstas no card do pedido) ──
-  const _monts=(ST.pedidos||[]).filter(p=>p.prevMontagem===_agDiaSel);
-  const _entrs=(ST.pedidos||[]).filter(p=>p.prevEntrega===_agDiaSel);
+  const _monts=_agFiltroTipo==='entrega'?[]:(ST.pedidos||[]).filter(p=>p.prevMontagem===_agDiaSel);
+  const _entrs=_agFiltroTipo==='montagem'?[]:(ST.pedidos||[]).filter(p=>p.prevEntrega===_agDiaSel);
   if(_monts.length||_entrs.length){
     html+=`<div style="margin-top:16px;margin-bottom:6px;font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.5px;">🔧 Montagens (${_monts.length}) · 📦 Entregas (${_entrs.length})</div>`;
     const _row=(p,rot,cor)=>`<div class="ag-ev-card" onclick="abrirModalPedido('${_sid(p.id)}')" style="cursor:pointer;">
