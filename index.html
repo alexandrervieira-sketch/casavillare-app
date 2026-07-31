@@ -8600,8 +8600,11 @@ function rComissoes(){
         </div>
       </div>`).join('');
       html+=`<div class="com-section">
-        <div class="com-section-title">🧾 Recibos de pagamento — ${_comMesRefLabel(mesStr)} <span style="font-weight:400;color:var(--gl);font-size:12px;">(${pagsMes.length} · ${fmt(totalPagsMes)})</span></div>
-        <div class="com-vendas-list">${linhas}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div class="com-section-title" style="margin:0;">🧾 Recibos de pagamento — ${_comMesRefLabel(mesStr)} <span style="font-weight:400;color:var(--gl);font-size:12px;">(${pagsMes.length} · ${fmt(totalPagsMes)})</span></div>
+          <button class="btn btn-s btn-sm" style="font-size:11px;" onclick="comRelatorioPagos()" title="Relatório de comissões pagas do mês (imprimir/PDF)">📄 Relatório do mês</button>
+        </div>
+        <div class="com-vendas-list" style="margin-top:10px;">${linhas}</div>
       </div>`;
     }
   }
@@ -8614,6 +8617,52 @@ function _comReciboRefCurta(pg){
   if(pg.escopo==='projetista_parcela') return 'Projeto '+(pg.parcelaLabel||'')+(pg.cliente?' · '+pg.cliente:'');
   if(pg.escopo==='montador') return 'Montagem'+(pg.cliente?' · '+pg.cliente:'')+(pg.tipoPag==='parcial'?' (adiant.)':'');
   return 'Comissão';
+}
+// ── Relatório de COMISSÕES PAGAS do mês selecionado (do ledger comPagamentos) — imprimível/PDF ──
+function comRelatorioPagos(){
+  const mes=(typeof _comMes!=='undefined'&&_comMes)?_comMes:_hojeLocal().slice(0,7);
+  const pags=(ST.comPagamentos||[]).filter(p=>(p.data||'').startsWith(mes))
+    .sort((a,b)=>(a.pessoa||'').localeCompare(b.pessoa||'')||(a.data||'').localeCompare(b.data||''));
+  if(!pags.length){ toast('Nenhuma comissão paga em '+_comMesRefLabel(mes)); return; }
+  const porPessoa={}; pags.forEach(p=>{ (porPessoa[p.pessoa]=porPessoa[p.pessoa]||[]).push(p); });
+  const total=pags.reduce((a,p)=>a+(p.valor||0),0);
+  const emp=ST.empresa||{}; const nomeEmp=emp.nome||'Casa Villare Ambientes Planejados'; const cidEmp=emp.cidade||'Valinhos — SP';
+  const f=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const pIcon={vendedor:'🎯',projetista:'✏️',montador:'🔧',supervisor:'👷'};
+  const corpo=Object.keys(porPessoa).sort().map(nome=>{
+    const rows=porPessoa[nome]; const sub=rows.reduce((a,p)=>a+(p.valor||0),0); const perfil=rows[0].perfil||'';
+    const linhas=rows.map(p=>`<tr><td>${_fmtDateBR(p.data)}</td><td>${_esc(_comReciboRefCurta(p))}</td><td style="text-align:right;">R$ ${f(p.valor)}</td></tr>`).join('');
+    return `<tr class="grp"><td colspan="2">${pIcon[perfil]||'💰'} <strong>${_esc(nome)}</strong> <span style="color:#777;font-size:10px;">${_esc(perfil)}</span></td><td style="text-align:right;font-weight:700;">R$ ${f(sub)}</td></tr>${linhas}`;
+  }).join('');
+  const nPessoas=Object.keys(porPessoa).length;
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Comissões Pagas — ${_esc(_comMesRefLabel(mes))}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000;background:#fff;}
+.page{width:210mm;padding:12mm 14mm;margin:0 auto;}
+.hd{border:1px solid #000;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+.hd .ti{font-weight:bold;font-size:13px;}.hd .co{font-size:10px;text-align:center;line-height:1.5;}
+.big{border:1px solid #000;border-top:none;background:#F0FFF4;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;}
+.big .l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}.big .v{font-size:22px;font-weight:900;color:#166534;}
+table{width:100%;border-collapse:collapse;}th,td{border:1px solid #000;padding:6px 8px;font-size:11px;}
+th{background:#eee;text-align:left;font-size:10px;text-transform:uppercase;}
+tr.grp td{background:#f4f1ea;border-top:2px solid #000;}
+tfoot td{font-weight:800;background:#f7f7f7;font-size:13px;}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:9;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;padding:8px 20px;gap:10px;}
+.toolbar span{color:#fff;font-size:13px;font-weight:600;}.tb{border:none;border-radius:6px;padding:7px 16px;font-weight:600;cursor:pointer;}
+body.tb-on{padding-top:48px;}@media print{.toolbar{display:none!important;}body{padding-top:0!important;}}</style></head>
+<body class="tb-on"><div class="toolbar"><span>💰 Comissões Pagas — ${_esc(_comMesRefLabel(mes))}</span>
+<div style="display:flex;gap:8px;"><button class="tb" style="background:#e0e0e0;" onclick="window.print()">🖨 Imprimir</button>
+<button class="tb" style="background:#c0392b;color:#fff;" onclick="var t=document.title;document.title='Comissoes_Pagas_${mes}';window.print();setTimeout(()=>document.title=t,300);">📥 Salvar PDF</button></div></div>
+<div class="page">
+  <div class="hd"><div class="ti">COMISSÕES PAGAS</div><div class="co"><strong>${_esc(nomeEmp.toUpperCase())}</strong><br>${_esc(cidEmp)}</div><div style="text-align:right;font-size:11px;"><strong>${_esc(_comMesRefLabel(mes))}</strong><br>${hoje}</div></div>
+  <div class="big"><span class="l">Total pago no mês (${nPessoas} pessoa${nPessoas!==1?'s':''})</span><span class="v">R$ ${f(total)}</span></div>
+  <table><thead><tr><th>Data</th><th>Referente</th><th style="text-align:right;">Valor</th></tr></thead>
+  <tbody>${corpo}</tbody>
+  <tfoot><tr><td colspan="2" style="text-align:right;">TOTAL GERAL</td><td style="text-align:right;color:#166534;">R$ ${f(total)}</td></tr></tfoot></table>
+  <div style="font-size:10px;color:#666;margin-top:14px;">* Comissões efetivamente pagas (registradas no sistema) com data de pagamento em ${_esc(_comMesRefLabel(mes))}. Gerado em ${hoje}.</div>
+</div></body></html>`;
+  const w=window.open('','_blank','width=920,height=760');
+  if(w){ w.document.write(html); w.document.close(); } else toast('❌ Popup bloqueado — permita pop-ups');
 }
 
 // ══════════════════════════════════════════════════════
