@@ -2440,9 +2440,9 @@ textarea.inp{resize:vertical;min-height:68px;}
           <input class="inp" type="date" id="pd-prev-montagem"/></div>
       </div>
       <div class="fr r2" id="pd-datas-real" style="display:none;">
-        <div><label class="lbl">📦 Entrega real</label>
+        <div id="pd-data-entrega-wrap"><label class="lbl">📦 Entrega real</label>
           <input class="inp" type="date" id="pd-data-entrega"/></div>
-        <div><label class="lbl">🔧 Data montagem real</label>
+        <div id="pd-data-montagem-wrap"><label class="lbl">🔧 Data montagem real</label>
           <input class="inp" type="date" id="pd-data-montagem"/></div>
       </div>
 
@@ -13483,8 +13483,14 @@ function pdOnClienteChange(){
 
 function pdOnStatusChange(){
   const v=document.getElementById('pd-status').value;
-  const showReal=['agendamento','transporte','entregue','montagem','concluido'].includes(v);
-  document.getElementById('pd-datas-real').style.display=showReal?'':'none';
+  const idx=_PED_ETAPAS_ORDER.indexOf(v);
+  // Entrega real só a partir de "Em Transporte"; Montagem real só a partir de "Em Montagem".
+  // (não faz sentido registrar antes de a etapa acontecer)
+  const showEntrega = idx>=_PED_ETAPAS_ORDER.indexOf('transporte');
+  const showMont    = idx>=_PED_ETAPAS_ORDER.indexOf('montagem');
+  const _wE=document.getElementById('pd-data-entrega-wrap');  if(_wE) _wE.style.display=showEntrega?'':'none';
+  const _wM=document.getElementById('pd-data-montagem-wrap'); if(_wM) _wM.style.display=showMont?'':'none';
+  document.getElementById('pd-datas-real').style.display=(showEntrega||showMont)?'':'none';
   const atSec=document.getElementById('pd-at-section');
   if(atSec) atSec.style.display=v==='assistencia'?'':'none';
   const pgfabSec=document.getElementById('pd-pgfab-section');
