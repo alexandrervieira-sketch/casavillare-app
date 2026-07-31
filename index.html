@@ -2446,6 +2446,10 @@ textarea.inp{resize:vertical;min-height:68px;}
         <div id="pd-data-montagem-wrap"><label class="lbl">🔧 Data montagem real</label>
           <input class="inp" type="date" id="pd-data-montagem"/></div>
       </div>
+      <div class="fr r2" style="margin-top:10px;">
+        <div><label class="lbl">💳 Data pgto fábrica <span style="font-size:10px;color:var(--gl);">— ajuste retroativo se preciso</span></label>
+          <input class="inp" type="date" id="pd-pgfab-data"/></div>
+      </div>
 
       <hr class="form-div"/>
       <div class="form-sec">Status & Acompanhamento</div>
@@ -13991,6 +13995,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-prev-montagem').value  =p.prevMontagem||'';
     document.getElementById('pd-data-entrega').value   =p.dataEntrega||'';
     document.getElementById('pd-data-montagem').value  =p.dataMontagem||'';
+    document.getElementById('pd-pgfab-data').value     =p.datePgFab||'';
     pdCalcMargem();
     // Carregar fornecedores adicionais salvos
     _pdFornsAdicionais=p.fornecedoresAdicionais?_deepClone(p.fornecedoresAdicionais):[];
@@ -14064,6 +14069,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-prev-montagem').value='';
     document.getElementById('pd-data-entrega').value='';
     document.getElementById('pd-data-montagem').value='';
+    document.getElementById('pd-pgfab-data').value='';
     document.getElementById('pd-transp-tipo').value='fabrica'; document.getElementById('pd-transp-valor').value=''; pdTranspChange();
     document.getElementById('pd-medicao-sel').value='0'; document.getElementById('pd-medicao-valor').value=''; pdMedicaoChange();
     document.getElementById('pd-status').value='projeto';
@@ -14161,6 +14167,8 @@ function salvarPedido(){
     _pedBackfillMarcos(pedido); // pedido novo já criado num status avançado também carimba os marcos
     ST.pedidos.push(pedido);
   }
+  // Data do pagamento à fábrica EDITÁVEL — sobrepõe o carimbo automático (permite ajuste retroativo)
+  { const _pgD=document.getElementById('pd-pgfab-data'); if(_pgD && _pgD.value) pedido.datePgFab=_pgD.value; }
   _pdId=null; save();
   toast(isEdit?'Pedido atualizado!':'Pedido criado!');
   fecharModal('modal-pedido'); rPedidos();
