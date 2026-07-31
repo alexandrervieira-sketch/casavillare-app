@@ -15734,8 +15734,52 @@ function rFabPagamentos(){
       <td style="padding:7px 10px;white-space:nowrap;">${compCell}</td>
     </tr>`;
   }).join('');
+  // ── Barra da Meta da fábrica principal (Casimiro) no mês ──
+  const _fp=_fabricaPrincipal()||'Casimiro';
+  const volMeta=_volumeFabricaMes(mesStr);
+  const tiers=_getFabTiers();
+  const tierAt=tiers.reduce((acc,t)=>volMeta>=t.vol?t:acc,null);
+  const prox=tiers.find(t=>volMeta<t.vol)||null;
+  const maxVolM=tiers[tiers.length-1].vol;
+  const pctM=Math.min(Math.round(volMeta/maxVolM*100),100);
+  const metaHtml=`
+  <div style="background:linear-gradient(135deg,#FAF5FF,#F5F3FF);border:1.5px solid #E9D5FF;border-radius:14px;padding:16px 18px;margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#7E22CE;">🏭 Meta ${_esc(_fp)} · ${mesNomeStr(_bipMes,_bipAno)}</div>
+        <div style="font-size:11px;color:#9CA3AF;">Volume de compras no mês · pagamentos diretos + bipartido</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:22px;font-weight:800;color:#7E22CE;">${fmt(volMeta)}</div>
+        <div style="font-size:11px;font-weight:700;color:${tierAt?tierAt.cor:'#9CA3AF'};">${tierAt?tierAt.icon+' '+tierAt.desc+'% garantido':'Sem meta ainda'}</div>
+      </div>
+    </div>
+    <div style="height:10px;background:#EDE9FE;border-radius:20px;overflow:hidden;">
+      <div style="height:10px;width:${pctM}%;background:linear-gradient(90deg,#A855F7,#7C3AED);border-radius:20px;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;">
+      ${tiers.map(t=>`<span style="color:${volMeta>=t.vol?t.cor:'#9CA3AF'};font-weight:${volMeta>=t.vol?'700':'400'};">${t.icon} ${t.desc}% · ${fmt(t.vol)}</span>`).join('')}
+    </div>
+    ${prox?`<div style="margin-top:8px;font-size:12px;color:#6B21A8;">Faltam <strong>${fmt(prox.vol-volMeta)}</strong> pra ${prox.label} (${prox.desc}% de desconto)</div>`:`<div style="margin-top:8px;font-size:12px;color:#166534;font-weight:700;">🏆 Tier máximo atingido!</div>`}
+  </div>`;
+  // ── Total pago POR FÁBRICA no mês (diretos), principal em destaque ──
+  const porFab={};
+  peds.filter(p=>_bipartidoPed(p)<=0).forEach(p=>{ const f=(p.fornecedor||'').trim()||_fp; porFab[f]=(porFab[f]||0)+(p.valorFabrica||0); });
+  const fabEntries=Object.entries(porFab).sort((a,b)=>b[1]-a[1]);
+  const porFabHtml=fabEntries.length?`
+  <div style="margin-bottom:16px;">
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:8px;">Pago por fábrica no mês</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+      ${fabEntries.map(([f,v])=>{ const principal=(f===_fp); return `<div style="background:${principal?'#FFFBEB':'var(--card)'};border:1.5px solid ${principal?'#FDE68A':'var(--brd)'};border-radius:12px;padding:12px 14px;">
+        <div style="font-size:12px;font-weight:700;color:${principal?'#92400E':'var(--txt)'};">${principal?'⭐ ':''}${_esc(f)}</div>
+        <div style="font-size:17px;font-weight:800;color:${principal?'#B45309':'var(--txt)'};margin-top:2px;">${fmt(v)}</div>
+      </div>`; }).join('')}
+    </div>
+  </div>`:'';
   el.innerHTML=`
   <div style="padding:8px 0;">
+    ${metaHtml}
+    ${porFabHtml}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;">
       <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
         <div style="font-size:11px;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Total à Fábrica (direto)</div>
