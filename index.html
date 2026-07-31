@@ -5612,6 +5612,7 @@ function salvarFolha(){
   const pessoa=document.getElementById('pf-pessoa').value;
   const mesAno=document.getElementById('pf-mesref').value;
   if(!pessoa||!mesAno){toast('Preencha colaborador e mês');return;}
+  if(_mesTravado(mesAno,'folhas')) return;
   const dup=ST.folhas.find(f=>String(f.id)!==String(_pfId)&&f.pessoa===pessoa&&f.mesAno===mesAno);
   if(dup){toast('Já existe uma folha para '+pessoa+' em '+mesAno);return;}
   const info=infoFunc(pessoa);
@@ -5731,6 +5732,7 @@ function salvarComissao(){
   const desc=tipo==='vinc'?document.getElementById('cn-obra').value.trim():document.getElementById('cn-desc').value.trim();
   if(!desc){toast('Informe a obra ou descrição');return;}
   const mesAno=data.substring(0,7);
+  if(_mesTravado(mesAno,'comissões')) return;
   if(!_conflOk('comissoes',ST.comissoes,_cnId,'comissão')) return;
   const entrada={id:_cnId||_newId(),_uAt:Date.now(),pessoa,descricao:desc,valor,data:new Date(data+'T12:00').toLocaleDateString('pt-BR'),dataIso:data,mesAno,tipo,obs};
   const idx=ST.comissoes.findIndex(c=>String(c.id)===String(_cnId));
@@ -15020,6 +15022,40 @@ function calcDRE(mesAno){
 }
 
 let _finSubAtivo='dre';
+// ── FECHAMENTO MENSAL (trava de integridade) — só o gestor fecha/reabre ──
+function _mesFechado(mesAno){ return (ST.mesesFechados&&ST.mesesFechados[mesAno])||null; }
+function _mesTravado(mesAno, oQue){
+  if(_mesFechado(mesAno)){ toast('🔒 '+_comMesRefLabel(mesAno)+' está FECHADO — reabra o mês (Financeiro › DRE) para editar'+(oQue?' '+oQue:'')+'.'); return true; }
+  return false;
+}
+function _btnFecharMes(){
+  if(ST.perfil!=='gestor') return '';
+  const mesAno=mesAnoStr(_finMes,_finAno);
+  return _mesFechado(mesAno)
+    ? `<button class="btn btn-s btn-sm" style="border-color:#B45309;color:#B45309;" onclick="finReabrirMes()" title="Mês fechado — clique para reabrir">🔓 Reabrir mês</button>`
+    : `<button class="btn btn-s btn-sm" onclick="finFecharMes()" title="Travar edições financeiras deste mês">🔒 Fechar mês</button>`;
+}
+function finFecharMes(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor fecha o mês.'); return; }
+  const mesAno=mesAnoStr(_finMes,_finAno);
+  if(_mesFechado(mesAno)){ toast('Este mês já está fechado.'); return; }
+  if(!_cfgSyncPronto()) return;
+  if(!confirm('🔒 Fechar '+_comMesRefLabel(mesAno)+'?\n\nLançamentos financeiros deste mês (DRE, folha, comissões e contas a pagar) ficam BLOQUEADOS para edição. Você (gestor) pode reabrir quando quiser.')) return;
+  if(!ST.mesesFechados) ST.mesesFechados={};
+  ST.mesesFechados[mesAno]={por:ST.nome||'?', em:_hojeLocal()};
+  _cfgTouch('mesesFechados'); save(); toast('🔒 '+_comMesRefLabel(mesAno)+' fechado.');
+  finSubTab(_finSubAtivo||'dre');
+}
+function finReabrirMes(){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor reabre o mês.'); return; }
+  const mesAno=mesAnoStr(_finMes,_finAno);
+  if(!_mesFechado(mesAno)){ toast('Este mês não está fechado.'); return; }
+  if(!_cfgSyncPronto()) return;
+  if(!confirm('🔓 Reabrir '+_comMesRefLabel(mesAno)+' para edição?')) return;
+  delete ST.mesesFechados[mesAno];
+  _cfgTouch('mesesFechados'); save(); toast('🔓 '+_comMesRefLabel(mesAno)+' reaberto.');
+  finSubTab(_finSubAtivo||'dre');
+}
 function finSubTab(sub){
   _finSubAtivo=sub;
   ['dre','analise','cr','cp','fluxo','pag'].forEach(s=>{
@@ -15029,7 +15065,7 @@ function finSubTab(sub){
   const actEl=document.getElementById('fin-actions');
   if(actEl){
     if(sub==='dre'){
-      actEl.innerHTML=`<div class="mes-nav"><button onclick="finNavMes(-1)">‹</button><span class="mes-label" id="fin-mes-label-v">—</span><button onclick="finNavMes(1)">›</button></div><button class="btn btn-p" onclick="abrirModalDRE(null)">+ Lançamento</button>`;
+      actEl.innerHTML=`<div class="mes-nav"><button onclick="finNavMes(-1)">‹</button><span class="mes-label" id="fin-mes-label-v">—</span><button onclick="finNavMes(1)">›</button></div>${_btnFecharMes()}<button class="btn btn-p" onclick="abrirModalDRE(null)">+ Lançamento</button>`;
       document.getElementById('fin-mes-label').textContent='';
     } else if(sub==='analise'){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="finNavMes(-1)">‹</button><span class="mes-label" id="analise-mes-label">—</span><button onclick="finNavMes(1)">›</button></div>`;
@@ -15416,6 +15452,7 @@ function salvarCP(){
   const vencimento=document.getElementById('cp-vencimento').value;
   if(!vencimento){toast('Informe o vencimento');return;}
   const mesAno=vencimento.slice(0,7);
+  if(_mesTravado(mesAno,'contas a pagar')) return;
   const pago=document.getElementById('cp-pago').checked;
   if(!_conflOk('contasPagar',ST.contasPagar,_cpId,'conta a pagar')) return;
   const conta={
@@ -16267,6 +16304,11 @@ function rFinanceiro(){
   if(_finLblEl) _finLblEl.textContent=mesNomeStr(_finMes,_finAno);
   const mesAno=mesAnoStr(_finMes,_finAno);
   const d=calcDRE(mesAno);
+  const _fech=_mesFechado(mesAno);
+  const _fechadoBanner=_fech?`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:9px 14px;margin-bottom:14px;font-size:13px;">
+    <span>🔒 <strong>Mês fechado</strong>${_fech.por?' por '+_esc(_fech.por):''}${_fech.em?' em '+_fmtDateBR(_fech.em):''} — lançamentos deste mês estão bloqueados para edição.</span>
+    ${ST.perfil==='gestor'?`<button class="btn btn-s btn-sm" style="border-color:#B45309;color:#B45309;" onclick="finReabrirMes()">🔓 Reabrir</button>`:''}
+  </div>`:'';
   const pct=(v,base)=>base>0?(v/base*100).toFixed(1)+'%':'—';
   const pctCls=(v)=>v>=0?'ok':'fail';
   const entries=(ST.dre||[]).filter(e=>e.mesAno===mesAno);
@@ -16425,7 +16467,7 @@ function rFinanceiro(){
       </div>
     </div>`;
 
-  document.getElementById('fin-content').innerHTML=`${dasBanner}<div class="dre-wrap">${dreHtml}${lateralHtml}</div>`;
+  document.getElementById('fin-content').innerHTML=`${_fechadoBanner}${dasBanner}<div class="dre-wrap">${dreHtml}${lateralHtml}</div>`;
 
   // Renderiza gráfico de resultado
   const labels=[];const dataRes=[];
@@ -16494,6 +16536,8 @@ function salvarLancamento(){
   const valor=_parseBRL(document.getElementById('dre-valor').value);
   if(!desc){toast('Informe a descrição');return;}
   if(!valor||valor<=0){toast('Informe um valor válido');return;}
+  const _mesLanc=document.getElementById('dre-mes').value||mesAnoStr(_finMes,_finAno);
+  if(_mesTravado(_mesLanc,'lançamentos do DRE')) return;
   const isEdit=!!_dreId;
   if(!_conflOk('dre',ST.dre,_dreId,'lançamento')) return;
   const entrada={
