@@ -4103,6 +4103,9 @@ function togglePwd(){
 
 function entrar(nome,perfil,area){
   ST.nome=nome; ST.perfil=perfil; ST.area=area;
+  // Sessão numa chave PRÓPRIA (só nome/perfil/area — nada sensível). Sobrevive à sync/limpeza do
+  // cvp_pay, então F5/Ctrl+Shift+R não derruba pro login. Só é apagada no logout (sair()).
+  try{ localStorage.setItem('cvp_sessao', JSON.stringify({nome,perfil,area})); }catch(e){}
   sessionStorage.setItem('cvp_token', Math.random().toString(36).slice(2)+Date.now().toString(36));
   save();
   document.getElementById('login-overlay').classList.add('hidden');
@@ -4166,6 +4169,7 @@ function sair(){
   _idleStop();
   _fbAuthLogout();
   sessionStorage.removeItem('cvp_token');
+  try{ localStorage.removeItem('cvp_sessao'); }catch(e){}
   ST.nome=''; ST.perfil=''; ST.area=''; save();
   // LGPD: após o save() sincronizar com a nuvem, apaga a cópia LOCAL (cvp_pay guarda clientes/CPF/salários).
   // Em máquina compartilhada da loja, o próximo a abrir o navegador NÃO encontra os dados no disco.
@@ -16437,6 +16441,7 @@ function limparCacheLocal(){
   if(!confirm('🧹 Limpar o cache local deste navegador?\n\nSeus dados estão salvos na NUVEM e serão recarregados — nada é perdido.\n\n⚠️ Você vai precisar fazer login novamente.')) return;
   try{ localStorage.removeItem('cvp_pay'); }catch(e){}
   try{ sessionStorage.removeItem('cvp_token'); }catch(e){}
+  try{ localStorage.removeItem('cvp_sessao'); }catch(e){}
   location.reload();
 }
 // ── Prazos (SLA) das etapas de Pedidos — editáveis pelo gestor, sincronizados via _config ──
@@ -18831,12 +18836,15 @@ initFirebase();
   });
   if(n>0){ save(); console.log('[CVP] Migração: '+n+' lead(s) ganho sem dataFechamento corrigido(s).'); }
 })();
-// Retoma a sessão enquanto o usuário NÃO fez logout. sair() apaga o cvp_pay (localStorage),
-// então se ele existe com nome/perfil a sessão é legítima. Antes exigíamos um token no
-// sessionStorage — mas ele se perdia em alguns F5/Ctrl+Shift+R e derrubava o usuário pro
-// login toda hora. A segurança dos DADOS continua no Firebase Auth (regras C1 exigem sessão
-// autenticada p/ ler/gravar) — este token não era a proteção real. entrar() reemite o token.
-if(ST.nome&&ST.perfil&&ST.area){
+// Retoma a sessão enquanto o usuário NÃO fez logout. A identidade fica na chave PRÓPRIA
+// cvp_sessao (só nome/perfil/area), que sobrevive à sincronização/limpeza do cvp_pay — antes
+// a sessão vivia dentro do cvp_pay e se perdia em alguns F5/Ctrl+Shift+R (a nuvem sobrescrevia
+// sem o nome), derrubando o usuário pro login. Fallback: o próprio ST (compatibilidade).
+// Segurança dos DADOS continua no Firebase Auth (regras C1 exigem sessão autenticada).
+let _sess=null; try{ _sess=JSON.parse(localStorage.getItem('cvp_sessao')||'null'); }catch(e){}
+if(_sess&&_sess.nome&&_sess.perfil&&_sess.area){
+  entrar(_sess.nome,_sess.perfil,_sess.area);
+} else if(ST.nome&&ST.perfil&&ST.area){
   entrar(ST.nome,ST.perfil,ST.area);
 }
 // Decisão tomada (app restaurado OU login à mostra): remove o splash de carregamento.
