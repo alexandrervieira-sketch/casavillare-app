@@ -947,9 +947,9 @@ textarea.inp{resize:vertical;min-height:68px;}
         </div>
       </div>
       <div style="border-bottom:2px solid var(--border);margin-bottom:20px;display:flex;gap:0;">
-        <button class="fin-sub-btn active" id="fab-sub-custos"    onclick="fabSubTab('custos')">💰 Custos de Fábrica</button>
-        <button class="fin-sub-btn"        id="fab-sub-pagamentos" onclick="fabSubTab('pagamentos')">💳 Pagamentos à Fábrica</button>
-        <button class="fin-sub-btn"        id="fab-sub-bipartido" onclick="fabSubTab('bipartido')">🏭 Bipartido / Financiamento</button>
+        <button class="fin-sub-btn active" id="fab-sub-pagamentos" onclick="fabSubTab('pagamentos')">💳 Pagamentos à Fábrica</button>
+        <button class="fin-sub-btn"        id="fab-sub-custos"     onclick="fabSubTab('custos')">📊 Geral (gráficos)</button>
+        <button class="fin-sub-btn"        id="fab-sub-bipartido"  onclick="fabSubTab('bipartido')">🏭 Bipartido / Financiamento</button>
       </div>
       <div id="fab-content"></div>
     </div>
@@ -15684,7 +15684,7 @@ function bipNavMes(d){
 }
 
 // ── Aba 🏭 Fábrica: hub que reaproveita as telas de fábrica com permissão própria ──
-let _fabSubAtivo='custos';
+let _fabSubAtivo='pagamentos';
 function fabSubTab(sub){ _fabSubAtivo=sub; rFabrica(); }
 function fabNavMes(d){
   _bipMes+=d;
