@@ -8779,8 +8779,26 @@ function rComissoes(){
     }
   }
 
-  document.getElementById('com-content').innerHTML=html||
-    '<div class="com-empty">Nenhuma informação disponível.</div>';
+  // A2-04: alerta de comissão PAGA cuja venda foi cancelada/excluída (cancelamento não estorna comissão automaticamente)
+  let _comOrfaos='';
+  if(ST.perfil==='gestor'){
+    const orf=[];
+    (ST.comPagamentos||[]).forEach(pg=>{
+      if(pg.escopo!=='projetista_parcela' && pg.escopo!=='montador') return; // só pedido-vinculadas (inequívoco)
+      const pd=(ST.pedidos||[]).find(x=>String(x.id)===String(pg.pedidoId));
+      let motivo='';
+      if(!pd) motivo='pedido excluído';
+      else { const _l=pd.leadId?(ST.leads||[]).find(l=>String(l.id)===String(pd.leadId)):null; if(_l && _l.status!=='ganho') motivo='venda cancelada'; }
+      if(motivo) orf.push({pg,motivo});
+    });
+    if(orf.length) _comOrfaos=`<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:12px;padding:12px 16px;margin-bottom:14px;">
+      <div style="font-weight:700;color:#B91C1C;font-size:13px;margin-bottom:4px;">⚠️ ${orf.length} comissão(ões) paga(s) de venda cancelada/excluída — sem estorno</div>
+      <div style="font-size:12px;color:#7F1D1D;">${orf.slice(0,6).map(o=>`${_esc(o.pg.pessoa||'—')} · ${fmt(o.pg.valor||0)} <span style="color:#9CA3AF;">(${o.motivo})</span>`).join(' · ')}${orf.length>6?` · +${orf.length-6}`:''}</div>
+      <div style="font-size:11px;color:#9CA3AF;margin-top:4px;">Confira se precisa estornar (o cancelamento da venda não estorna a comissão automaticamente).</div>
+    </div>`;
+  }
+  document.getElementById('com-content').innerHTML=_comOrfaos+(html||
+    '<div class="com-empty">Nenhuma informação disponível.</div>');
 }
 function _comReciboRefCurta(pg){
   if(pg.escopo==='vendedor_mes') return 'Comissão de vendas';
