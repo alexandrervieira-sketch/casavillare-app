@@ -6432,7 +6432,8 @@ function rRelCustosFabrica(tgt){
   // Custo REAL do projeto = fábrica + fornecedores adicionais + outros custos
   const _custoFornPed=p=>(p.fornecedoresAdicionais||[]).reduce((a,f)=>a+(f.valor||0),0);
   const _custoOutrosPed=p=>(p.outrosCustos||[]).reduce((a,c)=>a+(c.valor||0),0);
-  const _custoProjPed=p=>_custoFabPed(p)+_custoFornPed(p)+_custoOutrosPed(p);
+  const _custoProjPed=p=>{ const _f=_custoFabPed(p); return _f+_custoFornPed(p)+_custoOutrosPed(p)+_pedTransporte(p,_f)+_pedMedicao(p); }; // A9-03: inclui frete(6%)+medição, igual ao DRE/rentabilidade
+  const _pedCompMes=p=>{ const _l=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null; return (_l&&(_l.dataFechamento||_l.dataCriacao))||p.dataCriacao||p.data||''; }; // A9-02: competência da VENDA (igual ao DRE)
   const totalForn=todosped.reduce((s,p)=>s+_custoFornPed(p),0);
   const totalOutros=todosped.reduce((s,p)=>s+_custoOutrosPed(p),0);
   const totalReal=totalFab+totalForn+totalOutros;
@@ -6449,8 +6450,9 @@ function rRelCustosFabrica(tgt){
     meses.push({ano:d.getFullYear(), mes:d.getMonth(), label:d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})});
   }
   const porMes=meses.map(m=>{
-    const mPeds=peds.filter(p=>{const d=new Date(p.dataCriacao||p.data||0);return d.getFullYear()===m.ano&&d.getMonth()===m.mes;});
-    const mAt=pedsAt.filter(p=>{const d=new Date(p.dataCriacao||p.data||0);return d.getFullYear()===m.ano&&d.getMonth()===m.mes;});
+    const mMes=m.ano+'-'+String(m.mes+1).padStart(2,'0'); // compara por string (sem bug de fuso na virada de mês)
+    const mPeds=peds.filter(p=>String(_pedCompMes(p)).slice(0,7)===mMes);         // A9-02: por competência da venda
+    const mAt=pedsAt.filter(p=>String(p.dataCriacao||p.data||'').slice(0,7)===mMes);
     const totMes=mPeds.reduce((s,p)=>s+_custoFabPed(p),0);
     const totAt=mAt.reduce((s,p)=>s+(p.atCusto||0),0);
     const _liqMes=mPeds.reduce((s,p)=>s+_liqPed(p),0);
@@ -15115,6 +15117,7 @@ function calcDRE(mesAno){
   const cpvPedidos  =(ST.pedidos||[]).reduce((a,p)=>{
     if(_pedShowroom(p)) return a;   // showroom não é CPV (não tem venda) — entra como Investimento abaixo
     const _l=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
+    if(_l && _l.status!=='ganho') return a; // A5-03: venda que não se concretizou (lead perdido/cancelado) não gera CPV fantasma
     const ref=_l?.dataFechamento||_l?.dataCriacao||p.data||'';
     if(!String(ref).startsWith(mesAno)) return a;
     const _fab=(p.valorFabrica||0)>0?(p.valorFabrica||0):_bipartidoLead(_l); // sem custo manual, usa o bipartido (40% financiado)
@@ -15585,6 +15588,7 @@ function cpTogglePago(){
 function cpPagarConta(id){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
+  if(c&&_mesTravado(c.mesAno,'contas a pagar')) return; // A4-05: mês fechado não pode mudar
   if(!c||!confirm(`Confirmar pagamento de ${(c.valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} — ${c.descricao}?`)) return;
   c.pago=true; c.dataPagamento=_hojeLocal(); c._uAt=Date.now();
   save(); toast('✅ Pagamento registrado!'); rFinCP();
@@ -15592,6 +15596,7 @@ function cpPagarConta(id){
 function cpEstornarConta(id){
   if(!_podeEditar('fin')){ toast('🔒 Você tem acesso somente de leitura no Financeiro.'); return; }
   const c=(ST.contasPagar||[]).find(x=>String(x.id)===String(id));
+  if(c&&_mesTravado(c.mesAno,'contas a pagar')) return; // A4-05: mês fechado não pode mudar
   if(!c||!confirm('Estornar este pagamento?')) return;
   c.pago=false; c.dataPagamento=null; c._uAt=Date.now();
   save(); toast('Estorno realizado'); rFinCP();
@@ -15662,6 +15667,7 @@ function salvarCP(){
 }
 function excluirCP(){
   if(!_gestorPodeExcluir()) return;
+  { const _c=(ST.contasPagar||[]).find(x=>String(x.id)===String(_cpId)); if(_c&&_mesTravado(_c.mesAno,'contas a pagar')) return; } // A4-05
   if(!_cpId||!confirm('Excluir esta conta?')) return;
   _tombAdd('contasPagar',_cpId);
   ST.contasPagar=(ST.contasPagar||[]).filter(c=>String(c.id)!==String(_cpId));
@@ -16223,7 +16229,12 @@ function crSalvarParcela(){
   c.vencimento=novoVenc;
   c._uAt=Date.now();  // A7-01: carimbo por parcela (merge por parcela na sync)
   l._uAt=Date.now(); // carimba a versão (mesma proteção dos recebimentos)
-  save(); fecharModal('modal-cr-parc'); toast('✅ Parcela atualizada'); rFinCR();
+  // A3-01: avisa (não bloqueia) se a soma das parcelas deixar de bater com o valor do contrato
+  const _somaCond=(l.condicoesPgto||[]).reduce((s,x)=>s+(x.valor||0),0), _alvoCond=_leadValorVenda(l);
+  save(); fecharModal('modal-cr-parc');
+  if(_alvoCond>0 && Math.abs(_somaCond-_alvoCond)>0.05) toast('⚠️ Soma das parcelas ('+fmt(_somaCond)+') ≠ contrato ('+fmt(_alvoCond)+'). Confira.');
+  else toast('✅ Parcela atualizada');
+  rFinCR();
 }
 let _crrLeadId=null, _crrCondId=null;
 function crReceberParcela(leadId, condId){

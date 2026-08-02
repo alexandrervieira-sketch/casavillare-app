@@ -573,6 +573,14 @@ test('A2-02: pagar o mês do vendedor 2x não duplica', () => {
   assertEq(regs.length, 1, 'só 1 registro no mês');
 });
 
+// A5-03 · CPV não conta pedido de venda que não se concretizou (lead perdido/cancelado)
+test('A5-03: CPV auto ignora pedido cujo lead não é "ganho"', () => {
+  T.ST.leads = T.ST.leads || []; T.ST.pedidos = T.ST.pedidos || [];
+  T.ST.leads.push({ id: 'La503', status: 'perdido', dataFechamento: '2044-05-10', valor: 100000, desconto: 0 });
+  T.ST.pedidos.push({ id: 'Pa503', leadId: 'La503', valorFabrica: 20000, status: 'pedido', data: '2044-05-01' });
+  assertEq(T.calcDRE('2044-05').cpvPedidos, 0, 'custo fantasma de venda perdida não entra no CPV');
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);
