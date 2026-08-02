@@ -2071,8 +2071,8 @@ textarea.inp{resize:vertical;min-height:68px;}
               <option value="cv_outras">📦 Outras Despesas Variáveis</option>
             </optgroup>
             <optgroup label="Outros">
-              <option value="cpv">📦 CPV — Custo de Produto (Fábrica)</option>
-              <option value="ded_imposto">📑 Impostos / Deduções</option>
+              <option value="cpv">📦 CPV manual (a fábrica já vem dos pedidos — evite duplicar)</option>
+              <option value="ded_imposto">📑 Impostos / Deduções (não lance o DAS — já é automático)</option>
             </optgroup>
           </select></div>
         <div><label class="lbl">Valor (R$) *</label>
@@ -2126,7 +2126,7 @@ textarea.inp{resize:vertical;min-height:68px;}
               <option value="ded_imposto">Impostos / Deduções</option>
             </optgroup>
             <optgroup label="Custos Diretos">
-              <option value="cpv">CPV — Custo dos Produtos/Serviços</option>
+              <option value="cpv">CPV manual (a fábrica já vem dos pedidos — evite duplicar)</option>
             </optgroup>
             <optgroup label="Custos Fixos">
               <option value="cf_aluguel">🏢 Aluguel / Infraestrutura</option>
@@ -3175,6 +3175,27 @@ function _tombKey(col,id){ return col+'/'+String(id); }
 function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); _cfgTouch('_tomb'); }
 function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]>0); }
 function _tombClear(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=-Date.now(); _cfgTouch('_tomb'); } // ao RECRIAR um registro de id determinístico (vence a exclusão antiga na união)
+// A7-01: une condicoesPgto de 2 versões do MESMO lead por id de parcela. Cada parcela vence pelo SEU _uAt
+// (a baixa/estorno mais recente prevalece), preservando a ordem do doc vencedor. Sem isto, editar outro
+// campo do lead em uma máquina sobrescreve baixas de parcela feitas em outra (perda de recebimento).
+// Só atua quando TODAS as parcelas dos 2 lados têm id (dados novos); legado sem id mantém o comportamento atual.
+function _mergeCondPgto(locArr, cloArr, locWins){
+  const A=Array.isArray(locArr)?locArr:null, B=Array.isArray(cloArr)?cloArr:null;
+  if(!A||!B) return locWins?(A||B||[]):(B||A||[]);
+  const temIds=arr=>arr.every(c=>c&&c.id!=null);
+  if(!temIds(A)||!temIds(B)) return locWins?A:B; // legado sem id → doc-winner (sem regressão)
+  const pick=new Map();
+  const considerar=(arr,isLoc)=>arr.forEach(c=>{ const k=String(c.id); const prev=pick.get(k);
+    if(!prev){ pick.set(k,c); return; }
+    const pu=+prev._uAt||0, cu=+c._uAt||0;
+    if(cu>pu || (cu===pu && isLoc===locWins)) pick.set(k,c); // parcela mais recente vence; empate/legado segue o doc vencedor
+  });
+  considerar(A,true); considerar(B,false);
+  const ordem=locWins?A:B, vistos=new Set(), out=[];
+  ordem.forEach(c=>{ const k=String(c.id); if(!vistos.has(k)){ out.push(pick.get(k)); vistos.add(k); } });
+  (locWins?B:A).forEach(c=>{ const k=String(c.id); if(!vistos.has(k)){ out.push(pick.get(k)); vistos.add(k); } }); // parcela criada só no outro lado
+  return out;
+}
 // Une um _tomb vindo de outra máquina ao local: por chave mantém a ação mais recente (maior valor absoluto). Devolve true se mudou algo.
 function _tombMergeIncoming(inc){
   if(!inc||typeof inc!=='object') return false;
@@ -3568,7 +3589,14 @@ async function _fsLoadAll(){
       // edição offline ainda não sincronizada de ser sobrescrita pela nuvem antiga ao recarregar.
       // _fsSeen recebe a versão da NUVEM, então a sync enxerga o local como mudança e o reenvia.
       const _merged=cloud.map(d=>{ const id=String(d&&(d.id??d._id)); if(id&&id!=='undefined') _fsSeen[col+'/'+id]=JSON.stringify(d);
-        const loc=_localById.get(id); if(loc&&(loc._uAt||0)>(d._uAt||0)){ _localNovo=true; return loc; } return d; });
+        const loc=_localById.get(id); if(!loc) return d;
+        const locWins=(loc._uAt||0)>(d._uAt||0);
+        if(col==='leads' && (Array.isArray(loc.condicoesPgto)||Array.isArray(d.condicoesPgto))){ // A7-01: une parcelas por id (não perde baixa)
+          const mc=_mergeCondPgto(loc.condicoesPgto,d.condicoesPgto,locWins);
+          if(locWins || JSON.stringify(mc)!==JSON.stringify(d.condicoesPgto)) _localNovo=true; // difere da nuvem → reenvia
+          return {...(locWins?loc:d), condicoesPgto:mc};
+        }
+        if(locWins){ _localNovo=true; return loc; } return d; });
       // Extras locais só são preservados se NÃO tiverem tombstone (senão é um apagado ressuscitando)
       const extras=_localArr.filter(it=>{ const id=String(it&&(it.id??it._id)); return id&&id!=='undefined'&&!cloudIds.has(id)&&!_tombHas(col,id); });
       ST[col]=_merged.concat(extras);               // nuvem (ou local se mais novo) + locais inéditos
@@ -3667,8 +3695,15 @@ function _fsSubscribe(){
           }
           else if(idx>=0){
             const cur=ST[col][idx];
+            const curWins=!!(rec._uAt && cur && cur._uAt && rec._uAt < cur._uAt);
+            if(col==='leads' && (Array.isArray(cur.condicoesPgto)||Array.isArray(rec.condicoesPgto))){ // A7-01: une parcelas por id
+              const mc=_mergeCondPgto(cur.condicoesPgto,rec.condicoesPgto,curWins);
+              ST[col][idx]={...(curWins?cur:rec), condicoesPgto:mc};
+              _fsSeen[col+'/'+rid]=JSON.stringify(rec); mudou=true;
+              if(JSON.stringify(mc)!==JSON.stringify(rec.condicoesPgto)) _fsSyncCollection(col,ST[col]).catch(()=>{}); // merge trouxe algo que a nuvem não tem → converge
+            }
             // Guard de versão: não deixa a nuvem sobrescrever uma edição local MAIS NOVA (só quando ambos têm _uAt).
-            if(rec._uAt && cur && cur._uAt && rec._uAt < cur._uAt){
+            else if(curWins){
               _fsSeen[col+'/'+rid]=JSON.stringify(rec);        // registra o que a nuvem tem (versão antiga)…
               _fsSyncCollection(col,ST[col]).catch(()=>{});     // …e reempurra a local p/ a nuvem convergir com a mais recente
             } else { ST[col][idx]=rec; _fsSeen[col+'/'+rid]=JSON.stringify(rec); mudou=true; }
@@ -7815,14 +7850,18 @@ function comProjPagar(pedId,parc){
   if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor registra pagamento.'); return; }
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p) return;
   if(!p.comProjPago||typeof p.comProjPago!=='object') p.comProjPago={};
+  if(p.comProjPago[parc]){ toast('Parcela já paga.'); return; } // A2-01: idempotência (não repaga/duplica)
   const hoje=_hojeLocal();
   p.comProjPago[parc]=hoje;
-  // Ledger p/ recibo
+  // Ledger p/ recibo — id DETERMINÍSTICO: 2 dispositivos geram o mesmo id → união não duplica (A2-01/A7-02)
   const c=_calcComProjetista(p), info=_PARC_PROJ_INFO[parc]||['parcela','comA'];
   if(!ST.comPagamentos) ST.comPagamentos=[];
-  ST.comPagamentos.push({ id:_newId(), pessoa:p.projetista, perfil:'projetista', escopo:'projetista_parcela',
+  const _cpId='compp_'+String(p.id)+'_'+parc;
+  _tombClear('comPagamentos',_cpId);                              // se foi estornado antes, vence a exclusão na união
+  ST.comPagamentos=ST.comPagamentos.filter(x=>x.id!==_cpId);      // evita 2 no mesmo dispositivo
+  ST.comPagamentos.push({ id:_cpId, pessoa:p.projetista, perfil:'projetista', escopo:'projetista_parcela',
     pedidoId:String(p.id), parcela:parc, parcelaLabel:info[0], cliente:(p.clienteNome||p.cliente||''),
-    mesRef:hoje.slice(0,7), valor:c[info[1]], data:hoje, criadoEm:new Date().toISOString(), _uAt:Date.now() });
+    mesRef:hoje.slice(0,7), valor:_round2(c[info[1]]), data:hoje, criadoEm:new Date().toISOString(), _uAt:Date.now() });
   p._uAt=Date.now(); save(); rComissoes();
 }
 function comProjEstornar(pedId,parc){
@@ -7830,8 +7869,9 @@ function comProjEstornar(pedId,parc){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p||!p.comProjPago) return;
   if(!confirm('Desmarcar o pagamento desta parcela?')) return;
   delete p.comProjPago[parc];
-  const rec=(ST.comPagamentos||[]).find(x=>x.escopo==='projetista_parcela'&&x.pedidoId===String(p.id)&&x.parcela===parc);
-  if(rec){ _tombAdd('comPagamentos',rec.id); ST.comPagamentos=ST.comPagamentos.filter(x=>x.id!==rec.id); }
+  const recs=(ST.comPagamentos||[]).filter(x=>x.escopo==='projetista_parcela'&&x.pedidoId===String(p.id)&&x.parcela===parc); // tombstona TODOS (limpa duplicatas legadas)
+  recs.forEach(rec=>_tombAdd('comPagamentos',rec.id));
+  if(recs.length) ST.comPagamentos=ST.comPagamentos.filter(x=>!recs.some(r=>r.id===x.id));
   p._uAt=Date.now(); save(); rComissoes();
 }
 // Quita de uma vez tudo que está LIBERADO e ainda não pago para uma projetista (limpar histórico já pago).
@@ -8323,8 +8363,11 @@ function comPagarVendedor(encNome, mesRef){
   if(valor<=0){ toast('Sem comissão a pagar neste mês.'); return; }
   if(!confirm(`Registrar pagamento de ${fmt(valor)} de comissão para ${nome} (ref. ${mesRef})?`)) return;
   if(!ST.comPagamentos) ST.comPagamentos=[];
+  const _cpId='comvm_'+String(nome).replace(/\//g,'-')+'_'+mesRef; // id determinístico por vendedor+mês (A2-02/A7-02)
+  _tombClear('comPagamentos',_cpId);
+  ST.comPagamentos=(ST.comPagamentos||[]).filter(p=>p.id!==_cpId);
   ST.comPagamentos.push({
-    id:_newId(), pessoa:nome, perfil:'vendedor', escopo:'vendedor_mes',
+    id:_cpId, pessoa:nome, perfil:'vendedor', escopo:'vendedor_mes',
     mesRef, valor, data:_hojeLocal(), itens,
     criadoEm:new Date().toISOString(), _uAt:Date.now()
   });
@@ -8333,10 +8376,10 @@ function comPagarVendedor(encNome, mesRef){
 function comEstornarVendedor(encNome, mesRef){
   if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor.'); return; }
   const nome=decodeURIComponent(encNome);
-  const rec=_comPagVendedor(nome, mesRef); if(!rec) return;
+  const recs=(ST.comPagamentos||[]).filter(p=>p.escopo==='vendedor_mes' && p.pessoa===nome && p.mesRef===mesRef); if(!recs.length) return;
   if(!confirm('Desmarcar o pagamento da comissão deste mês?')) return;
-  _tombAdd('comPagamentos', rec.id);
-  ST.comPagamentos=(ST.comPagamentos||[]).filter(p=>p.id!==rec.id);
+  recs.forEach(rec=>_tombAdd('comPagamentos', rec.id)); // tombstona TODOS (limpa duplicatas legadas)
+  ST.comPagamentos=(ST.comPagamentos||[]).filter(p=>!recs.some(r=>r.id===p.id));
   save(); toast('Pagamento desmarcado.'); rComissoes();
 }
 
@@ -15227,10 +15270,21 @@ function finSubTab(sub){
 let _fluxoMeses=6;
 function fluxoSetMeses(n){ _fluxoMeses=parseInt(n)||6; rFinFluxo(); }
 function fluxoSetSaldoIni(v){ if(!_podeEditar('fin')){ toast('🔒 Sem permissão.'); return; } ST.fluxoSaldoIni=_parseBRL(v); _cfgTouch('fluxoSaldoIni'); save(); rFinFluxo(); }
-function _fluxoAReceberMes(mes){ let t=0; (ST.leads||[]).filter(l=>l.status==='ganho').forEach(l=>(l.condicoesPgto||[]).forEach(c=>{ if(!c.pago&&(c.vencimento||'').slice(0,7)===mes) t+=(c.valor||0); })); return t; }
-function _fluxoAPagarMes(mes){
+// A6-01: parcela em aberto VENCIDA (venc < mês atual) não some — cai no mês atual (é uma entrada que já deveria ter entrado).
+function _fluxoAReceberMes(mes, primeiroMes){
+  let t=0;
+  (ST.leads||[]).filter(l=>l.status==='ganho').forEach(l=>(l.condicoesPgto||[]).forEach(c=>{
+    if(c.pago) return;
+    let m=(c.vencimento||'').slice(0,7); if(!m) return;
+    if(primeiroMes && m<primeiroMes) m=primeiroMes; // vencido em aberto → mês atual
+    if(m===mes) t+=(c.valor||0);
+  }));
+  return t;
+}
+function _fluxoAPagarMes(mes, primeiroMes){
+  const efMes=e=>{ let m=e.mesAno||''; if(primeiroMes && m && m<primeiroMes) m=primeiroMes; return m; }; // A6-01: conta vencida em aberto cai no mês atual
   const explicAll=(ST.contasPagar||[]).filter(e=>e.mesAno===mes);
-  const explicUnpaid=explicAll.filter(e=>!e.pago);
+  const explicUnpaid=(ST.contasPagar||[]).filter(e=>!e.pago && efMes(e)===mes);
   const ult=new Map();
   (ST.contasPagar||[]).filter(e=>e.recorrencia==='mensal'&&e.mesAno<mes).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>ult.set(e.cat+'|'+(e.fornecedor||e.descricao||''),e));
   const ek=new Set(explicAll.map(c=>c.cat+'|'+(c.fornecedor||c.descricao||'')));
@@ -15241,7 +15295,9 @@ function _fluxoFolhaMes(){ return todosFunc().filter(p=>!_estaDesligado(p.nome))
 function _fluxoFabricaMes(mes, primeiroMes){
   return (ST.pedidos||[]).reduce((t,p)=>{
     const vf=p.valorFabrica||0;
-    if(vf<=0 || _bipartidoPed(p)>0 || p.comprovante) return t; // sem custo, financiado (bipartido paga via financeira) ou já pago à fábrica
+    if(vf<=0 || p.status==='cancelado' || _bipartidoPed(p)>0 || p.comprovante) return t; // sem custo, cancelado, financiado ou já pago
+    // A6-02: venda que não se concretizou (lead cancelado/perdido) não gera saída projetada à fábrica
+    if(p.leadId){ const _l=(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)); if(_l && _l.status!=='ganho') return t; }
     let m=(p.datePgFab||p.prevProd||p.data||'').slice(0,7)||primeiroMes;
     if(m<primeiroMes) m=primeiroMes; // vencido/sem data → cai no mês atual (é uma saída que já deveria ter saído)
     return t+(m===mes?vf:0);
@@ -15265,7 +15321,7 @@ function rFinFluxo(){
   const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0, primeiroMes=meses[0];
   let acum=saldoIni, pior={mes:meses[0],val:Infinity};
   const linhas=meses.map(mes=>{
-    const ent=_fluxoAReceberMes(mes), cp=_fluxoAPagarMes(mes), fab=_fluxoFabricaMes(mes,primeiroMes), imp=_fluxoImpostosMes(mes), sai=cp+folha+fab+imp, saldoMes=ent-sai;
+    const ent=_fluxoAReceberMes(mes,primeiroMes), cp=_fluxoAPagarMes(mes,primeiroMes), fab=_fluxoFabricaMes(mes,primeiroMes), imp=_fluxoImpostosMes(mes), sai=cp+folha+fab+imp, saldoMes=ent-sai;
     acum+=saldoMes; if(acum<pior.val) pior={mes,val:acum};
     return {mes,ent,cp,folha,fab,imp,saldoMes,acum};
   });
@@ -16062,7 +16118,7 @@ function crReceberMassa(){
     const l=(ST.leads||[]).find(x=>String(x.id)===String(leadId));
     if(!l||!l.condicoesPgto) return;
     const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
-    if(c){c.pago=true;c.dataPagamento=hoje;l._uAt=Date.now();}
+    if(c){c.pago=true;c.dataPagamento=hoje;c._uAt=Date.now();l._uAt=Date.now();}
   });
   save(); toast(`✅ ${checks.length} parcela${checks.length!==1?'s':''} recebida${checks.length!==1?'s':''}!`); rFinCR();
 }
@@ -16165,6 +16221,7 @@ function crSalvarParcela(){
   c.desc=document.getElementById('crp-desc').value.trim();
   c.valor=novoValor;
   c.vencimento=novoVenc;
+  c._uAt=Date.now();  // A7-01: carimbo por parcela (merge por parcela na sync)
   l._uAt=Date.now(); // carimba a versão (mesma proteção dos recebimentos)
   save(); fecharModal('modal-cr-parc'); toast('✅ Parcela atualizada'); rFinCR();
 }
@@ -16202,12 +16259,12 @@ function crrConfirmar(){
   if(rec<=0){ toast('Informe o valor recebido'); return; }
   if(rec>total+0.005){ toast('O valor recebido não pode ser maior que a parcela'); return; }
   if(Math.abs(rec-total)<0.005){
-    c.pago=true; c.dataPagamento=_hojeLocal();                          // quitação total
+    c.pago=true; c.dataPagamento=_hojeLocal(); c._uAt=Date.now();       // quitação total (carimbo por parcela — A7-01)
   } else {
     const base=c.desc||'Parcela';
-    const paga={ ...c, id:_newId(), valor:Math.round(rec*100)/100, pago:true, dataPagamento:_hojeLocal(), desc:base+' (recebido parcial)' };
+    const paga={ ...c, id:_newId(), valor:Math.round(rec*100)/100, pago:true, dataPagamento:_hojeLocal(), desc:base+' (recebido parcial)', _uAt:Date.now() };
     c.valor=Math.round((total-rec)*100)/100;                            // a original vira o SALDO pendente
-    c.desc=base+' (saldo)'; c.pago=false; c.dataPagamento=null;
+    c.desc=base+' (saldo)'; c.pago=false; c.dataPagamento=null; c._uAt=Date.now();
     l.condicoesPgto.push(paga);
   }
   l._uAt=Date.now();
@@ -16219,7 +16276,7 @@ function crEstornarParcela(leadId, condId){
   if(!l||!l.condicoesPgto) return;
   const c=l.condicoesPgto.find(x=>String(x.id)===String(condId));
   if(!c||!confirm('Estornar este recebimento?')) return;
-  c.pago=false; c.dataPagamento=null;
+  c.pago=false; c.dataPagamento=null; c._uAt=Date.now(); // A7-01: carimbo por parcela
   l._uAt=Date.now();
   save(); toast('Estorno realizado'); rFinCR();
 }
@@ -16533,7 +16590,7 @@ function rFinanceiro(){
 
     <div class="dre-sec-hdr"><span>Custos</span></div>
     <div class="dre-row dre-indent">
-      <span class="dre-lbl sm">CPV — Custo dos Produtos/Serviços${d.cpvPedidos>0?`<span style="font-size:10px;color:var(--gl);"> · 🏭 ${fmt(d.cpvPedidos)} pedidos (auto)${d.cpvManual>0?` + ${fmt(d.cpvManual)} manual`:''}</span>`:''}</span>
+      <span class="dre-lbl sm">CPV — Custo dos Produtos/Serviços${d.cpvPedidos>0?`<span style="font-size:10px;color:var(--gl);"> · 🏭 ${fmt(d.cpvPedidos)} pedidos (auto)</span>`:''}${d.cpvManual>0?`<span style="font-size:10px;color:#B45309;font-weight:600;"> ⚠️ ${fmt(d.cpvManual)} manual — confira se não duplica os pedidos</span>`:''}</span>
       <div class="dre-right"><span class="dre-val fail">${fmt(d.cpv)}</span></div>
     </div>
     <div class="dre-row dre-subtotal">
@@ -18681,7 +18738,13 @@ async function nfeEmitir(){
   btnEmitir.disabled=true;
 
   const nota=nfeMontarPayload();
-  const ref='cv'+String(_nfePedidoId||'')+'_'+Date.now();
+  // A8-04: ref IDEMPOTENTE. Se uma tentativa anterior caiu (resposta perdida após a Focus já ter autorizado),
+  // reusa o MESMO ref pendente → a Focus deduplica por ref e devolve a nota já autorizada em vez de emitir 2ª.
+  // Ref novo só quando não há pendente (1ª emissão, ou após sucesso/rejeição que limpam o pendente).
+  const _pRef=(ST.pedidos||[]).find(x=>String(x.id)===String(_nfePedidoId));
+  let ref;
+  if(_pRef && _pRef.nfeRefPendente){ ref=_pRef.nfeRefPendente; }
+  else { ref='cv'+String(_nfePedidoId||'')+'_'+Date.now(); if(_pRef){ _pRef.nfeRefPendente=ref; _pRef._uAt=Date.now(); save(); } }
 
   try{
     const resp=await _nfeFetch('/emitir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ambiente:amb,ref,nota})});
@@ -18697,12 +18760,15 @@ async function nfeEmitir(){
         ? 'Os dados do destinatário validam (autorizam em homologação). Em PRODUÇÃO, verifique no painel da Focus se a empresa está <b>habilitada para produção</b> — certificado A1 vinculado e emissão de produção ativada (é configuração separada da homologação).'
         : 'Confira CNPJ, IE, endereço e os fiscais (NCM/CFOP/CSOSN) e tente novamente.';
       statusEl.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;font-size:13px;color:#DC2626;margin-bottom:12px;">❌ <strong>Erro do Focus/SEFAZ:</strong> ${_esc(msg)}<br><span style="font-size:11px;">${_dica}</span></div>`;
+      // Nota REJEITADA (não autorizada): libera o ref p/ a próxima tentativa (após corrigir os dados) usar um ref novo. A8-04
+      if(p){ delete p.nfeRefPendente; p._uAt=Date.now(); save(); }
       btnEmitir.disabled=false; btnEmitir.textContent='🧾 Tentar novamente';
       return;
     }
     const novoStatus=data.autorizado?'emitida':'processing';
     if(p){
       p.nfe={ provider:'focus', ambiente:amb, ref, status:novoStatus, numero:data.numero||'', serie:data.serie||cfg.serie||'1', chaveAcesso:data.chave||'', danfeUrl:data.danfeUrl||'', xmlUrl:data.xmlUrl||'', mensagem:data.mensagem||'', emitidaEm:_hojeLocal() };
+      if(novoStatus==='emitida') delete p.nfeRefPendente; // autorizada → libera ref p/ futura re-emissão legítima (após cancelamento). A8-04
       p._uAt=Date.now(); // carimba a versão — evita corrida que faz a nota "voltar para Pendentes"
       if(novoStatus==='emitida'&&ST.configNFe?.proxNum){ ST.configNFe.proxNum=String(parseInt(ST.configNFe.proxNum||0)+1); _cfgTouch('configNFe'); }
       save();

@@ -76,7 +76,9 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
   _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds,
   _configsPublica, _cfgprivDocs, _cfgprivMerge,
-  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE
+  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE,
+  _mergeCondPgto, _fluxoAReceberMes, _fluxoAPagarMes, _fluxoFabricaMes,
+  comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -511,6 +513,64 @@ test('E: boleto reconhecido no FECHAMENTO (competência 24/07) e NÃO de novo no
     condicoesPgto: [{ id: 'c1', forma: 'boleto', valor: 30000, vencimento: '2034-03-05' }] });
   assert(T.calcDRE('2034-01').recCRM >= 30000, 'boleto entra no fechamento (regime de competência)');
   assert(T.calcDRE('2034-03').recCRM < 30000, 'boleto NÃO é reconhecido de novo no vencimento (evita contar 2x)');
+});
+
+// ══════ Correções da auditoria 01/08/2026 (3 críticos + 2 altos) ══════
+
+// A7-01 · merge de condicoesPgto por parcela (não perde a baixa)
+test('A7-01: baixa de parcela sobrevive a edição concorrente do lead (merge por parcela)', () => {
+  const loc = [{ id: 'p1', valor: 100, pago: true, dataPagamento: '2035-01-05', _uAt: 2000 }, { id: 'p2', valor: 100, pago: false, _uAt: 1000 }];
+  const clo = [{ id: 'p1', valor: 100, pago: false, _uAt: 1000 }, { id: 'p2', valor: 100, pago: false, _uAt: 1000 }];
+  const out = T._mergeCondPgto(loc, clo, false); // nuvem venceu no doc, mas p1 local (baixa) é mais nova
+  assert(out.find(c => c.id === 'p1').pago === true, 'a baixa de p1 não é perdida');
+});
+test('A7-01: estorno mais recente vence a baixa antiga', () => {
+  const out = T._mergeCondPgto([{ id: 'p1', valor: 100, pago: false, _uAt: 3000 }], [{ id: 'p1', valor: 100, pago: true, _uAt: 2000 }], false);
+  assert(out[0].pago === false, 'estorno recente prevalece');
+});
+test('A7-01: parcela legada SEM id mantém comportamento antigo (doc-winner)', () => {
+  assert(T._mergeCondPgto([{ valor: 100, pago: true }], [{ valor: 100, pago: false }], false)[0].pago === false, 'sem id → nuvem, como antes');
+});
+
+// A6-01 · contas vencidas em aberto caem no mês atual (não somem da projeção)
+test('A6-01: parcela a receber vencida cai no mês atual', () => {
+  T.ST.leads = [{ id: 'LfxR', status: 'ganho', condicoesPgto: [{ id: 'c1', valor: 8000, vencimento: '2040-05-10' }] }];
+  assertEq(T._fluxoAReceberMes('2040-07', '2040-07'), 8000); // vencida em maio aparece em julho (mês atual)
+  assertEq(T._fluxoAReceberMes('2040-08', '2040-07'), 0);    // não reaparece nos meses seguintes
+});
+test('A6-01: conta a pagar vencida cai no mês atual', () => {
+  T.ST.contasPagar = [{ id: 'cp1', mesAno: '2040-05', valor: 4000, pago: false, cat: 'cv_op', descricao: 'X' }];
+  assertEq(T._fluxoAPagarMes('2040-07', '2040-07'), 4000);
+  assertEq(T._fluxoAPagarMes('2040-08', '2040-07'), 0);
+});
+
+// A6-02 · pedido de fábrica de venda cancelada não é projetado como saída
+test('A6-02: fábrica de venda cancelada/perdida fica fora da projeção', () => {
+  T.ST.leads = [{ id: 'LfxF', status: 'perdido' }];
+  T.ST.pedidos = [
+    { id: 'PfxOk', status: 'pedido', valorFabrica: 6000, data: '2041-03-01' },
+    { id: 'PfxCanc', leadId: 'LfxF', status: 'pedido', valorFabrica: 9000, data: '2041-03-01' }
+  ];
+  assertEq(T._fluxoFabricaMes('2041-03', '2041-03'), 6000); // só o ativo; o cancelado (9k) fica de fora
+});
+
+// A2-01 · pagamento de comissão idempotente (não duplica)
+test('A2-01: pagar a mesma parcela do projetista 2x não duplica no ledger', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = [];
+  T.ST.leads = [{ id: 'LcomX', status: 'ganho', valor: 100000, desconto: 0 }];
+  T.ST.pedidos = [{ id: 'PcomX', leadId: 'LcomX', projetista: 'Ana', status: 'concluido', dateExecAssn: '2042-01-05' }];
+  T.comProjPagar('PcomX', 'A'); T.comProjPagar('PcomX', 'A');
+  const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'projetista_parcela' && x.pedidoId === 'PcomX' && x.parcela === 'A');
+  assertEq(regs.length, 1, 'só 1 registro no ledger');
+  assert(String(regs[0].id).startsWith('compp_'), 'id determinístico');
+});
+test('A2-02: pagar o mês do vendedor 2x não duplica', () => {
+  _confirmReturn = true; // comPagarVendedor pede confirmação
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = [];
+  T.ST.leads = [{ id: 'LvenX', status: 'ganho', responsavel: 'Vera', dataFechamento: '2043-02-10', valor: 50000, desconto: 0 }];
+  T.comPagarVendedor('Vera', '2043-02'); T.comPagarVendedor('Vera', '2043-02');
+  const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'vendedor_mes' && x.pessoa === 'Vera' && x.mesRef === '2043-02');
+  assertEq(regs.length, 1, 'só 1 registro no mês');
 });
 
 // ── relatório ──
