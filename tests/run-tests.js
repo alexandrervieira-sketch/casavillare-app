@@ -632,6 +632,23 @@ test('A4-07: DRE usa o DAS pago (realizado), não o estimado', () => {
   assertEq(dre.dasPagoDRE, true, 'flag de pago');
 });
 
+// Meta: pedido financiado PAGO (com comprovante) conta o valorFabrica e NÃO duplica o bipartido
+test('Meta: financiado pago conta valorFabrica no total e bipartido não duplica', () => {
+  T.ST.fabrica = {};
+  T.ST.leads = T.ST.leads || []; T.ST.pedidos = T.ST.pedidos || [];
+  T.ST.leads.push({ id: 'LmixP', status: 'ganho', dataFechamento: '2048-05-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
+  T.ST.pedidos.push({ id: 'PmixP', leadId: 'LmixP', valorFabrica: 26000, status: 'pedido', datePgFab: '2048-05-15', comprovante: true });
+  assertEq(T._totalFabricaMes('2048-05'), 26000, 'financiado PAGO conta o valorFabrica no total direto');
+  assertEq(T._bipartidoTotalMes('2048-05'), 0, 'bipartido não soma de novo (já está dentro do valorFabrica)');
+  assert(_close(T._volumeFabricaMes('2048-05'), 26000), 'volume = 26000, sem dobrar');
+});
+test('Meta: financiamento SEM pagamento direto ainda conta o bipartido (não vai pro ralo)', () => {
+  T.ST.fabrica = {};
+  T.ST.leads = T.ST.leads || [];
+  T.ST.leads.push({ id: 'LpuroF', status: 'ganho', dataFechamento: '2049-06-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
+  assert(_close(T._bipartidoTotalMes('2049-06'), 40000), 'sem pedido pago → bipartido conta (40k)');
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);
