@@ -581,6 +581,22 @@ test('A5-03: CPV auto ignora pedido cujo lead não é "ganho"', () => {
   assertEq(T.calcDRE('2044-05').cpvPedidos, 0, 'custo fantasma de venda perdida não entra no CPV');
 });
 
+// A5-05 · pedido cancelado sai do CPV e da meta; A5-04 · AT erro-loja abate no DRE
+test('A5-05: pedido cancelado não entra no CPV nem na meta de fábrica', () => {
+  T.ST.fabrica = {};
+  T.ST.leads = T.ST.leads || []; T.ST.pedidos = T.ST.pedidos || [];
+  T.ST.leads.push({ id: 'La505', status: 'ganho', dataFechamento: '2045-03-10', valor: 80000, desconto: 0 });
+  T.ST.pedidos.push({ id: 'Pa505', leadId: 'La505', valorFabrica: 30000, status: 'pedido', datePgFab: '2045-03-12', cancelado: true });
+  assertEq(T.calcDRE('2045-03').cpvPedidos, 0, 'cancelado fora do CPV');
+  assertEq(T._totalFabricaMes('2045-03'), 0, 'cancelado fora da meta de fábrica');
+});
+test('A5-04: custo de AT (erro loja) entra no CPV do DRE', () => {
+  T.ST.pedidos = T.ST.pedidos || [];
+  T.ST.pedidos.push({ id: 'Pat504', atErroTipo: 'nosso', atCusto: 1500, dateConcluido: '2046-07-20' });
+  assert(T.calcDRE('2046-07').cpvAT === 1500, 'AT erro-loja abatida no CPV');
+  assertEq(T.calcDRE('2046-08').cpvAT, 0, 'não conta em outro mês');
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);

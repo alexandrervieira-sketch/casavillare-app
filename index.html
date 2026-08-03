@@ -4305,7 +4305,7 @@ function rHome(){
 // Vendas FECHADAS ainda SEM nota fiscal (mesmo critério da aba Fiscal › Pendentes).
 function _nfePendentes(){
   return (ST.pedidos||[]).filter(p=>{
-    if(_pedShowroom(p)) return false;                              // showroom/investimento não emite NFe
+    if(_pedShowroom(p)||_pedCancelado(p)) return false;            // showroom/cancelado não emite NFe
     if(p.nfe&&p.nfe.status!=='rejeitada') return false;            // já tem nota emitida/em processamento
     const l=p.leadId?(ST.leads||[]).find(x=>String(x.id)===String(p.leadId)):null;
     return !l || l.status==='ganho';                               // venda fechada (ganho) ou pedido manual
@@ -6415,7 +6415,7 @@ function rRelCustosFabrica(tgt){
   const el=document.getElementById(tgt||'rel-content'); // reutilizável (Relatórios e aba Fábrica)
   if(!el) return;
 
-  const todosped=(ST.pedidos||[]).filter(p=>!_pedShowroom(p)); // showroom/investimento fora do custo-fábrica (não tem venda p/ o ratio)
+  const todosped=(ST.pedidos||[]).filter(p=>!_pedShowroom(p)&&!_pedCancelado(p)); // showroom/cancelado fora do custo-fábrica
   const peds=todosped.filter(p=>_custoFabPed(p)>0);
   const pedsAt=todosped.filter(p=>p.atErroTipo==='nosso'&&(p.atCusto||0)>0);
 
@@ -7779,6 +7779,7 @@ function _bipartidoPed(p){
 // Pedido de SHOWROOM / investimento interno: não é venda — fora da meta fábrica, do CPV,
 // da comissão e do fiscal; o custo entra como INVESTIMENTO no mês. Ver tipoPedido.
 function _pedShowroom(p){ return !!(p&&p.tipoPedido==='showroom'); }
+function _pedCancelado(p){ return !!(p&&p.cancelado); } // A5-05: pedido cancelado — fora de CPV/meta/comissão/fiscal/fluxo; preserva histórico
 function _custoFabPed(p){
   const manual=(p&&p.valorFabrica)||0;
   return manual>0?manual:_bipartidoPed(p);
@@ -7815,7 +7816,7 @@ function _pedValorVendaCRM(p){
   return p.valor||0;
 }
 function _pedidoValorBase(pedido){
-  if(_pedShowroom(pedido)) return 0; // showroom/investimento não é venda → sem base de comissão (zera vend/proj/mont/sup)
+  if(_pedShowroom(pedido)||_pedCancelado(pedido)) return 0; // showroom/cancelado não é venda → sem base de comissão (zera vend/proj/mont/sup)
   let valorBase=pedido.valor||0;
   if(pedido.leadId){
     const l=(ST.leads||[]).find(x=>String(x.id)===String(pedido.leadId));
@@ -9878,7 +9879,7 @@ function _ehFabricaPrincipal(p){ const fp=_fabricaPrincipal(); const f=(p.fornec
 function _totalFabricaMes(mes){
   return (ST.pedidos||[])
     .filter(p=>{
-      if(_pedShowroom(p)) return false;        // showroom/investimento não conta na meta
+      if(_pedShowroom(p)||_pedCancelado(p)) return false;  // showroom/cancelado não conta na meta
       if(!p.valorFabrica) return false;
       if(_bipartidoPed(p)>0) return false;     // financiado → conta no bipartido (sem dupla contagem)
       if(!_ehFabricaPrincipal(p)) return false;// só a fábrica principal (Casimiro) — item Casimiro
@@ -13080,7 +13081,7 @@ function _rPedPipe(ped,hoje,statsHtml){
 
       return `<div class="ped-card" onclick="abrirModalPedido('${_sid(p.id)}')">
         <div class="ped-card-acc" style="background:${accCor};"></div>
-        <div class="ped-card-nome" title="${nome}">${_pedShowroom(p)?'🏛️ ':''}${nome}</div>
+        <div class="ped-card-nome" title="${nome}" style="${_pedCancelado(p)?'text-decoration:line-through;opacity:.55;':''}">${_pedShowroom(p)?'🏛️ ':''}${_pedCancelado(p)?'🚫 ':''}${nome}</div>
         <div class="ped-card-desc" title="${_esc(p.descricao||'')}">${_pedShowroom(p)?'<span style="color:#7C3AED;font-weight:600;">Showroom/Investimento · </span>':''}${_esc(p.descricao||'Sem descrição')}</div>
         ${prazoHtml}
         <div class="ped-card-foot">
@@ -13113,7 +13114,8 @@ function _rPedPipe(ped,hoje,statsHtml){
           <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
           ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();abrirFichaRentab('${p.id}')" title="Rentabilidade do projeto (previsto × real)">📊</button>`:''}
           ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
-          ${e.id!=='concluido'?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
+          ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();${_pedCancelado(p)?`pedReativar('${p.id}')`:`pedCancelar('${p.id}')`}" title="${_pedCancelado(p)?'Reativar pedido':'Cancelar pedido (sai de CPV/meta/comissão/fiscal)'}">${_pedCancelado(p)?'↩️':'🚫'}</button>`:''}
+          ${e.id!=='concluido'&&!_pedCancelado(p)?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
         </div>
         ${e.id==='proj_exec'&&!p.valorFabrica
           ?`<div class="ped-card-comp"><span class="comp-pend" style="cursor:pointer;" onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">📄 Importar XML via ✏️ Editar</span></div>`
@@ -13255,6 +13257,21 @@ function pedVoltar(id){
   p.statusChangedAt=_hojeLocal();
   p._uAt=Date.now();
   save(); toast(`← ${anterior.icon} ${anterior.label}`); rPedidos();
+}
+// A5-05: cancelar/reativar pedido (gestor). Cancelado sai de CPV/meta/comissão/fiscal/fluxo; histórico preservado.
+function pedCancelar(id){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id)); if(!p) return;
+  if(!confirm('Cancelar este pedido?\n\nEle sai do CPV, da meta de fábrica, das comissões, do fiscal e do fluxo de caixa — mas o histórico fica salvo. Dá pra reativar depois.')) return;
+  p.cancelado=true; p.canceladoEm=_hojeLocal(); p._uAt=Date.now();
+  save(); toast('🚫 Pedido cancelado.'); rPedidos();
+}
+function pedReativar(id){
+  if(ST.perfil!=='gestor'){ toast('🔒 Apenas o gestor.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id)); if(!p) return;
+  if(!confirm('Reativar este pedido? Ele volta a contar em CPV/meta/comissão/fiscal.')) return;
+  delete p.cancelado; delete p.canceladoEm; p._uAt=Date.now();
+  save(); toast('↩️ Pedido reativado.'); rPedidos();
 }
 
 // Aceita vários e-mails num campo só (separados por vírgula, ponto-e-vírgula, barra ou espaço) e devolve no formato do mailto.
@@ -15133,7 +15150,7 @@ function calcDRE(mesAno){
   // Auto = fábrica + fornecedores + outros custos, na competência da VENDA (fechamento do lead), alinhado à receita.
   const cpvManual   =soma('cpv');
   const cpvPedidos  =(ST.pedidos||[]).reduce((a,p)=>{
-    if(_pedShowroom(p)) return a;   // showroom não é CPV (não tem venda) — entra como Investimento abaixo
+    if(_pedShowroom(p)||_pedCancelado(p)) return a;   // showroom/cancelado fora do CPV
     const _l=p.leadId?(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)):null;
     if(_l && _l.status!=='ganho') return a; // A5-03: venda que não se concretizou (lead perdido/cancelado) não gera CPV fantasma
     const ref=_l?.dataFechamento||_l?.dataCriacao||p.data||'';
@@ -15144,10 +15161,16 @@ function calcDRE(mesAno){
             +(p.outrosCustos||[]).reduce((s,c)=>s+(c.valor||0),0)
             +_pedTransporte(p,_fab)+_pedMedicao(p); // transporte (6% ou manual) + medição — imposto já entra na dedução do DAS
   },0);
-  const cpv         =cpvManual+cpvPedidos;
+  // A5-04: custo de Assistência Técnica quando o erro é NOSSO (erro loja) abate no resultado (CPV), por competência (data da AT/conclusão/pedido).
+  const cpvAT       =(ST.pedidos||[]).reduce((a,p)=>{
+    if(_pedCancelado(p) || p.atErroTipo!=='nosso' || !((p.atCusto||0)>0)) return a;
+    const ref=p.atData||p.dateConcluido||p.data||'';
+    return String(ref).startsWith(mesAno)?a+(p.atCusto||0):a;
+  },0);
+  const cpv         =cpvManual+cpvPedidos+cpvAT;
   // Investimento showroom/interno do mês (compras que NÃO são venda): reduz o resultado como investimento.
   const investShowroom=(ST.pedidos||[]).reduce((a,p)=>{
-    if(!_pedShowroom(p)) return a;
+    if(!_pedShowroom(p)||_pedCancelado(p)) return a;
     if(!String(p.data||'').startsWith(mesAno)) return a;
     return a+_custoFabPed(p)
             +(p.fornecedoresAdicionais||[]).reduce((s,f)=>s+(f.valor||0),0)
@@ -15209,7 +15232,7 @@ function calcDRE(mesAno){
   const margemBruta=recLiq>0?lucroBruto/recLiq*100:0;
   const margemOp   =recLiq>0?resultado/recLiq*100:0;
 
-  return {recCRM,recOutra,recBruta,ded,dasPrevisto,recLiq,cpv,cpvManual,cpvPedidos,lucroBruto,
+  return {recCRM,recOutra,recBruta,ded,dasPrevisto,recLiq,cpv,cpvManual,cpvPedidos,cpvAT,lucroBruto,
           despPessoal,despPessoalOp,despPrestadores,
           cfAluguel,cfEnergia,cfAgua,cfInternet,cfSistema,cfDiarista,cfHigiene,cfManutencao,cfOutras,totalCF,
           cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,cvComissao,comEffTotal,cvComProj,cvComSup,cvComMont,totalCV,
@@ -15316,7 +15339,7 @@ function _fluxoFolhaMes(){ return todosFunc().filter(p=>!_estaDesligado(p.nome))
 function _fluxoFabricaMes(mes, primeiroMes){
   return (ST.pedidos||[]).reduce((t,p)=>{
     const vf=p.valorFabrica||0;
-    if(vf<=0 || p.status==='cancelado' || _bipartidoPed(p)>0 || p.comprovante) return t; // sem custo, cancelado, financiado ou já pago
+    if(vf<=0 || _pedCancelado(p) || _bipartidoPed(p)>0 || p.comprovante) return t; // sem custo, cancelado, financiado ou já pago
     // A6-02: venda que não se concretizou (lead cancelado/perdido) não gera saída projetada à fábrica
     if(p.leadId){ const _l=(ST.leads||[]).find(l=>String(l.id)===String(p.leadId)); if(_l && _l.status!=='ganho') return t; }
     let m=(p.datePgFab||p.prevProd||p.data||'').slice(0,7)||primeiroMes;
@@ -16619,7 +16642,7 @@ function rFinanceiro(){
 
     <div class="dre-sec-hdr"><span>Custos</span></div>
     <div class="dre-row dre-indent">
-      <span class="dre-lbl sm">CPV — Custo dos Produtos/Serviços${d.cpvPedidos>0?`<span style="font-size:10px;color:var(--gl);"> · 🏭 ${fmt(d.cpvPedidos)} pedidos (auto)</span>`:''}${d.cpvManual>0?`<span style="font-size:10px;color:#B45309;font-weight:600;"> ⚠️ ${fmt(d.cpvManual)} manual — confira se não duplica os pedidos</span>`:''}</span>
+      <span class="dre-lbl sm">CPV — Custo dos Produtos/Serviços${d.cpvPedidos>0?`<span style="font-size:10px;color:var(--gl);"> · 🏭 ${fmt(d.cpvPedidos)} pedidos (auto)</span>`:''}${d.cpvAT>0?`<span style="font-size:10px;color:#9F1239;font-weight:600;"> · 🛠️ ${fmt(d.cpvAT)} assist. (erro loja)</span>`:''}${d.cpvManual>0?`<span style="font-size:10px;color:#B45309;font-weight:600;"> ⚠️ ${fmt(d.cpvManual)} manual — confira se não duplica os pedidos</span>`:''}</span>
       <div class="dre-right"><span class="dre-val fail">${fmt(d.cpv)}</span></div>
     </div>
     <div class="dre-row dre-subtotal">
