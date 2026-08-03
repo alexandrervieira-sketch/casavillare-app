@@ -9035,14 +9035,17 @@ function rTreinamentos(){
   const el=document.getElementById('trei-content');
   if(!el) return;
   // 📖 Guia de Uso do Sistema — sempre no topo, acessível a todos (abre a página do guia em nova aba)
-  const guiaBanner=`<a href="guia.html" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;text-decoration:none;background:linear-gradient(135deg,#3d2f22,#6b5844);color:#fff;border-radius:14px;padding:16px 20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.12);">
-    <div style="font-size:30px;">📖</div>
-    <div style="flex:1;">
-      <div style="font-size:15px;font-weight:800;">Guia de Uso do Sistema</div>
-      <div style="font-size:12.5px;opacity:.92;">Passo a passo de todos os módulos, atualizado. Qualquer um pode consultar quando precisar — abre em nova aba.</div>
-    </div>
-    <div style="font-size:13px;font-weight:700;background:rgba(255,255,255,.18);padding:8px 14px;border-radius:8px;white-space:nowrap;">Abrir ›</div>
-  </a>`;
+  const guiaBanner=`<div style="margin-bottom:18px;">
+    <a href="guia.html" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;text-decoration:none;background:linear-gradient(135deg,#3d2f22,#6b5844);color:#fff;border-radius:14px;padding:16px 20px;box-shadow:0 2px 8px rgba(0,0,0,.12);">
+      <div style="font-size:30px;">📖</div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:800;">Guia de Uso do Sistema</div>
+        <div style="font-size:12.5px;opacity:.92;">Passo a passo de todos os módulos, atualizado. Qualquer um pode consultar quando precisar — abre em nova aba.</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;background:rgba(255,255,255,.18);padding:8px 14px;border-radius:8px;white-space:nowrap;">Abrir ›</div>
+    </a>
+    <a href="apresentacao.html" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:9px;font-size:12.5px;color:var(--p,#6b5844);text-decoration:none;font-weight:600;">🎤 Ver também a apresentação do sistema (por fluxo de venda · módulo · função) ›</a>
+  </div>`;
 
   if(!lista.length){
     el.innerHTML=guiaBanner+`<div class="empty"><p>Nenhum treinamento cadastrado ainda.${isG?' Clique em "+ Novo treinamento" para começar.':''}</p></div>`;

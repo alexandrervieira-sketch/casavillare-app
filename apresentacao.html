@@ -1,0 +1,335 @@
+<style>
+:root{
+  --bg:#FBF9F5; --surface:#FFFFFF; --surface-2:#F4EEE4; --border:#E8E0D3; --border-2:#DCD1BF;
+  --ink:#2C2720; --ink-soft:#514839; --muted:#867A68; --faint:#A99C88;
+  --accent:#8C6E48; --accent-2:#B8974F; --gold:#C8A96A;
+  --ok:#3F8F55; --ok-bg:#E7F1E9; --warn:#B5812F; --warn-bg:#F6EDDB; --danger:#B24A3A;
+  --shadow:0 1px 2px rgba(70,52,26,.05), 0 8px 26px rgba(70,52,26,.07);
+  --radius:14px;
+  --serif:Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#201D18; --surface:#2A2620; --surface-2:#332E26; --border:#3C362C; --border-2:#494134;
+    --ink:#EEE7DA; --ink-soft:#D2C7B4; --muted:#A99E8C; --faint:#7E7360;
+    --accent:#C7A567; --accent-2:#D6B978; --gold:#D8BC7C;
+    --ok:#6FBF86; --ok-bg:#25342890; --warn:#D6A94E; --warn-bg:#37301f90; --danger:#D77E6E;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#201D18; --surface:#2A2620; --surface-2:#332E26; --border:#3C362C; --border-2:#494134;
+  --ink:#EEE7DA; --ink-soft:#D2C7B4; --muted:#A99E8C; --faint:#7E7360;
+  --accent:#C7A567; --accent-2:#D6B978; --gold:#D8BC7C;
+  --ok:#6FBF86; --ok-bg:#25342890; --warn:#D6A94E; --warn-bg:#37301f90; --danger:#D77E6E;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+}
+:root[data-theme="light"]{
+  --bg:#FBF9F5; --surface:#FFFFFF; --surface-2:#F4EEE4; --border:#E8E0D3; --border-2:#DCD1BF;
+  --ink:#2C2720; --ink-soft:#514839; --muted:#867A68; --faint:#A99C88;
+  --accent:#8C6E48; --accent-2:#B8974F; --gold:#C8A96A;
+  --ok:#3F8F55; --ok-bg:#E7F1E9; --warn:#B5812F; --warn-bg:#F6EDDB; --danger:#B24A3A;
+  --shadow:0 1px 2px rgba(70,52,26,.05), 0 8px 26px rgba(70,52,26,.07);
+}
+
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+  font-size:16px;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s;}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px;}
+h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.15;text-wrap:balance;color:var(--ink);}
+a{color:var(--accent);}
+.tnum{font-variant-numeric:tabular-nums;}
+
+/* ── Top bar ── */
+.topbar{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%, transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--border);}
+.topbar .row{display:flex;align-items:center;gap:14px;height:60px;}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-weight:700;font-size:18px;white-space:nowrap;}
+.brand .mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(150deg,var(--accent),var(--accent-2));
+  display:grid;place-items:center;color:#fff;font-size:15px;flex-shrink:0;box-shadow:var(--shadow);}
+.brand span{color:var(--muted);font-weight:400;}
+.switch{display:flex;gap:4px;margin-left:auto;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:11px;padding:4px;}
+.switch button{border:none;background:none;color:var(--muted);font-family:var(--sans);font-size:13px;font-weight:600;
+  padding:7px 13px;border-radius:8px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.switch button:hover{color:var(--ink);}
+.switch button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.theme-btn{border:1px solid var(--border);background:var(--surface);color:var(--muted);width:38px;height:38px;
+  border-radius:10px;cursor:pointer;font-size:16px;display:grid;place-items:center;flex-shrink:0;transition:all .15s;}
+.theme-btn:hover{color:var(--ink);border-color:var(--border-2);}
+@media(max-width:720px){
+  .switch button{padding:7px 9px;font-size:12px;}
+  .brand span{display:none;}
+}
+
+/* ── Hero ── */
+.hero{padding:52px 0 30px;}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
+.hero h1{font-size:clamp(30px,5vw,46px);margin:0 0 14px;}
+.hero p.lead{font-size:18px;color:var(--ink-soft);max-width:60ch;margin:0 0 26px;}
+.access{display:flex;flex-wrap:wrap;gap:12px;}
+.access .chip{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);
+  border-radius:11px;padding:11px 15px;font-size:14px;box-shadow:var(--shadow);}
+.access .chip b{color:var(--ink);}
+.access .chip .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:1px;}
+
+/* ── Views ── */
+.view{display:none;padding:14px 0 70px;animation:fade .35s ease;}
+.view.on{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.sec-head{margin:34px 0 8px;}
+.sec-head h2{font-size:26px;margin:0 0 6px;}
+.sec-head p{color:var(--muted);margin:0;max-width:64ch;}
+.divider{height:1px;background:var(--border);margin:30px 0;border:0;}
+
+/* ── Flow timeline ── */
+.flow{display:flex;flex-direction:column;gap:0;margin-top:26px;}
+.step{display:grid;grid-template-columns:52px 1fr;gap:18px;padding-bottom:26px;position:relative;}
+.step:not(:last-child)::before{content:"";position:absolute;left:25px;top:46px;bottom:-4px;width:2px;
+  background:linear-gradient(var(--border-2),var(--border));}
+.step .dot{width:52px;height:52px;border-radius:50%;background:var(--surface);border:2px solid var(--accent);
+  color:var(--accent);display:grid;place-items:center;font-family:var(--serif);font-size:20px;font-weight:700;
+  z-index:1;box-shadow:var(--shadow);}
+.step.done .dot{background:var(--accent);color:#fff;}
+.step .body{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:18px 20px;box-shadow:var(--shadow);}
+.step h3{font-size:18px;margin:0 0 3px;}
+.step .who{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-2);margin-bottom:8px;}
+.step p{margin:0 0 8px;color:var(--ink-soft);font-size:15px;}
+.step .tip{font-size:13.5px;color:var(--muted);background:var(--surface-2);border-left:3px solid var(--gold);
+  padding:8px 12px;border-radius:0 8px 8px 0;margin-top:4px;}
+.step .tip b{color:var(--ink-soft);}
+
+/* ── Module accordion grid ── */
+.mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-top:24px;}
+.mod{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+  box-shadow:var(--shadow);transition:border-color .15s;}
+.mod:hover{border-color:var(--border-2);}
+.mod > button{width:100%;display:flex;align-items:center;gap:13px;padding:16px 18px;background:none;border:none;
+  cursor:pointer;text-align:left;font-family:var(--sans);color:var(--ink);}
+.mod .ic{width:40px;height:40px;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;
+  font-size:19px;flex-shrink:0;}
+.mod .mt{flex:1;min-width:0;}
+.mod .mt strong{display:block;font-size:15.5px;font-weight:700;}
+.mod .mt small{color:var(--muted);font-size:12.5px;}
+.mod .chev{color:var(--faint);transition:transform .25s;font-size:13px;}
+.mod.open .chev{transform:rotate(90deg);}
+.mod .detail{max-height:0;overflow:hidden;transition:max-height .3s ease;}
+.mod.open .detail{max-height:640px;}
+.mod .detail-in{padding:2px 18px 18px 71px;font-size:14px;color:var(--ink-soft);}
+.mod .detail-in .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:12px 0 5px;}
+.mod .detail-in ul{margin:0;padding-left:18px;}
+.mod .detail-in li{margin-bottom:4px;}
+.mod .detail-in .tip{font-size:13px;color:var(--muted);background:var(--surface-2);border-left:3px solid var(--gold);
+  padding:8px 11px;border-radius:0 8px 8px 0;margin-top:12px;}
+.tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+.tag{font-size:11px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted);
+  padding:3px 9px;border-radius:20px;}
+@media(max-width:600px){ .mod .detail-in{padding-left:18px;} }
+
+/* ── Roles ── */
+.roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:24px;}
+.role{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);
+  border-top:3px solid var(--accent);}
+.role h3{font-size:18px;margin:0 0 2px;display:flex;align-items:center;gap:9px;}
+.role .sub{color:var(--muted);font-size:13px;margin-bottom:14px;}
+.role .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:12px 0 6px;}
+.role ul{margin:0;padding-left:17px;font-size:14px;color:var(--ink-soft);}
+.role ul li{margin-bottom:4px;}
+.role .access-list{display:flex;flex-wrap:wrap;gap:5px;}
+.role .a-yes,.role .a-no{font-size:11.5px;padding:3px 9px;border-radius:20px;font-weight:600;}
+.role .a-yes{background:var(--ok-bg);color:var(--ok);}
+.role .a-no{background:var(--surface-2);color:var(--faint);}
+
+/* callout */
+.callout{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);
+  border-radius:0 var(--radius) var(--radius) 0;padding:18px 22px;margin-top:26px;box-shadow:var(--shadow);}
+.callout h3{font-size:16px;margin:0 0 6px;}
+.callout p{margin:0;color:var(--ink-soft);font-size:14.5px;}
+footer{border-top:1px solid var(--border);padding:26px 0;color:var(--faint);font-size:13px;text-align:center;}
+</style>
+
+<div class="topbar"><div class="wrap"><div class="row">
+  <div class="brand"><span class="mark">CV</span>Casa Villare <span>· Treinamento</span></div>
+  <nav class="switch" id="switch">
+    <button data-v="flow" class="on">Fluxo de venda</button>
+    <button data-v="mods">Módulos</button>
+    <button data-v="roles">Por função</button>
+  </nav>
+  <button class="theme-btn" id="theme" title="Alternar tema" aria-label="Alternar tema">◐</button>
+</div></div></div>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">Sistema de Gestão · Guia da equipe</div>
+  <h1>Como usar o sistema da Casa Villare</h1>
+  <p class="lead">Um guia rápido e prático de todo o sistema — do lead que chega no WhatsApp até o contrato assinado e a montagem. Use as abas acima para ver por <b>fluxo de venda</b>, por <b>módulo</b> ou pelo que <b>cada função</b> faz.</p>
+  <div class="access">
+    <div class="chip"><div><span class="k">Onde acessar</span><b>sistema-casa-villare.web.app</b></div></div>
+    <div class="chip"><div><span class="k">Login</span><b>seu e-mail @casavillare.com.br</b></div></div>
+    <div class="chip"><div><span class="k">Primeira vez?</span>“Criar minha senha”</div></div>
+  </div>
+</div></header>
+
+<main class="wrap">
+
+<!-- ══════════ FLUXO DE VENDA ══════════ -->
+<section class="view on" id="view-flow">
+  <div class="sec-head">
+    <h2>A jornada de uma venda, do início ao fim</h2>
+    <p>Toda venda percorre o mesmo caminho no sistema. Entender essa sequência é entender o sistema inteiro — cada etapa vive no Funil (CRM) e “empurra” as informações para as próximas áreas.</p>
+  </div>
+  <div class="flow">
+    <div class="step done"><div class="dot">1</div><div class="body">
+      <div class="who">Recepção · caixa “Leads”</div>
+      <h3>O lead chega</h3>
+      <p>Todo contato novo cai na caixa <b>Leads</b> do Funil (CRM). Pode vir de 3 formas: pela <b>IA do WhatsApp</b>, por <b>formulário</b>, ou cadastrado na mão (botão <b>+ Novo lead</b>). O card mostra a origem, o responsável e a <b>hora que entrou</b>.</p>
+      <div class="tip"><b>Triagem:</b> quem está só de curioso vai para “Perdido”; quem tem real interesse avança para o 1º Atendimento.</div>
+    </div></div>
+
+    <div class="step done"><div class="dot">2</div><div class="body">
+      <div class="who">Vendedor</div>
+      <h3>1º Atendimento &amp; Briefing</h3>
+      <p>O vendedor assume o lead e registra o que o cliente precisa — ambiente, cidade, estilo, prazo. No <b>Briefing</b> aprofunda os detalhes do projeto. Vá avançando o card etapa por etapa (botão <b>→</b> no card).</p>
+      <div class="tip"><b>Dica:</b> mantenha o “próximo contato” preenchido — o sistema avisa no Dashboard quando um lead está parado.</div>
+    </div></div>
+
+    <div class="step done"><div class="dot">3</div><div class="body">
+      <div class="who">Vendedor / Projetista</div>
+      <h3>Projeto &amp; importação do Promob</h3>
+      <p>A partir da etapa <b>Projeto</b>, o card ganha os campos de valor e pagamento. Desenhe no Promob e <b>importe o XML</b> — o sistema puxa os ambientes e o valor do orçamento automaticamente. Nada de digitar item por item.</p>
+      <div class="tip"><b>Importante:</b> o “Valor Promob” é o orçamento; a <b>venda real</b> é o valor ao cliente (depois do desconto).</div>
+    </div></div>
+
+    <div class="step done"><div class="dot">4</div><div class="body">
+      <div class="who">Vendedor</div>
+      <h3>Apresentação &amp; Negociação</h3>
+      <p>Apresente o projeto e registre o <b>desconto</b>, o <b>prazo de entrega</b> e as <b>condições de pagamento</b> (à vista, cartão, boleto, financiamento). O sistema calcula tudo — comissão, imposto, margem — em tempo real.</p>
+      <div class="tip"><b>Fonte única:</b> preencha prazo e condições aqui no lead — essas informações vão direto para o contrato, sem redigitar.</div>
+    </div></div>
+
+    <div class="step done"><div class="dot">5</div><div class="body">
+      <div class="who">Vendedor</div>
+      <h3>Fechamento → Cadastro do cliente</h3>
+      <p>Ao fechar, aparece o <b>🎉 Negócio Fechado!</b> Clique em <b>Criar Cadastro do Cliente</b> e preencha os dados fiscais (CPF/CNPJ, endereço). Os ambientes já vêm preenchidos do lead — você só completa e salva.</p>
+      <div class="tip"><b>Cliente que já comprou?</b> Ao importar um XML novo o sistema pergunta se é uma <b>nova compra</b> — escolha “começar contrato novo” para não misturar com a venda anterior.</div>
+    </div></div>
+
+    <div class="step done"><div class="dot">6</div><div class="body">
+      <div class="who">Vendedor</div>
+      <h3>Gerar o contrato</h3>
+      <p>Logo após salvar o cadastro, o sistema abre a tela de <b>Contrato</b>. Confira os ambientes, clique em <b>📄 Gerar Contrato</b> e imprima ou salve em PDF. O contrato sai completo, com todas as cláusulas.</p>
+      <div class="tip"><b>Dica:</b> o número do contrato e as cláusulas são automáticos — não precisa mexer.</div>
+    </div></div>
+
+    <div class="step"><div class="dot">7</div><div class="body">
+      <div class="who">Produção · Fábrica · Financeiro</div>
+      <h3>Pós-venda: pedido, fábrica, nota e entrega</h3>
+      <p>A venda vira um <b>Pedido</b> e percorre a produção por etapas: <b>Medição → Projeto Executivo → Executivo Assinado → Pagamento Fábrica → Pedido Fábrica → Em Produção → Concluído</b>. Em paralelo, o <b>Fiscal</b> emite a NFe, a <b>Comissão</b> é calculada e a <b>Agenda</b> organiza medição, entrega e montagem.</p>
+      <div class="tip"><b>Fim da jornada:</b> tudo que foi registrado no funil alimenta essas áreas — por isso caprichar no começo economiza retrabalho no fim. Use a <b>Rentabilidade</b> do pedido para conferir a margem (previsto × realizado).</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ══════════ MÓDULOS ══════════ -->
+<section class="view" id="view-mods">
+  <div class="sec-head">
+    <h2>Cada aba do sistema, explicada</h2>
+    <p>O menu da esquerda tem todas as áreas. Cada pessoa vê só as abas que seu perfil permite. Clique em cada módulo para ver o que ele faz e as ações principais.</p>
+  </div>
+  <div class="mods" id="mods"></div>
+  <div class="callout">
+    <h3>Não está vendo alguma aba?</h3>
+    <p>É normal — cada perfil enxerga só o que precisa (um vendedor não vê o Financeiro, por exemplo). Se faltar algo que você deveria acessar, fale com o gestor, que ajusta em <b>Configurações → Equipe</b>.</p>
+  </div>
+</section>
+
+<!-- ══════════ POR FUNÇÃO ══════════ -->
+<section class="view" id="view-roles">
+  <div class="sec-head">
+    <h2>O que cada função faz no sistema</h2>
+    <p>O sistema mostra para cada pessoa só as áreas do seu trabalho. Veja abaixo o essencial de cada perfil — o que acessa e o dia a dia.</p>
+  </div>
+  <div class="roles" id="roles"></div>
+  <div class="callout">
+    <h3>Cada login enxerga só o que é seu</h3>
+    <p>Além das abas por perfil, o sistema <b>isola por pessoa</b>: o vendedor vê apenas os <b>próprios leads</b> (CRM), as <b>próprias metas</b> e a <b>própria comissão</b> — nunca os dos colegas. Só o gestor enxerga a equipe inteira.</p>
+  </div>
+  <div class="callout">
+    <h3>Quem define os acessos</h3>
+    <p>O <b>gestor</b> configura em <b>Configurações → Equipe</b>: define o perfil de cada pessoa, aprova o acesso e pode ajustar permissão por aba (sem acesso · só ver · editar). Também é lá que se cria/reseta senha.</p>
+  </div>
+</section>
+
+</main>
+
+<footer><div class="wrap">Casa Villare · Sistema de Gestão — guia interno de treinamento. Dúvidas do dia a dia: fale com o gestor.</div></footer>
+
+<script>
+const MODS=[
+  {ic:"🏠",n:"Dashboard",d:"Sua tela inicial",why:"A visão geral do dia: a Central de Alertas com tudo que precisa da sua atenção, os números do mês, o gráfico de vendas, os projetos quentes e a agenda.",acts:["Central de Alertas — metas em risco, leads a seguir (sem próximo contato / esfriando), triagem parada e pedidos atrasados","KPIs do mês: novos leads, projetos quentes, pipeline ativo e fechados","Gráfico de leads fechados por mês, com a média de vendas","Dashboard Comercial: conversão, origem dos leads e motivos de perda","Próximos eventos, aniversariantes e mural de avisos"],tip:"Comece o dia aqui: a Central de Alertas mostra exatamente onde agir.",tags:["Todos"]},
+  {ic:"🎯",n:"CRM · Funil de Vendas",d:"O coração comercial",why:"Onde os leads vivem e avançam até virar venda. As colunas são as etapas: Leads, 1º Atendimento, Briefing, Projeto, Apresentação, Negociação, Fechamento — e no fim, Ganhos e Perdidos do mês.",acts:["+ Novo lead e triagem da caixa Leads (avança ou marca Perdido com o motivo)","Editar Lead: dados do cliente, origem, responsável, tipo de venda, prazo e desconto","Importar o XML do Promob (puxa ambientes e o valor do orçamento)","Condições de pagamento: Pix, Boleto, À vista, Cartão ou Financiamento","Especificador (arquiteto/designer) e RT quando houver","Avançar/voltar etapas (→ e ←), anexar fotos/PDFs e definir o próximo contato"],tip:"O card mostra origem, responsável, valor e a hora de entrada. Só o gestor pode lançar vendas retroativas pelas “Datas”.",tags:["Vendedor","Gestor"]},
+  {ic:"📦",n:"Pedidos",d:"Vendas em produção",why:"Depois de fechada, a venda vira um pedido e percorre a produção por etapas, cada uma com prazo: Venda Programada → Medição → Projeto Executivo → Executivo Assinado → Pagamento Fábrica → Pedido Fábrica → Em Produção → Concluído.",acts:["Avançar o pedido pelas etapas (→ Avançar) e acompanhar prazos e atrasos","Editar Pedido: fábrica, custo, responsável de obra, projetista e montador","Ver a Rentabilidade do projeto (Previsto × Realizado) com todas as comissões e custos","Registrar transporte, medição, fornecedores e outros custos","Cancelar pedido (🚫) — sai do custo, meta, comissão e fiscal, mas preserva o histórico; reativa com ↩️","O comprovante de pagamento à fábrica agora é anexado só em Fábrica › Pagamentos (o card só mostra o status)","Novo Showroom / Investimento — compra interna (não gera comissão nem NFe)"],tip:"O pedido nasce sozinho quando o cadastro do cliente é salvo. Mover o card para 'Pagamento Fábrica' = pago (carimba a data). Há trava contra zerar o custo de fábrica sem querer.",tags:["Vendedor","Produção","Financeiro"]},
+  {ic:"📅",n:"Agenda",d:"Compromissos e prazos",why:"Reúne follow-ups, medições, entregas, montagens e aniversários — tudo em um calendário.",acts:["Ver e criar compromissos","Acompanhar medições e entregas agendadas","Lembretes automáticos de contato de leads"],tip:"Itens do funil (contato, apresentação) aparecem aqui sozinhos.",tags:["Todos"]},
+  {ic:"🏆",n:"Metas",d:"Objetivos do mês",why:"Acompanha as metas do mês: meta da loja, meta por vendedor, meta da fábrica (que define o tier de desconto Bronze/Prata/Ouro) e um Plano de Ação para bater a meta.",acts:["Meta da loja e por vendedor, com % atingido e dias restantes","Meta da fábrica: tiers de desconto por volume de compras","Estatísticas: taxa de conversão e ticket médio","Plano de ação — quantos contatos, apresentações e vendas ainda faltam"],tip:"A meta é o valor ao cliente (venda real), não o orçamento Promob.",tags:["Vendedor","Gestor"]},
+  {ic:"🏅",n:"Comissões",d:"Cálculo da comissão",why:"Calcula a comissão de cada venda — para a equipe comercial, projetistas e montadores. Mostra o que já está liberado, o que fica pendente até a conclusão do projeto e o total previsto.",acts:["Acompanhar a comissão por período (valor de venda, líquido, pontuação e %)","Comissão de projetista e montador libera quando o projeto é concluído","Registrar o pagamento escolhendo a DATA (inclusive retroativa → cai no mês certo); gera recibo e não duplica","Registrar adiantamentos e lançar comissão manual"],tip:"🔒 Cada pessoa vê APENAS a própria comissão — o CRM, as Metas e a Comissão são individuais por login. O gestor vê de todos; por isso, ao apresentar para a equipe, o gestor não deve projetar a tela de Comissões.",tags:["Vendedor","Gestor","Financeiro"]},
+  {ic:"👥",n:"Cadastros",d:"Clientes e parceiros",why:"O catálogo de pessoas: Clientes, Especificadores &amp; Parceiros, Funcionários e Fornecedores. O cadastro de cliente é o que gera o contrato.",acts:["Cadastrar/editar cliente (dados fiscais + ambientes)","Gerar o contrato a partir do cliente","Cadastrar especificadores, fornecedores e funcionários"],tip:"Ao fechar uma venda, o cadastro do cliente já vem pré-preenchido do lead.",tags:["Vendedor","Gestor","Financeiro"]},
+  {ic:"💰",n:"Financeiro",d:"O caixa da loja",why:"A saúde financeira em 6 abas: DRE (resultado do mês), Análise (margem e ponto de equilíbrio), Contas a Receber, Contas a Pagar, Fluxo de Caixa e Folha.",acts:["DRE — receita das vendas (automática), deduções (DAS), custos e lucro","Análise — margem de contribuição, custos fixos, ponto de equilíbrio e meta de lucro","A Receber — parcelas em aberto, recebidas e vencidas; dar baixa e exportar","A Pagar — contas do mês; conta recorrente (mensal) aparece sozinha todo mês (🔁), é só clicar Pagar; encerra trocando p/ Única","Fluxo de Caixa — projeção mês a mês; vencidas caem no mês atual e o já pago não desconta 2×","Folha — salários e adiantamentos. Fechar o mês (🔒) trava edições daquele período"],tip:"🔒 Acesso restrito a gestor e financeiro. Boa parte é automática. O DRE usa o DAS realmente pago e a assistência por erro da loja abate no resultado.",tags:["Gestor","Financeiro"]},
+  {ic:"📋",n:"Relatórios",d:"Números para decidir",why:"Cinco análises para decidir: Vendas, Funil de Conversão, Análise de Perdas, Rentabilidade e Desempenho — além dos horários de pico de entrada dos leads.",acts:["Vendas — contratos, valor vendido, ticket médio e evolução de 12 meses vs meta","Funil de Conversão — leads → atendimentos → vendas, com % de cada etapa","Análise de Perdas — quanto e por que se perde (ranking de motivos)","Rentabilidade — margem geral, lucro previsto × realizado e referência por cor","Desempenho — avaliação por colaborador (individual ou ranking)"],tip:"Filtre por mês, trimestre, 12 meses ou ano em qualquer relatório.",tags:["Gestor","Financeiro"]},
+  {ic:"🏭",n:"Fábrica",d:"Compras e pagamentos à fábrica",why:"Reformulada em 3 abas: Pagamentos à Fábrica (abre nesta — barra da meta da Casimiro + lista de pagamentos + comprovante), Geral (gráficos de custo) e Bipartido/Financiamento (os 40% que a financeira envia à fábrica).",acts:["Pagamentos à Fábrica — barra da Meta da Casimiro (desconto por volume 4%/6%/8%), lista de todos os pedidos que foram à fábrica no mês, e é AQUI que se anexa/envia o comprovante (um lugar só, guardado com segurança)","O total conta o valorFabrica de todos os pedidos pagos (financiados inclusive — o bipartido já está dentro do valor, sem contar 2×)","Geral — gráficos de custo por mês e top fornecedores","Bipartido/Financiamento — saldo do que a financeira envia à fábrica"],tip:"Sinal de 'pago' = mover o card do pedido para 'Pagamento Fábrica'. Financiado só entra no total depois de anexar o comprovante.",tags:["Gestor","Financeiro"]},
+  {ic:"🧾",n:"Fiscal",d:"Nota fiscal e impostos",why:"3 abas: Pendentes (vendas sem nota, prontas para emitir), Emitidas (notas com DANFE, XML, carta de correção e cancelamento) e Tributário (o DAS do Simples Nacional, calculado automaticamente).",acts:["Pendentes — emitir a NFe do pedido ou registrar uma nota manual","Emitidas — baixar DANFE/XML, emitir CC-e (correção) ou cancelar","Tributário — DAS previsto do mês (RBT12, alíquota nominal e efetiva)","Marcar o DAS como pago quando quitar"],tip:"A alíquota do imposto acompanha a faixa de faturamento (RBT12) da loja.",tags:["Gestor","Financeiro"]},
+  {ic:"🗂️",n:"Repositório &amp; 🎓 Treinamentos",d:"Arquivos e materiais",why:"O Repositório guarda documentos e arquivos úteis; Treinamentos reúne materiais e o Guia de Uso do sistema.",acts:["Consultar documentos e modelos","📖 Guia de Uso do Sistema — botão no topo de Treinamentos, aberto a todos, com o passo a passo de tudo","Acessar materiais de treinamento"],tip:"O Guia de Uso fica sempre à mão em Treinamentos — consulte quando precisar.",tags:["Todos"]}
+];
+const ROLES=[
+  {ic:"🛒",n:"Vendedor",sub:"Do lead ao contrato",yes:["CRM","Pedidos","Agenda","Metas","Comissões","Cadastros"],no:["Financeiro","Fiscal","Relatórios"],day:["Triar a caixa Leads e avançar o funil","Importar o Promob e registrar a negociação","Fechar a venda e gerar o contrato","Acompanhar metas e comissões"]},
+  {ic:"👑",n:"Gestor",sub:"Visão e controle total",yes:["Tudo"],no:[],day:["Configurar equipe, perfis e permissões","Aprovar acessos e definir senhas","Acompanhar DRE, relatórios e metas","Definir comissões e o rodízio de leads"]},
+  {ic:"💰",n:"Financeiro",sub:"Caixa, notas e folha",yes:["Financeiro","Fiscal","Pedidos","Cadastros","Comissões","Relatórios"],no:["CRM","Metas"],day:["Contas a pagar e a receber","Emitir NFe e acompanhar o DAS","Fechar a folha de pagamento","Conferir rentabilidade e fluxo de caixa"]},
+  {ic:"📐",n:"Supervisor / Projetista",sub:"Produção e projeto",yes:["Pedidos","Agenda","Metas","Comissões","Cadastros"],no:["CRM","Financeiro","Fiscal"],day:["Acompanhar pedidos em produção","Organizar medições e prazos na agenda","Apoiar o projeto e o cadastro"]},
+  {ic:"🔧",n:"Montador",sub:"Entrega e montagem",yes:["Pedidos","Agenda","Comissões"],no:["CRM","Cadastros","Financeiro"],day:["Ver o que montar e quando","Consultar a agenda de montagens","Acompanhar suas comissões"]},
+  {ic:"🤝",n:"Prestador",sub:"Serviços pontuais",yes:["Agenda","Comissões"],no:["Demais áreas"],day:["Ver seus compromissos na agenda","Acompanhar comissões dos serviços"]}
+];
+
+const mEl=document.getElementById('mods');
+MODS.forEach(m=>{
+  const el=document.createElement('div');el.className='mod';
+  el.innerHTML=`<button aria-expanded="false"><div class="ic">${m.ic}</div>
+    <div class="mt"><strong>${m.n}</strong><small>${m.d}</small></div><div class="chev">▶</div></button>
+    <div class="detail"><div class="detail-in">
+      <p style="margin:2px 0 0">${m.why}</p>
+      <div class="lbl">Principais ações</div><ul>${m.acts.map(a=>`<li>${a}</li>`).join('')}</ul>
+      <div class="tip">💡 ${m.tip}</div>
+      <div class="tagrow">${m.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    </div></div>`;
+  el.querySelector('button').addEventListener('click',()=>{
+    const open=el.classList.toggle('open');
+    el.querySelector('button').setAttribute('aria-expanded',open);
+  });
+  mEl.appendChild(el);
+});
+
+const rEl=document.getElementById('roles');
+ROLES.forEach(r=>{
+  const el=document.createElement('div');el.className='role';
+  el.innerHTML=`<h3>${r.ic} ${r.n}</h3><div class="sub">${r.sub}</div>
+    <div class="lbl">Acessa</div><div class="access-list">
+      ${r.yes.map(a=>`<span class="a-yes">✓ ${a}</span>`).join('')}
+      ${r.no.map(a=>`<span class="a-no">— ${a}</span>`).join('')}</div>
+    <div class="lbl">No dia a dia</div><ul>${r.day.map(d=>`<li>${d}</li>`).join('')}</ul>`;
+  rEl.appendChild(el);
+});
+
+const sw=document.getElementById('switch');
+sw.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  sw.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('view-'+b.dataset.v).classList.add('on');
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+
+const root=document.documentElement,tb=document.getElementById('theme');
+tb.addEventListener('click',()=>{
+  const dark=(root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'))==='dark';
+  root.setAttribute('data-theme',dark?'light':'dark');
+});
+</script>
