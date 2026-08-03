@@ -15359,10 +15359,10 @@ function _fluxoAPagarMes(mes, primeiroMes){
   const efMes=e=>{ let m=e.mesAno||''; if(primeiroMes && m && m<primeiroMes) m=primeiroMes; return m; }; // A6-01: conta vencida em aberto cai no mês atual
   const explicAll=(ST.contasPagar||[]).filter(e=>e.mesAno===mes);
   const explicUnpaid=(ST.contasPagar||[]).filter(e=>!e.pago && efMes(e)===mes);
-  const ult=new Map();
-  (ST.contasPagar||[]).filter(e=>e.recorrencia==='mensal'&&e.mesAno<mes).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>ult.set(e.cat+'|'+(e.fornecedor||e.descricao||''),e));
+  const ult=new Map(); // ÚLTIMO lançamento por conta (qualquer tipo) — projeta só se o mais recente for 'mensal' (encerra com 'única')
+  (ST.contasPagar||[]).filter(e=>e.mesAno<mes).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>ult.set(e.cat+'|'+(e.fornecedor||e.descricao||''),e));
   const ek=new Set(explicAll.map(c=>c.cat+'|'+(c.fornecedor||c.descricao||'')));
-  const rec=[...ult.values()].filter(e=>!ek.has(e.cat+'|'+(e.fornecedor||e.descricao||'')));
+  const rec=[...ult.values()].filter(e=>e.recorrencia==='mensal'&&!ek.has(e.cat+'|'+(e.fornecedor||e.descricao||'')));
   return explicUnpaid.reduce((a,e)=>a+(e.valor||0),0)+rec.reduce((a,e)=>a+(e.valor||0),0);
 }
 function _fluxoFolhaMes(){ return todosFunc().filter(p=>!_estaDesligado(p.nome)).reduce((a,p)=>a+((ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0),0); }
@@ -15761,9 +15761,10 @@ function rFinCP(){
   // Recorrentes: conta 'mensal' de meses anteriores que AINDA não foi materializada neste mês → aparece PREVISTA (some ao pagar/lançar).
   const _chaveRec=c=>c.cat+'|'+(c.fornecedor||c.descricao||'');
   const _ekMes=new Set(todas.map(_chaveRec));
-  const _ultRec=new Map();
-  (ST.contasPagar||[]).filter(e=>e.recorrencia==='mensal'&&e.mesAno<mesStr).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>_ultRec.set(_chaveRec(e),e));
-  const projetadas=[..._ultRec.values()].filter(e=>!_ekMes.has(_chaveRec(e)));
+  const _ultRec=new Map(); // ÚLTIMO lançamento de cada conta (qualquer tipo) antes deste mês
+  (ST.contasPagar||[]).filter(e=>e.mesAno<mesStr).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>_ultRec.set(_chaveRec(e),e));
+  // Projeta só se o ÚLTIMO for 'mensal' → basta lançar/editar um mês como 'única' p/ ENCERRAR a recorrência.
+  const projetadas=[..._ultRec.values()].filter(e=>e.recorrencia==='mensal'&&!_ekMes.has(_chaveRec(e)));
   const totalPend=pendentes.reduce((a,c)=>a+(c.valor||0),0)+projetadas.reduce((a,c)=>a+(c.valor||0),0);
   const totalPago=pagas.reduce((a,c)=>a+(c.valor||0),0);
 
