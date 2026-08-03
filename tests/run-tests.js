@@ -78,7 +78,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _configsPublica, _cfgprivDocs, _cfgprivMerge,
   _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE,
   _mergeCondPgto, _fluxoAReceberMes, _fluxoAPagarMes, _fluxoFabricaMes,
-  comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor
+  comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
+  _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -559,18 +560,21 @@ test('A2-01: pagar a mesma parcela do projetista 2x não duplica no ledger', () 
   T.ST.perfil = 'gestor'; T.ST.comPagamentos = [];
   T.ST.leads = [{ id: 'LcomX', status: 'ganho', valor: 100000, desconto: 0 }];
   T.ST.pedidos = [{ id: 'PcomX', leadId: 'LcomX', projetista: 'Ana', status: 'concluido', dateExecAssn: '2042-01-05' }];
-  T.comProjPagar('PcomX', 'A'); T.comProjPagar('PcomX', 'A');
+  const _p = T.ST.pedidos.find(x => x.id === 'PcomX');
+  T._comProjPagarExec(_p, 'A', '2042-01-20'); T._comProjPagarExec(_p, 'A', '2042-01-20'); // 2× (duplo-clique / 2 dispositivos)
   const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'projetista_parcela' && x.pedidoId === 'PcomX' && x.parcela === 'A');
   assertEq(regs.length, 1, 'só 1 registro no ledger');
   assert(String(regs[0].id).startsWith('compp_'), 'id determinístico');
+  assertEq(regs[0].mesRef, '2042-01', 'A2-03: mesRef vem da data escolhida (não de hoje)');
 });
 test('A2-02: pagar o mês do vendedor 2x não duplica', () => {
-  _confirmReturn = true; // comPagarVendedor pede confirmação
   T.ST.perfil = 'gestor'; T.ST.comPagamentos = [];
   T.ST.leads = [{ id: 'LvenX', status: 'ganho', responsavel: 'Vera', dataFechamento: '2043-02-10', valor: 50000, desconto: 0 }];
-  T.comPagarVendedor('Vera', '2043-02'); T.comPagarVendedor('Vera', '2043-02');
+  const { valor, itens } = T._comVendedorMes('Vera', '2043-02');
+  T._comPagVendedorExec('Vera', '2043-02', valor, itens, '2043-03-05'); T._comPagVendedorExec('Vera', '2043-02', valor, itens, '2043-03-05');
   const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'vendedor_mes' && x.pessoa === 'Vera' && x.mesRef === '2043-02');
   assertEq(regs.length, 1, 'só 1 registro no mês');
+  assertEq(regs[0].data, '2043-03-05', 'A2-03: data do pagamento é a escolhida');
 });
 
 // A5-03 · CPV não conta pedido de venda que não se concretizou (lead perdido/cancelado)
@@ -595,6 +599,28 @@ test('A5-04: custo de AT (erro loja) entra no CPV do DRE', () => {
   T.ST.pedidos.push({ id: 'Pat504', atErroTipo: 'nosso', atCusto: 1500, dateConcluido: '2046-07-20' });
   assert(T.calcDRE('2046-07').cpvAT === 1500, 'AT erro-loja abatida no CPV');
   assertEq(T.calcDRE('2046-08').cpvAT, 0, 'não conta em outro mês');
+});
+
+// A7-03 · relógio lógico + desempate determinístico
+test('A7-03: _stampUAt é monotônico e vence relógio adiantado (skew)', () => {
+  const o = { _uAt: 0 }; const a = T._stampUAt(o); const b = T._stampUAt(o);
+  assert(b > a, 'estritamente crescente');
+  const fut = { _uAt: 5e15 }; assert(T._stampUAt(fut) > 5e15, 'edição causal vence a máquina adiantada');
+});
+test('A7-03: _recWins é determinístico e simétrico (sem loop de reenvio)', () => {
+  const a = { _uAt: 100, x: 1 }, b = { _uAt: 100, x: 2 }; // empate de _uAt
+  assert(T._recWins(a, b) === !T._recWins(b, a), 'simétrico → exatamente 1 vencedor');
+  assert(T._recWins(a, b) === T._recWins(a, b), 'estável');
+});
+test('A7-03: empate resolve por conteúdo (não "nuvem sempre vence")', () => {
+  const a = { _uAt: 100, x: 2 }, b = { _uAt: 100, x: 1 };
+  // as duas máquinas escolhem o MESMO vencedor independente da ordem
+  const w1 = T._recWins(a, b) ? a : b, w2 = T._recWins(b, a) ? b : a;
+  assertEq(T._canon(w1), T._canon(w2), 'convergência');
+});
+test('A7-07: doc legado sem _uAt não sobrescreve edição local nova', () => {
+  const cur = { _uAt: 1700, x: 9 }, recLegado = { x: 2 }; // nuvem legada sem _uAt
+  assert(T._recWins(cur, recLegado) === true, 'a edição local carimbada sobrevive');
 });
 
 // ── relatório ──

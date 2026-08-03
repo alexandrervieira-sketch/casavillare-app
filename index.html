@@ -2032,6 +2032,26 @@ textarea.inp{resize:vertical;min-height:68px;}
   </div>
 </div>
 
+<div class="modal-bg hidden" id="modal-compag">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-hdr">
+      <div><div class="modal-title">💰 Registrar pagamento</div><div class="modal-sub" id="compag-sub"></div></div>
+      <button class="modal-close" onclick="fecharModal('modal-compag')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fr" id="compag-valor-wrap" style="display:none;"><label class="lbl">Valor do pagamento (R$)</label>
+        <input class="inp" id="compag-valor" type="text" inputmode="decimal" placeholder="0,00" oninput="_maskBRL(this)"/></div>
+      <div class="fr"><label class="lbl">Data do pagamento</label>
+        <input class="inp" id="compag-data" type="date"/></div>
+      <div style="font-size:11.5px;color:var(--gl);margin-top:2px;">A data REAL do pagamento define em que mês a comissão é contabilizada — use retroativo se já pagou antes.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button class="btn btn-s" onclick="fecharModal('modal-compag')">Cancelar</button>
+        <button class="btn btn-p" onclick="comPagConfirmarData()">Confirmar pagamento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg hidden" id="modal-cp">
   <div class="modal" style="max-width:500px;">
     <div class="modal-hdr">
@@ -3175,6 +3195,16 @@ function _tombKey(col,id){ return col+'/'+String(id); }
 function _tombAdd(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=Date.now(); _cfgTouch('_tomb'); }
 function _tombHas(col,id){ return !!(ST._tomb&&ST._tomb[_tombKey(col,id)]>0); }
 function _tombClear(col,id){ if(!ST._tomb||typeof ST._tomb!=='object') ST._tomb={}; ST._tomb[_tombKey(col,id)]=-Date.now(); _cfgTouch('_tomb'); } // ao RECRIAR um registro de id determinístico (vence a exclusão antiga na união)
+// A7-03: relógio lógico (Lamport por-objeto) + desempate determinístico p/ o merge de registros.
+// _stampUAt não é usado ainda em todos os mutadores (Fase 2); _recWins já corrige o EMPATE silencioso
+// (antes a nuvem sempre vencia) e o A7-07 (doc legado sem _uAt sobrescrevia edição local nova).
+function _stampUAt(o){ if(o) o._uAt=Math.max(Date.now(),(+o._uAt||0)+1); return o&&o._uAt; }
+function _canon(o){ try{ return JSON.stringify(o, Object.keys(o).sort()); }catch(e){ return String(o); } } // desempate ESTÁVEL entre máquinas
+function _recWins(a,b){ // true = manter a versão A. Determinístico e simétrico (a≠b ⇒ _recWins(a,b)===!_recWins(b,a)) → sem loop de reenvio.
+  const ua=+((a&&a._uAt))||0, ub=+((b&&b._uAt))||0;
+  if(ua!==ub) return ua>ub;
+  return _canon(a) > _canon(b); // empate/legado(0): conteúdo canônico decide → as 2 máquinas convergem p/ a MESMA versão
+}
 // A7-01: une condicoesPgto de 2 versões do MESMO lead por id de parcela. Cada parcela vence pelo SEU _uAt
 // (a baixa/estorno mais recente prevalece), preservando a ordem do doc vencedor. Sem isto, editar outro
 // campo do lead em uma máquina sobrescreve baixas de parcela feitas em outra (perda de recebimento).
@@ -3590,7 +3620,7 @@ async function _fsLoadAll(){
       // _fsSeen recebe a versão da NUVEM, então a sync enxerga o local como mudança e o reenvia.
       const _merged=cloud.map(d=>{ const id=String(d&&(d.id??d._id)); if(id&&id!=='undefined') _fsSeen[col+'/'+id]=JSON.stringify(d);
         const loc=_localById.get(id); if(!loc) return d;
-        const locWins=(loc._uAt||0)>(d._uAt||0);
+        const locWins=_recWins(loc,d); // A7-03: desempate determinístico (empate/legado não deixa a nuvem vencer em silêncio)
         if(col==='leads' && (Array.isArray(loc.condicoesPgto)||Array.isArray(d.condicoesPgto))){ // A7-01: une parcelas por id (não perde baixa)
           const mc=_mergeCondPgto(loc.condicoesPgto,d.condicoesPgto,locWins);
           if(locWins || JSON.stringify(mc)!==JSON.stringify(d.condicoesPgto)) _localNovo=true; // difere da nuvem → reenvia
@@ -3695,7 +3725,7 @@ function _fsSubscribe(){
           }
           else if(idx>=0){
             const cur=ST[col][idx];
-            const curWins=!!(rec._uAt && cur && cur._uAt && rec._uAt < cur._uAt);
+            const curWins=!!(cur) && _recWins(cur, rec); // A7-03: trata _uAt ausente como 0 (fecha A7-07) + desempate determinístico
             if(col==='leads' && (Array.isArray(cur.condicoesPgto)||Array.isArray(rec.condicoesPgto))){ // A7-01: une parcelas por id
               const mc=_mergeCondPgto(cur.condicoesPgto,rec.condicoesPgto,curWins);
               ST[col][idx]={...(curWins?cur:rec), condicoesPgto:mc};
@@ -7849,12 +7879,36 @@ function _calcComProjetista(pedido){
 // ── Registro de pagamento da comissão do projetista, por parcela (A=Exec, B=Fáb, C=Conc) ──
 // Guarda a DATA do pagamento em pedido.comProjPago[parcela]. Só o gestor registra.
 const _PARC_PROJ_INFO={A:['Exec. assinado (1%)','comA'],B:['Pedido à fábrica (0,5%)','comB'],C:['Concluído (0,5%)','comC']};
+// A2-03: modal reutilizável p/ registrar pagamento com DATA (permite retroativo → conta no mês certo).
+let _comPagFn=null;
+function _comAbrirPagData(opts){
+  _comPagFn=opts.fn;
+  const sub=document.getElementById('compag-sub'); if(sub) sub.textContent=opts.sub||'';
+  const ti=document.querySelector('#modal-compag .modal-title'); if(ti) ti.textContent=opts.titulo||'💰 Registrar pagamento';
+  const dt=document.getElementById('compag-data'); if(dt) dt.value=_hojeLocal();
+  const vw=document.getElementById('compag-valor-wrap'), vi=document.getElementById('compag-valor');
+  if(opts.pedeValor){ if(vw) vw.style.display=''; if(vi) vi.value=opts.valorIni||''; } else if(vw){ vw.style.display='none'; }
+  abrirModal('modal-compag');
+}
+function comPagConfirmarData(){
+  const d=document.getElementById('compag-data')?.value;
+  if(!d){ toast('Informe a data do pagamento'); return; }
+  const vw=document.getElementById('compag-valor-wrap');
+  let valor=null;
+  if(vw && vw.style.display!=='none'){ valor=_parseBRL(document.getElementById('compag-valor')?.value); if(!(valor>0)){ toast('Informe um valor válido'); return; } }
+  const fn=_comPagFn; _comPagFn=null; fecharModal('modal-compag');
+  if(fn) fn(d, valor);
+}
 function comProjPagar(pedId,parc){
   if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor registra pagamento.'); return; }
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p) return;
   if(!p.comProjPago||typeof p.comProjPago!=='object') p.comProjPago={};
   if(p.comProjPago[parc]){ toast('Parcela já paga.'); return; } // A2-01: idempotência (não repaga/duplica)
-  const hoje=_hojeLocal();
+  _comAbrirPagData({ titulo:'💰 Pagamento — projetista', sub:(p.clienteNome||p.cliente||''), fn:(dataPg)=>_comProjPagarExec(p,parc,dataPg) });
+}
+function _comProjPagarExec(p,parc,dataPg){
+  if(!p.comProjPago||typeof p.comProjPago!=='object') p.comProjPago={};
+  const hoje=dataPg||_hojeLocal();
   p.comProjPago[parc]=hoje;
   // Ledger p/ recibo — id DETERMINÍSTICO: 2 dispositivos geram o mesmo id → união não duplica (A2-01/A7-02)
   const c=_calcComProjetista(p), info=_PARC_PROJ_INFO[parc]||['parcela','comA'];
@@ -8203,40 +8257,26 @@ function salvarVendaCom(){
 }
 
 function abrirAdiantMont(pedidoId, valorTotal, totalAdiant){
-  // nome buscado pelo id (não trafega no onclick → evita quebra de string/XSS via nome de cliente)
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor registra pagamento.'); return; }
   const _pd=(ST.pedidos||[]).find(p=>String(p.id)===String(pedidoId));
   const clienteNome=_pd?(_pd.clienteNome||_pd.cliente||'—'):'—';
   const saldo=Math.max(0,valorTotal-totalAdiant);
-  const val=prompt(
-    `Adiantamento para: ${clienteNome}\n`+
-    `Comissão total: ${fmt(valorTotal)}\n`+
-    `Já adiantado: ${fmt(totalAdiant)}\n`+
-    `Saldo restante: ${fmt(saldo)}\n\n`+
-    `Valor do adiantamento (R$):`
-  );
-  if(!val) return;
-  const valor=parseFloat(val.replace(',','.'));
-  if(isNaN(valor)||valor<=0){toast('Valor inválido');return;}
-  if(valor>saldo+0.01){toast(`Valor excede o saldo disponível (${fmt(saldo)})`);return;}
+  _comAbrirPagData({ titulo:'💸 Adiantamento — montador', sub:clienteNome+' · saldo '+fmt(saldo), pedeValor:true, fn:(dataPg,valor)=>{
+    if(valor>saldo+0.01){ toast(`Valor excede o saldo disponível (${fmt(saldo)})`); return; }
+    _adiantMontExec(pedidoId,_pd,clienteNome,valor,dataPg,'parcial');
+  }});
+}
+// Registra adiantamento/quitação do montador (valor + data escolhida). tipoPag = 'parcial' | 'quitacao'.
+function _adiantMontExec(pedidoId,_pd,clienteNome,valor,dataPg,tipoPag){
+  const hoje=dataPg||_hojeLocal(), mesRef=hoje.slice(0,7);
   if(!ST.comissoes) ST.comissoes=[];
-  ST.comissoes.push({
-    id: _newId(),
-    pedidoId: String(pedidoId),
-    pessoa: (_pd&&_pd.montador)||'Montagem',
-    tipo: 'adiantamento_mont',
-    valor,
-    mesAno: _mesLocal(),
-    obs: `Adiantamento — ${clienteNome}`,
-    criadoEm: new Date().toISOString(),
-    _uAt: Date.now()
-  });
+  ST.comissoes.push({ id:_newId(), pedidoId:String(pedidoId), pessoa:(_pd&&_pd.montador)||'Montagem', tipo:'adiantamento_mont',
+    valor, mesAno:mesRef, obs:(tipoPag==='quitacao'?'Pagamento total — ':'Adiantamento — ')+clienteNome, criadoEm:new Date().toISOString(), _uAt:Date.now() });
   if(!ST.comPagamentos) ST.comPagamentos=[];
   ST.comPagamentos.push({ id:_newId(), pessoa:(_pd&&_pd.montador)||'Montagem', perfil:'montador', escopo:'montador',
-    pedidoId:String(pedidoId), cliente:clienteNome, mesRef:_mesLocal(), valor, data:_hojeLocal(),
-    tipoPag:'parcial', criadoEm:new Date().toISOString(), _uAt:Date.now() });
-  save();
-  toast(`Adiantamento de ${fmt(valor)} registrado ✅`);
-  rComissoes();
+    pedidoId:String(pedidoId), cliente:clienteNome, mesRef, valor, data:hoje,
+    tipoPag, criadoEm:new Date().toISOString(), _uAt:Date.now() });
+  save(); toast(`${tipoPag==='quitacao'?'Pagamento':'Adiantamento'} de ${fmt(valor)} registrado ✅`); rComissoes();
 }
 
 // Quita o saldo restante da comissão do montador de uma vez (registra o saldo como pagamento).
@@ -8246,26 +8286,7 @@ function montQuitar(pedidoId){
   const c=_calcComMontador(pd);
   if(c.saldo<=0){ toast('Já quitado.'); return; }
   const cliente=pd.clienteNome||pd.cliente||'—';
-  if(!confirm(`Registrar pagamento de ${fmt(c.saldo)} (saldo restante) do montador para ${cliente}?`)) return;
-  if(!ST.comissoes) ST.comissoes=[];
-  ST.comissoes.push({
-    id: _newId(),
-    pedidoId: String(pedidoId),
-    pessoa: pd.montador||'Montagem',
-    tipo: 'adiantamento_mont',
-    valor: c.saldo,
-    mesAno: _mesLocal(),
-    obs: `Pagamento total — ${cliente}`,
-    criadoEm: new Date().toISOString(),
-    _uAt: Date.now()
-  });
-  if(!ST.comPagamentos) ST.comPagamentos=[];
-  ST.comPagamentos.push({ id:_newId(), pessoa:pd.montador||'Montagem', perfil:'montador', escopo:'montador',
-    pedidoId:String(pedidoId), cliente, mesRef:_mesLocal(), valor:c.saldo, data:_hojeLocal(),
-    tipoPag:'quitacao', criadoEm:new Date().toISOString(), _uAt:Date.now() });
-  save();
-  toast(`✅ Pagamento de ${fmt(c.saldo)} registrado.`);
-  rComissoes();
+  _comAbrirPagData({ titulo:'💰 Pagamento — montador', sub:cliente+' · saldo '+fmt(c.saldo), fn:(dataPg)=>_adiantMontExec(pd.id,pd,cliente,c.saldo,dataPg,'quitacao') });
 }
 
 // ── Relatório de Montagem (por montador): pedidos visíveis + comissão 10% + etapa + adiantado × saldo ──
@@ -8364,14 +8385,16 @@ function comPagarVendedor(encNome, mesRef){
   if(_comPagVendedor(nome, mesRef)){ toast('Comissão deste mês já paga.'); return; }
   const {valor, itens}=_comVendedorMes(nome, mesRef);
   if(valor<=0){ toast('Sem comissão a pagar neste mês.'); return; }
-  if(!confirm(`Registrar pagamento de ${fmt(valor)} de comissão para ${nome} (ref. ${mesRef})?`)) return;
+  _comAbrirPagData({ titulo:'💰 Pagamento — vendedor', sub:nome+' · ref. '+mesRef+' · '+fmt(valor), fn:(dataPg)=>_comPagVendedorExec(nome,mesRef,valor,itens,dataPg) });
+}
+function _comPagVendedorExec(nome,mesRef,valor,itens,dataPg){
   if(!ST.comPagamentos) ST.comPagamentos=[];
   const _cpId='comvm_'+String(nome).replace(/\//g,'-')+'_'+mesRef; // id determinístico por vendedor+mês (A2-02/A7-02)
   _tombClear('comPagamentos',_cpId);
   ST.comPagamentos=(ST.comPagamentos||[]).filter(p=>p.id!==_cpId);
   ST.comPagamentos.push({
     id:_cpId, pessoa:nome, perfil:'vendedor', escopo:'vendedor_mes',
-    mesRef, valor, data:_hojeLocal(), itens,
+    mesRef, valor, data:(dataPg||_hojeLocal()), itens,   // mesRef = mês da VENDA; data = quando foi pago (A2-03)
     criadoEm:new Date().toISOString(), _uAt:Date.now()
   });
   save(); toast(`✅ Comissão de ${fmt(valor)} paga.`); rComissoes();
