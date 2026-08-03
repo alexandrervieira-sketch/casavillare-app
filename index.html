@@ -13289,7 +13289,7 @@ function pedReativar(id){
 function _emailsParaMailto(s){
   return String(s||'').split(/[,;\/\s]+/).map(e=>e.trim()).filter(Boolean).join(',');
 }
-function enviarComprovanteEmail(pedId){
+async function enviarComprovanteEmail(pedId){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId));
   if(!p){toast('Pedido não encontrado');return;}
   const fab=ST.fabrica||{};
@@ -13303,9 +13303,12 @@ function enviarComprovanteEmail(pedId){
   const fmtBRL=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const hoje=new Date().toLocaleDateString('pt-BR');
 
-  // Baixar comprovante automaticamente
+  // Baixar comprovante automaticamente — resolve a REFERÊNCIA (Storage/cache) ou usa o dataURL legado
+  let src=p.comprovante;
+  if(!/^data:/.test(src)){ src=await _anexoData(src); }
+  if(!src){ toast('Comprovante não encontrado — aguarde o upload e tente de novo'); return; }
   const a=document.createElement('a');
-  a.href=p.comprovante;
+  a.href=src;
   a.download=`Comprovante_${nomeCliente.replace(/\s+/g,'_')}_${p.nContrato||pedId}.${p.comprovanteNome?.split('.').pop()||'jpg'}`;
   a.click();
 
