@@ -9034,13 +9034,22 @@ function rTreinamentos(){
   const lista=[...ST.treinamentos].sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   const el=document.getElementById('trei-content');
   if(!el) return;
+  // 📖 Guia de Uso do Sistema — sempre no topo, acessível a todos (abre a página do guia em nova aba)
+  const guiaBanner=`<a href="guia.html" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;text-decoration:none;background:linear-gradient(135deg,#3d2f22,#6b5844);color:#fff;border-radius:14px;padding:16px 20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.12);">
+    <div style="font-size:30px;">📖</div>
+    <div style="flex:1;">
+      <div style="font-size:15px;font-weight:800;">Guia de Uso do Sistema</div>
+      <div style="font-size:12.5px;opacity:.92;">Passo a passo de todos os módulos, atualizado. Qualquer um pode consultar quando precisar — abre em nova aba.</div>
+    </div>
+    <div style="font-size:13px;font-weight:700;background:rgba(255,255,255,.18);padding:8px 14px;border-radius:8px;white-space:nowrap;">Abrir ›</div>
+  </a>`;
 
   if(!lista.length){
-    el.innerHTML=`<div class="empty"><p>Nenhum treinamento cadastrado ainda.${isG?' Clique em "+ Novo treinamento" para começar.':''}</p></div>`;
+    el.innerHTML=guiaBanner+`<div class="empty"><p>Nenhum treinamento cadastrado ainda.${isG?' Clique em "+ Novo treinamento" para começar.':''}</p></div>`;
     return;
   }
 
-  el.innerHTML=`<div class="trei-grid">${lista.map(t=>{
+  el.innerHTML=guiaBanner+`<div class="trei-grid">${lista.map(t=>{
     const cat=TREI_CAT[t.cat]||TREI_CAT.outro;
     const dtFmt=t.data?new Date(t.data+'T12:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'—';
     const dest=TREI_DEST[t.dest]||t.dest||'Todos';

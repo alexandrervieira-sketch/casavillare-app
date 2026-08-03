@@ -1,0 +1,439 @@
+<title>Guia Prático — Sistema Casa Villare</title>
+<style>
+  :root{
+    --ink:#2C2720; --soft:#514839; --muted:#8A7E6C; --faint:#B4A992;
+    --accent:#8C6E48; --clay:#A78B6D; --gold:#BFA87D; --line:#E4DBCC;
+    --cream:#F7F2EA; --card:#FFFFFF; --bg:#EFE7DA;
+    --ok:#3F8F55; --okbg:#EAF5EC; --warn:#B45309; --warnbg:#FBF0DF; --new:#0D9488; --newbg:#E2F5F1;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  .gw{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:15px;padding:0;margin:0;}
+  .gw a{color:var(--accent);text-decoration:none;}
+  .gshell{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:236px 1fr;gap:0;align-items:start;}
+  /* Hero */
+  .ghero{grid-column:1 / -1;background:linear-gradient(180deg,#33291F,#4A3B2A);color:#F7F2EA;padding:38px 40px 34px;}
+  .ghero .eye{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold);font-weight:700;}
+  .ghero h1{font-family:var(--serif);font-size:34px;line-height:1.05;margin:8px 0 6px;font-weight:600;letter-spacing:.3px;}
+  .ghero p{margin:0;color:#D9CDB8;font-size:14.5px;max-width:640px;}
+  .ghero .tip{margin-top:16px;display:inline-flex;gap:9px;align-items:center;background:rgba(191,168,125,.16);border:1px solid rgba(191,168,125,.4);border-radius:9px;padding:8px 13px;font-size:12.5px;color:#EFE3CC;}
+  /* Nav */
+  nav.gnav{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:22px 12px 40px 22px;font-size:13px;}
+  nav.gnav .grp{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:16px 0 6px;}
+  nav.gnav a{display:block;padding:5px 10px;border-radius:7px;color:var(--soft);margin-bottom:1px;border-left:2px solid transparent;}
+  nav.gnav a:hover{background:var(--cream);color:var(--ink);}
+  nav.gnav a.on{background:var(--cream);color:var(--accent);border-left-color:var(--clay);font-weight:600;}
+  /* Main */
+  main.gmain{padding:26px 40px 80px;min-width:0;}
+  section.mod{scroll-margin-top:12px;padding:22px 0 6px;border-top:1px solid var(--line);}
+  section.mod:first-of-type{border-top:none;}
+  .modhd{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+  .modico{width:40px;height:40px;border-radius:10px;background:var(--cream);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+  .modhd h2{font-family:var(--serif);font-size:23px;font-weight:600;margin:0;letter-spacing:.2px;}
+  .modhd .who{margin-left:auto;font-size:11px;color:var(--muted);background:var(--cream);border:1px solid var(--line);border-radius:20px;padding:3px 11px;white-space:nowrap;}
+  .lead{color:var(--soft);font-size:14.5px;margin:2px 0 14px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;}
+  .card h3{font-size:14.5px;font-weight:700;margin:0 0 8px;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .sub{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin:2px 0 12px;}
+  .sub span{font-size:12px;background:var(--cream);border:1px solid var(--line);border-radius:7px;padding:6px 9px;color:var(--soft);}
+  ul.steps{margin:6px 0 2px;padding-left:0;list-style:none;}
+  ul.steps li{position:relative;padding:4px 0 4px 26px;font-size:13.5px;color:var(--soft);}
+  ul.steps li::before{content:"→";position:absolute;left:4px;color:var(--clay);font-weight:700;}
+  ul.steps li b{color:var(--ink);font-weight:600;}
+  .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:20px;padding:2px 8px;vertical-align:middle;}
+  .b-new{background:var(--newbg);color:var(--new);border:1px solid #9BD8CE;}
+  .b-gestor{background:#F3EEFB;color:#6D4F9E;border:1px solid #D8C9F0;}
+  .tipline{font-size:12.5px;color:var(--warn);background:var(--warnbg);border:1px solid #EBD6AE;border-radius:8px;padding:8px 12px;margin-top:8px;}
+  .okline{font-size:12.5px;color:var(--ok);background:var(--okbg);border:1px solid #BEE3C6;border-radius:8px;padding:8px 12px;margin-top:8px;}
+  kbd{font-family:var(--sans);font-size:11px;background:#33291F;color:#F7F2EA;border-radius:5px;padding:2px 7px;font-weight:600;}
+  /* New highlights strip */
+  .newgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;margin-top:6px;}
+  .newitem{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--new);border-radius:0 10px 10px 0;padding:11px 13px;}
+  .newitem .t{font-size:13.5px;font-weight:700;margin-bottom:2px;}
+  .newitem .d{font-size:12.5px;color:var(--muted);line-height:1.45;}
+  .foot{grid-column:1 / -1;text-align:center;color:var(--faint);font-size:12px;padding:18px;border-top:1px solid var(--line);}
+  @media(max-width:820px){
+    .gshell{grid-template-columns:1fr;}
+    nav.gnav{position:static;max-height:none;padding:14px 20px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px;}
+    nav.gnav .grp{width:100%;margin:8px 0 2px;}
+    nav.gnav a{border-left:none;}
+    main.gmain{padding:20px;}
+    .ghero{padding:28px 22px;}
+    .ghero h1{font-size:27px;}
+  }
+</style>
+
+<div class="gw"><div class="gshell">
+
+  <header class="ghero">
+    <div class="eye">Casa Villare · Ambientes Planejados</div>
+    <h1>Guia Prático do Sistema</h1>
+    <p>Tudo que o sistema faz, módulo por módulo, em passos diretos. Use como referência do dia a dia — do lead que chega no WhatsApp até o contrato, a produção, a nota fiscal e o financeiro.</p>
+    <div class="tip">💡 Dica de ouro: aperte <kbd>Ctrl</kbd> + <kbd>K</kbd> em qualquer tela para achar um cliente, lead ou pedido na hora.</div>
+  </header>
+
+  <nav class="gnav" id="gnav">
+    <div class="grp">Começando</div>
+    <a href="#novidades">✨ Novidades</a>
+    <a href="#acesso">🔑 Como acessar</a>
+    <a href="#busca">🔍 Busca global</a>
+    <a href="#dashboard">🏠 Dashboard</a>
+    <div class="grp">Vender</div>
+    <a href="#crm">🎯 CRM (funil)</a>
+    <a href="#cadastros">👥 Cadastros & Contrato</a>
+    <a href="#metas">🏆 Metas</a>
+    <a href="#comissoes">🏅 Comissões</a>
+    <div class="grp">Entregar</div>
+    <a href="#pedidos">📦 Pedidos (produção)</a>
+    <a href="#agenda">📅 Agenda</a>
+    <a href="#fabrica">🏭 Fábrica</a>
+    <div class="grp">Administrar</div>
+    <a href="#financeiro">💰 Financeiro</a>
+    <a href="#relatorios">📋 Relatórios</a>
+    <a href="#fiscal">🧾 Fiscal (NFe)</a>
+    <a href="#repositorio">🗂️ Repositório</a>
+    <a href="#treinamentos">🎓 Treinamentos</a>
+    <a href="#config">⚙️ Configurações</a>
+  </nav>
+
+  <main class="gmain">
+
+    <section class="mod" id="novidades">
+      <div class="modhd"><div class="modico">✨</div><h2>Novidades</h2></div>
+      <p class="lead">O que entrou de novo agora — todas já estão no ar.</p>
+      <div class="newgrid">
+        <div class="newitem"><div class="t">🏭 Fábrica reformulada</div><div class="d">3 abas (Pagamentos · Geral com gráficos · Bipartido), barra da meta de desconto da Casimiro e "pago por fábrica" no mês.</div></div>
+        <div class="newitem"><div class="t">💳 Comprovante num lugar só</div><div class="d">Anexa e envia o comprovante à fábrica só em Fábrica › Pagamentos — e agora não se perde mais (guardado com segurança).</div></div>
+        <div class="newitem"><div class="t">🚫 Cancelar pedido</div><div class="d">Pedido que caiu sai do custo, da meta, da comissão e do fiscal — sem apagar o histórico. Dá pra reativar.</div></div>
+        <div class="newitem"><div class="t">🗓️ Comissão paga com data</div><div class="d">Ao registrar um pagamento de comissão você escolhe a data — inclusive retroativa, pra cair no mês certo.</div></div>
+        <div class="newitem"><div class="t">🔁 Contas fixas automáticas</div><div class="d">Conta recorrente aparece sozinha todo mês em A Pagar — é só clicar Pagar, sem relançar.</div></div>
+        <div class="newitem"><div class="t">📈 Fluxo de caixa mais fiel</div><div class="d">Contas vencidas entram no mês atual e o que já foi pago não desconta duas vezes.</div></div>
+        <div class="newitem"><div class="t">🔍 Busca global</div><div class="d">Ache lead, cliente ou pedido de qualquer tela com Ctrl+K.</div></div>
+        <div class="newitem"><div class="t">💬 WhatsApp direto</div><div class="d">Falar com o lead, avisar status do pedido e cobrar parcela — com texto pronto.</div></div>
+        <div class="newitem"><div class="t">🕓 Histórico do lead</div><div class="d">Registro do que foi feito (ligação, visita, WhatsApp) sem apagar o anterior.</div></div>
+        <div class="newitem"><div class="t">📊 Aging de recebíveis</div><div class="d">Quem está atrasado e há quanto tempo, com os maiores devedores.</div></div>
+        <div class="newitem"><div class="t">💸 Canais (CAC)</div><div class="d">Quanto cada origem de lead custa e quanto rende (ROI).</div></div>
+        <div class="newitem"><div class="t">📈 Tendência nos KPIs</div><div class="d">A Home mostra ▲/▼ vs. o mês anterior.</div></div>
+        <div class="newitem"><div class="t">⏱️ Prazos editáveis</div><div class="d">Você ajusta os dias de cada etapa dos pedidos.</div></div>
+        <div class="newitem"><div class="t">🐞 Monitor de erros</div><div class="d">Falhas do sistema ficam registradas pro gestor ver.</div></div>
+      </div>
+    </section>
+
+    <section class="mod" id="acesso">
+      <div class="modhd"><div class="modico">🔑</div><h2>Como acessar</h2><span class="who">Todos</span></div>
+      <div class="card">
+        <ul class="steps">
+          <li>Abra o endereço do sistema no navegador (salve nos favoritos).</li>
+          <li>Entre com o <b>e-mail corporativo</b> e a sua senha.</li>
+          <li><b>Primeira vez?</b> Clique em “Criar minha senha” e siga o passo a passo.</li>
+          <li>Esqueceu? Use “Problemas para entrar? Resetar acesso”, ou peça ao gestor.</li>
+          <li>Troque sua senha quando quiser em <b>🔑 Trocar minha senha</b> (canto inferior da barra lateral).</li>
+        </ul>
+        <div class="okline">🔒 Cada login enxerga só o que é seu: o vendedor vê os próprios leads, metas e comissão — nunca a do colega. Ao sair, os dados são limpos deste navegador (segurança em máquina compartilhada).</div>
+      </div>
+    </section>
+
+    <section class="mod" id="busca">
+      <div class="modhd"><div class="modico">🔍</div><h2>Busca global</h2><span class="who">Todos</span> <span class="badge b-new">novo</span></div>
+      <p class="lead">O jeito mais rápido de achar qualquer coisa.</p>
+      <div class="card">
+        <ul class="steps">
+          <li>Aperte <kbd>Ctrl</kbd> + <kbd>K</kbd> (ou clique em <b>🔍 Buscar</b> no topo do menu).</li>
+          <li>Digite <b>nome, telefone ou número</b> — acha leads, clientes, parceiros, fornecedores e pedidos ao mesmo tempo.</li>
+          <li>Clique no resultado para abrir direto. <kbd>Esc</kbd> fecha.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="dashboard">
+      <div class="modhd"><div class="modico">🏠</div><h2>Dashboard</h2><span class="who">Todos</span></div>
+      <p class="lead">Comece o dia por aqui.</p>
+      <div class="card">
+        <h3>Central de Alertas</h3>
+        <ul class="steps">
+          <li>Mostra o que precisa de ação: <b>leads a contatar</b>, contatos vencidos, pedidos fora do prazo, contas a vencer e meta em risco.</li>
+          <li>Cada pessoa vê só os alertas da sua função.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Indicadores do mês <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li>Cards de <b>Novos</b>, Projetos Quentes, Pipeline e <b>Fechados</b>.</li>
+          <li>Novos e Fechados agora mostram a <b>tendência</b>: ▲ +20% (verde) ou ▼ (vermelho) vs. o mês anterior.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="crm">
+      <div class="modhd"><div class="modico">🎯</div><h2>CRM — funil de vendas</h2><span class="who">Vendedores · Gestor</span></div>
+      <p class="lead">Onde a venda nasce e caminha, do primeiro contato ao fechamento.</p>
+      <div class="card">
+        <h3>Trabalhar um lead</h3>
+        <ul class="steps">
+          <li><b>Novo lead:</b> clique em <b>+ Lead</b>, preencha nome, telefone e origem. A hora de entrada fica registrada (🕐 Entrou).</li>
+          <li><b>Avançar etapa:</b> use o botão <b>→</b> no card, ou arraste pela coluna. As etapas vão de 1º Atendimento até Ganho/Fechado.</li>
+          <li><b>Importar Promob:</b> a partir de “Projeto”, importe o XML — o sistema puxa ambientes e valor automaticamente.</li>
+          <li><b>Próximo contato:</b> defina a data para o lead não esfriar (ele vira alerta no Dashboard).</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>💬 WhatsApp e 🕓 histórico <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li><b>💬</b> no card (ou no modal) abre o WhatsApp do cliente com uma saudação pronta.</li>
+          <li><b>Histórico de atividades:</b> registre ligação, visita, WhatsApp, orçamento ou nota — carimba quem e quando, e nunca apaga o anterior.</li>
+          <li>Avançar etapa e abrir o WhatsApp entram <b>sozinhos</b> no histórico.</li>
+        </ul>
+        <div class="okline">✅ Assim outro vendedor consegue assumir o lead sabendo tudo que já foi feito.</div>
+      </div>
+      <div class="card">
+        <h3>Fechar a venda</h3>
+        <ul class="steps">
+          <li>Preencha as <b>condições de pagamento</b> (à vista, boleto, cartão, financiamento) antes de mover para Fechamento.</li>
+          <li>Ao marcar <b>Ganho</b>, crie o cadastro do cliente e gere o <b>contrato</b> (o sistema aproveita os dados do lead).</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="cadastros">
+      <div class="modhd"><div class="modico">👥</div><h2>Cadastros & Contrato</h2><span class="who">Vendedores · Gestor</span></div>
+      <p class="lead">O “fichário” de pessoas e onde sai o contrato.</p>
+      <div class="sub"><span>🏠 Clientes</span><span>🏛️ Especificadores & Parceiros</span><span>👔 Funcionários</span><span>🏭 Fornecedores</span></div>
+      <div class="card">
+        <ul class="steps">
+          <li>Cadastre <b>cliente</b> (com endereço de entrega), <b>parceiro/especificador</b>, <b>funcionário</b> ou <b>fornecedor</b>.</li>
+          <li><b>Gerar contrato:</b> abra o cliente e clique em <b>📄 Contrato</b>. Os ambientes vêm do XML importado no lead.</li>
+          <li>O nome de cada ambiente sai do <b>nome do arquivo</b> do Promob (ex.: BANHEIRO.xml → “Banheiro”).</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="metas">
+      <div class="modhd"><div class="modico">🏆</div><h2>Metas</h2><span class="who">Vendedores (a sua) · Gestor (todas)</span></div>
+      <div class="card">
+        <ul class="steps">
+          <li>Acompanhe a meta da <b>loja</b> e a <b>sua</b> meta do mês, com % atingido.</li>
+          <li>O gestor define as metas por mês em Metas (loja e por vendedor).</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="comissoes">
+      <div class="modhd"><div class="modico">🏅</div><h2>Comissões</h2><span class="who">Cada um vê a sua</span></div>
+      <div class="card">
+        <ul class="steps">
+          <li>Cada vendedor vê <b>somente a sua</b> comissão — ninguém vê a do outro.</li>
+          <li>Mostra o que está <b>liberado</b> e o que está <b>a receber</b> (libera conforme o pedido avança).</li>
+          <li>A base de comissão segue a cascata desconto → taxa → RT (valor líquido da venda).</li>
+        </ul>
+        <div class="tipline">⚠️ Numa apresentação para a equipe toda, não projete esta aba — comissão é informação individual.</div>
+      </div>
+      <div class="card">
+        <h3>💰 Registrar pagamento com data <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li>Só o <b>gestor</b> registra o pagamento (vendedor, projetista ou montador).</li>
+          <li>Ao clicar em <b>Pagar</b>, escolha a <b>data do pagamento</b> — pode ser <b>retroativa</b>. É a data que define em que <b>mês</b> a comissão é contabilizada (evita cair tudo no mês atual).</li>
+          <li>Cada pagamento gera <b>🧾 recibo</b>. O sistema avisa se você registrar a mesma comissão duas vezes (não duplica).</li>
+          <li>Avisos automáticos: <b>"+R$ a pagar"</b> se entrar venda nova depois de já ter pago o mês; <b>"adiantado a maior"</b> se o montador recebeu além da comissão final; e alerta de <b>comissão paga de venda cancelada</b>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="pedidos">
+      <div class="modhd"><div class="modico">📦</div><h2>Pedidos — produção</h2><span class="who">Obras · Gestor</span></div>
+      <p class="lead">Do fechamento até a montagem concluída, etapa por etapa.</p>
+      <div class="card">
+        <h3>Mover o pedido</h3>
+        <ul class="steps">
+          <li>Cada pedido caminha pelo quadro: Medição → Projeto → Pagamento Fábrica → Produção → Depósito → Agendamento → Montagem → Concluído.</li>
+          <li>Use <b>→ Avançar</b> no card. O quadro tem barra de rolagem horizontal e mantém a posição.</li>
+          <li>O <b>semáforo de prazo</b> (🟢🟡🔴) avisa quando uma etapa está estourando o prazo.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>💬 Avisar o cliente & custo de fábrica</h3>
+        <ul class="steps">
+          <li><b>💬</b> no card avisa o cliente conforme a etapa (“entrou em produção”, “montagem concluída”).</li>
+          <li><b>Chip da fábrica</b> no card (🏭 Casimiro · Custo …) — clique para abrir a aba Fábrica. <span class="badge b-new">novo</span></li>
+          <li><b>Sinal de "pago à fábrica" = mover o card para "Pagamento Fábrica"</b> — isso carimba a data do pagamento e joga o valor para Fábrica › Pagamentos no mês certo (a data é editável).</li>
+          <li>O <b>comprovante</b> de pagamento à fábrica agora é anexado/enviado só em <b>Fábrica › 💳 Pagamentos à Fábrica</b> (um lugar só). <span class="badge b-new">novo</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🚫 Cancelar / reativar pedido <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li>Pedido que caiu: o <b>gestor</b> clica em <b>🚫</b> no card. Ele fica <b>riscado</b> e sai do custo (CPV), da meta de fábrica, das comissões, do fiscal e do fluxo de caixa — <b>mas o histórico é preservado</b>.</li>
+          <li>Mudou de ideia? <b>↩️</b> reativa e ele volta a contar.</li>
+          <li>Há uma <b>trava</b>: se você salvar um pedido com o Custo de Fábrica vazio mas ele já tinha valor, o sistema pergunta antes de zerar.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="agenda">
+      <div class="modhd"><div class="modico">📅</div><h2>Agenda</h2><span class="who">Todos</span></div>
+      <div class="card">
+        <ul class="steps">
+          <li>Reúne contatos com clientes, apresentações e entregas/montagens.</li>
+          <li>Alguns eventos entram sozinhos (ex.: próximo contato do lead, apresentação).</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="fabrica">
+      <div class="modhd"><div class="modico">🏭</div><h2>Fábrica</h2><span class="who">Gestor · Financeiro</span> <span class="badge b-new">reformulada</span></div>
+      <div class="sub"><span>💳 Pagamentos à Fábrica</span><span>📊 Geral (gráficos)</span><span>🏭 Bipartido / Financiamento</span></div>
+      <div class="card">
+        <h3>💳 Pagamentos à Fábrica <span class="who">abre nesta</span></h3>
+        <ul class="steps">
+          <li>No topo, a <b>barra da Meta da Casimiro</b> (nossa fábrica principal): mostra o quanto já compramos no mês e o desconto por volume — 🥉 4% (70k), 🥈 6% (150k), 🥇 8% (200k) — e quanto falta pro próximo.</li>
+          <li><b>Pago por fábrica no mês</b> e a <b>lista</b> de todos os pedidos que chegaram em "Pagamento Fábrica".</li>
+          <li>É aqui que você <b>📎 anexa</b> e <b>📧 envia</b> o comprovante à fábrica (o comprovante fica guardado com segurança e não se perde).</li>
+          <li>O <b>total conta o valorFabrica de todos os pedidos pagos</b> (financiados inclusive). No financiado, o valor é o total pago à Casimiro — o <b>bipartido já está dentro dele</b> (não conta duas vezes).</li>
+          <li>Pedido <b>financiado sem comprovante</b> aparece em cinza ("anexe o comprovante →") e só entra no total depois que você anexa.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📊 Geral (gráficos) &nbsp;·&nbsp; 🏭 Bipartido</h3>
+        <ul class="steps">
+          <li><b>Geral:</b> visão do custo de fábrica com gráficos (custo por mês, % custo/venda) e os top fornecedores.</li>
+          <li><b>Bipartido / Financiamento:</b> o saldo do bipartido (parte que a financeira paga à fábrica) e o relatório do saldo para imprimir/enviar.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="financeiro">
+      <div class="modhd"><div class="modico">💰</div><h2>Financeiro</h2><span class="who">Gestor · Financeiro</span></div>
+      <p class="lead">O caixa da empresa, do previsto ao realizado.</p>
+      <div class="sub"><span>📊 DRE</span><span>⚖️ Análise</span><span>💳 A Receber</span><span>📋 A Pagar</span><span>📈 Fluxo de Caixa</span><span>👥 Folha</span></div>
+      <div class="card">
+        <h3>💳 A Receber — cobrança e atrasos <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li>Veja o <b>saldo a receber</b>, o já recebido e as <b>vencidas em aberto</b>.</li>
+          <li><b>Aging:</b> os recebíveis por faixa de atraso (a vencer · 1–30 · 31–60 · +60 dias) e os <b>maiores devedores</b>.</li>
+          <li><b>💬</b> em cada parcela abre o WhatsApp de cobrança já com valor e vencimento.</li>
+          <li>Marque <b>✅ Receber</b> quando o pagamento entrar; gere <b>🧾 Recibo</b> quando quiser.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📋 A Pagar — contas fixas automáticas <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li>Ao lançar uma conta, escolha a recorrência <b>Mensal</b> — ela passa a aparecer <b>sozinha todo mês</b> como <b>🔁 recorrente · 🔮 Prevista</b> (já somada no "A Pagar do mês").</li>
+          <li>É só clicar <b>✅ Pagar</b> (ou <b>Lançar</b> para ajustar o valor do mês, ex.: energia que varia). Não precisa relançar.</li>
+          <li>Para <b>encerrar</b> uma recorrente (contrato acabou): num mês, edite e troque a recorrência para <b>Única</b> — ela para de aparecer.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📈 Fluxo de Caixa</h3>
+        <ul class="steps">
+          <li>Informe o <b>saldo inicial</b> (o dinheiro em caixa <b>hoje</b>); o sistema projeta entradas, saídas e saldo acumulado.</li>
+          <li>Contas <b>vencidas em aberto</b> aparecem no <b>mês atual</b> (não somem); pedido <b>cancelado</b> não é projetado; e o que já foi pago no mês <b>não desconta duas vezes</b>. <span class="badge b-new">novo</span></li>
+          <li>Avisa em vermelho quando o caixa <b>fica negativo</b> em algum mês.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>DRE · Fechamento · Folha</h3>
+        <ul class="steps">
+          <li><b>DRE:</b> receita, custos, DAS e lucro por mês (competência — a venda entra no mês do fechamento). O <b>DAS</b> usa o valor <b>realmente pago</b> quando já quitado, e a <b>assistência por erro da loja</b> abate no resultado. <span class="badge b-new">novo</span></li>
+          <li><b>🔒 Fechar mês:</b> depois de fechado, não dá mais para pagar, estornar ou excluir contas daquele mês (protege os números). O gestor pode reabrir.</li>
+          <li><b>A Pagar:</b> contas da empresa, com baixa e recibos. <b>Folha:</b> salários e adiantamentos.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="relatorios">
+      <div class="modhd"><div class="modico">📋</div><h2>Relatórios</h2><span class="who">Gestor · Financeiro</span></div>
+      <div class="sub"><span>🛒 Vendas</span><span>🔄 Funil de Conversão</span><span>💸 Canais (CAC)</span><span>🔴 Análise de Perdas</span><span>💹 Rentabilidade</span><span>📈 Desempenho</span></div>
+      <div class="card">
+        <h3>💸 Canais (CAC) <span class="badge b-new">novo</span></h3>
+        <ul class="steps">
+          <li>Escolha o mês e informe <b>quanto investiu em cada canal</b> (tráfego, agência, BNI…).</li>
+          <li>O sistema calcula <b>custo por lead</b>, <b>CAC</b> (custo por venda) e <b>ROI</b> (retorno = receita ÷ investimento).</li>
+          <li>Decisão de marketing no dado: invista onde o retorno é maior (Indicação e Loja costumam render muito, de graça).</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Os demais relatórios</h3>
+        <ul class="steps">
+          <li><b>Vendas:</b> contratos, valor vendido, ticket, evolução e por vendedor.</li>
+          <li><b>Funil de Conversão</b> e <b>Análise de Perdas:</b> onde os leads avançam ou caem, e por quê.</li>
+          <li><b>Rentabilidade:</b> margem por projeto (previsto × real). <b>Desempenho:</b> ticket médio e conversão.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="fiscal">
+      <div class="modhd"><div class="modico">🧾</div><h2>Fiscal — Nota Fiscal</h2><span class="who">Gestor · Financeiro</span></div>
+      <div class="sub"><span>⏳ Pendentes</span><span>✅ Emitidas</span><span>🧮 Tributário</span></div>
+      <div class="card">
+        <ul class="steps">
+          <li><b>Emitir NFe:</b> na aba Pendentes, revise os dados e emita (a nota sai pelo servidor seguro).</li>
+          <li><b>Emitidas:</b> baixe DANFE/XML, <b>envie por e-mail</b> ao cliente/contador, faça <b>cancelamento</b> ou <b>carta de correção</b>.</li>
+          <li><b>Tributário:</b> o DAS do Simples é estimado automaticamente e entra no DRE e no Fluxo.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mod" id="repositorio">
+      <div class="modhd"><div class="modico">🗂️</div><h2>Repositório</h2><span class="who">Todos</span></div>
+      <div class="card"><ul class="steps"><li>Guarde arquivos e documentos úteis da equipe num lugar só.</li></ul></div>
+    </section>
+
+    <section class="mod" id="treinamentos">
+      <div class="modhd"><div class="modico">🎓</div><h2>Treinamentos</h2><span class="who">Todos</span></div>
+      <div class="card"><ul class="steps"><li>Materiais de treinamento e este guia ficam aqui para consulta.</li></ul></div>
+    </section>
+
+    <section class="mod" id="config">
+      <div class="modhd"><div class="modico">⚙️</div><h2>Configurações</h2><span class="who">Somente gestor</span> <span class="badge b-gestor">gestor</span></div>
+      <p class="lead">O “motor” do sistema. Só o gestor mexe aqui.</p>
+      <div class="sub"><span>🏢 Empresa</span><span>👥 Equipe</span><span>💰 Comissões</span><span>💳 Meios de Pagamento</span><span>📄 Documentos</span><span>🏭 Fábrica</span><span>🧾 NFe</span><span>🔄 Rodízio de Leads</span><span>⚙️ Sistema</span></div>
+      <div class="card">
+        <h3>Equipe & permissões</h3>
+        <ul class="steps">
+          <li>Cadastre pessoas, defina <b>perfil</b> e o que cada uma <b>vê</b> e <b>edita</b> (aba por aba).</li>
+          <li>Aprovar acesso e definir senha da equipe também ficam aqui.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>⚙️ Sistema <span class="badge b-new">novidades aqui</span></h3>
+        <ul class="steps">
+          <li><b>⏱️ Prazos das etapas de Pedidos:</b> ajuste os dias de cada etapa. <span class="badge b-new">novo</span></li>
+          <li><b>💬 Mensagens de WhatsApp:</b> edite os textos prontos (lead, status do pedido, cobrança). <span class="badge b-new">novo</span></li>
+          <li><b>🐞 Monitor de Erros:</b> falhas do sistema ficam registradas para o gestor. <span class="badge b-new">novo</span></li>
+          <li><b>Backup, Limpar cache</b> e a <b>Trilha de auditoria</b> (quem alterou o quê e quando).</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Empresa · Comissões · Fábrica · NFe</h3>
+        <ul class="steps">
+          <li><b>Empresa:</b> dados, logo e CNPJ (necessário para emitir nota).</li>
+          <li><b>Comissões</b> e <b>Meios de Pagamento:</b> tabelas de % e taxas de cartão/financiamento.</li>
+          <li><b>Fábrica:</b> e-mail e contato para os comprovantes. <b>NFe:</b> configuração de emissão.</li>
+          <li><b>Rodízio de Leads:</b> distribuição automática dos leads que chegam.</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="foot">Casa Villare · Ambientes Planejados — guia interno do sistema de gestão · atualizado julho/2026</div>
+
+</div></div>
+
+<script>
+  (function(){
+    var links=[].slice.call(document.querySelectorAll('nav.gnav a'));
+    var secs=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+    function onScroll(){
+      var y=window.scrollY||document.documentElement.scrollTop, best=0;
+      for(var i=0;i<secs.length;i++){ if(secs[i] && secs[i].offsetTop-90<=y) best=i; }
+      links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+    }
+    window.addEventListener('scroll',onScroll,{passive:true});
+    links.forEach(function(a){ a.addEventListener('click',function(e){
+      var el=document.getElementById(a.getAttribute('href').slice(1));
+      if(el){ e.preventDefault(); window.scrollTo({top:el.offsetTop-8,behavior:'smooth'}); }
+    });});
+    onScroll();
+  })();
+</script>
