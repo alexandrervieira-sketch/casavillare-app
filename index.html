@@ -15885,20 +15885,21 @@ function rFabPagamentos(){
   const el=document.getElementById('fab-content'); if(!el) return;
   const mesStr=mesAnoStr(_bipMes,_bipAno);
   ['bip-mes-label','fab-mes-label'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=mesNomeStr(_bipMes,_bipAno);});
-  // Só os pagamentos DO MÊS (mesma competência da Meta Fábrica: etapa paga + mês do datePgFab/data).
-  // Pedido financiado NÃO entra aqui (aparece na aba Bipartido) — evita dupla contagem (item C).
-  // Diretos (não financiados) + financiados QUE TÊM comprovante (caso misto: parte direta paga à fábrica).
-  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr && (_bipartidoPed(p)<=0 || !!p.comprovante))
+  // Lista TODOS os pedidos que chegaram em "Pagamento Fábrica" no mês (financiados inclusive) — é AQUI que se anexa o comprovante.
+  // O TOTAL conta só os PAGOS: não-financiado (sempre), ou financiado COM comprovante. Financiado sem comprovante fica pendente.
+  const _contaPg=p=>(_bipartidoPed(p)<=0 || !!p.comprovante); // dentro dos peds (já Casimiro/pg_fab/mês)
+  const peds=(ST.pedidos||[]).filter(p=>(p.valorFabrica||0)>0 && !_pedShowroom(p) && !_pedCancelado(p) && _FAB_ETAPAS_PAGAS.includes(p.status) && (p.datePgFab||p.data||'').slice(0,7)===mesStr)
     .sort((a,b)=>(b.valorFabrica||0)-(a.valorFabrica||0));
-  // Total à fábrica principal (Casimiro) no mês = valorFabrica de TODOS os pagos (financiados pagos inclusive) — mesma conta da Meta.
+  // Total à fábrica principal (Casimiro) no mês = mesma conta da Meta (só os pagos).
   const total=_totalFabricaMes(mesStr);
   const nFin=peds.filter(p=>_bipartidoPed(p)>0).length;
   const comComp=peds.filter(p=>p.comprovante).length;
-  const semComp=peds.filter(p=>_bipartidoPed(p)<=0&&!p.comprovante).length;
+  const semComp=peds.filter(p=>!p.comprovante).length;
   const linhas=peds.map(p=>{
     const fab=p.fornecedor||'—';
     const temComp=!!p.comprovante;
     const isFin=_bipartidoPed(p)>0;
+    const conta=_contaPg(p); // já soma no total do mês? (financiado precisa de comprovante)
     const compCell=(temComp
       ? `<button class="btn btn-s btn-sm" onclick="verComprovante('${p.id}')">👁️ Ver</button>
          <button class="btn btn-s btn-sm" onclick="enviarComprovanteEmail('${p.id}')" title="Enviar à fábrica por e-mail">📧</button>`
@@ -15908,7 +15909,7 @@ function rFabPagamentos(){
     return `<tr>
       <td style="padding:7px 10px;font-size:13px;">${_esc(p.clienteNome||p.cliente||'—')}${isFin?' <span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 6px;border-radius:8px;font-weight:700;" title="Pedido financiado — o valorFabrica é o total pago à Casimiro e SOMA no total (o bipartido está dentro dele)">🔗 Financiado</span>':''}</td>
       <td style="padding:7px 10px;font-size:12px;color:#6B7280;">${_esc(fab)}</td>
-      <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:700;color:#B45309;" title="${isFin?'Total pago à Casimiro (o bipartido está dentro deste valor)':''}">${fmt(p.valorFabrica)}</td>
+      <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:700;color:${conta?'#B45309':'#9CA3AF'};" title="${!conta?'Financiado sem comprovante — anexe o comprovante para contar na meta':(isFin?'Total pago à Casimiro (o bipartido está dentro deste valor)':'')}">${fmt(p.valorFabrica)}${!conta?'<div style="font-size:9px;font-weight:600;color:#B45309;">anexe o comprovante →</div>':''}</td>
       <td style="padding:7px 10px;"><span class="badge" style="background:${et.cor}20;color:${et.cor};border:1px solid ${et.cor}40;white-space:nowrap;font-size:11px;">${et.icon} ${et.label}</span></td>
       <td style="padding:7px 10px;">${temComp?'<span style="font-size:11px;color:#166534;font-weight:700;">✅ anexado</span>':'<span style="font-size:11px;color:#B45309;font-weight:700;">⏳ pendente</span>'}</td>
       <td style="padding:7px 10px;white-space:nowrap;">${compCell}</td>
@@ -15944,7 +15945,7 @@ function rFabPagamentos(){
   </div>`;
   // ── Total pago POR FÁBRICA no mês (diretos), principal em destaque ──
   const porFab={};
-  peds.forEach(p=>{ const f=(p.fornecedor||'').trim()||_fp; porFab[f]=(porFab[f]||0)+(p.valorFabrica||0); }); // inclui financiados pagos
+  peds.filter(_contaPg).forEach(p=>{ const f=(p.fornecedor||'').trim()||_fp; porFab[f]=(porFab[f]||0)+(p.valorFabrica||0); }); // só os PAGOS (financiado precisa de comprovante)
   const fabEntries=Object.entries(porFab).sort((a,b)=>b[1]-a[1]);
   const porFabHtml=fabEntries.length?`
   <div style="margin-bottom:16px;">
