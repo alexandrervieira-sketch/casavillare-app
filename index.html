@@ -2551,21 +2551,9 @@ textarea.inp{resize:vertical;min-height:68px;}
         </div>
       </div>
 
-      <!-- ── Seção Pagamento Fábrica (aparece quando etapa = pg_fab) ── -->
-      <div id="pd-pgfab-section" style="display:none;margin-top:16px;padding:16px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:12px;">
-        <div style="font-size:13px;font-weight:700;color:#1D4ED8;margin-bottom:12px;">💳 Comprovante de Pagamento à Fábrica</div>
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px;">
-          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px dashed #BFDBFE;border-radius:8px;padding:8px 14px;font-size:13px;color:#1D4ED8;font-weight:600;">
-            📎 Anexar comprovante
-            <input type="file" id="pd-pgfab-comp-input" accept="image/*,application/pdf" style="display:none" onchange="pdPgfabAnexarComp(this)">
-          </label>
-          <span id="pd-pgfab-comp-nome" style="font-size:12px;color:#6B7280;"></span>
-          <button id="pd-pgfab-comp-ver" style="display:none;font-size:12px;background:none;border:1px solid #1D4ED8;color:#1D4ED8;border-radius:5px;padding:2px 8px;cursor:pointer;" onclick="pdPgfabVerComp()">👁️ Ver</button>
-        </div>
-        <button id="pd-pgfab-email-btn" style="width:100%;padding:10px;background:#1D4ED8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;" onclick="pdPgfabEnviarEmail()">
-          📧 Enviar Comprovante à Fábrica
-        </button>
-        <div id="pd-pgfab-email-status" style="font-size:11px;color:#16A34A;margin-top:6px;text-align:center;display:none;"></div>
+      <!-- Comprovante de pagamento à fábrica: gerenciado num lugar só (Fábrica › Pagamentos) p/ não confundir -->
+      <div id="pd-pgfab-section" style="display:none;margin-top:16px;padding:13px 16px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:12px;font-size:12.5px;color:#1D4ED8;line-height:1.5;">
+        💳 O <b>comprovante de pagamento à fábrica</b> e o <b>envio por e-mail</b> ficam em <b>Fábrica › 💳 Pagamentos à Fábrica</b> — um lugar só, pra não sair diferente.
       </div>
 
       <div id="pd-check-section" style="display:none;margin-top:16px;padding:16px;background:#F5F3F0;border:1.5px solid var(--border);border-radius:12px;">
@@ -9925,8 +9913,9 @@ function _bipartidoTotalMes(mes){
       return s+(l.condicoesPgto||[]).filter(c=>c.forma==='financiamento').reduce((a,c)=>a+_bipartidoCond(c),0);
     },0);
 }
-// Volume TOTAL de compras da fábrica no mês (Meta Fábrica) = pagamentos (diretos + financiados pagos) + bipartido puro.
-function _volumeFabricaMes(mes){ return _totalFabricaMes(mes)+_bipartidoTotalMes(mes); }
+// Volume de compras da fábrica no mês (Meta Fábrica) = valorFabrica de TODOS os pedidos pagos (financiados inclusive).
+// O valorFabrica é o TOTAL pago à Casimiro — o bipartido JÁ ESTÁ dentro dele, então NÃO se soma de novo (senão conta 2×).
+function _volumeFabricaMes(mes){ return _totalFabricaMes(mes); }
 
 // Retorna tiers configurados da fábrica (com defaults)
 function _getFabTiers(){
@@ -13170,21 +13159,10 @@ function _rPedPipe(ped,hoje,statsHtml){
             </div>
           </div>`;
         })():''}
-        ${e.id==='pg_fab'?`<div class="ped-card-comp" onclick="event.stopPropagation();">
+        ${e.id==='pg_fab'?`<div class="ped-card-comp" onclick="event.stopPropagation();navTo('tab-fabrica');setTimeout(()=>fabSubTab('pagamentos'),100);" style="cursor:pointer;" title="Anexar/enviar o comprovante em Fábrica › Pagamentos">
           ${p.comprovante
-            ?`<div style="display:flex;flex-direction:column;gap:4px;width:100%;">
-                <div style="display:flex;align-items:center;gap:4px;">
-                  <span class="comp-ok">✅ Comprovante</span>
-                  <button onclick="verComprovante('${p.id}')">👁️ Ver</button>
-                  <button onclick="anexarComprovante('${p.id}')">↩️</button>
-                </div>
-                ${(ST.fabrica&&ST.fabrica.email)?`
-                <button onclick="event.stopPropagation();enviarComprovanteEmail('${p.id}')"
-                  style="width:100%;background:${p.emailFabricaEnviado?'#F0FDF4':'#1D4ED8'};color:${p.emailFabricaEnviado?'#166534':'#fff'};border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;">
-                  ${p.emailFabricaEnviado?'✅ E-mail enviado em '+p.emailFabricaEnviado:'📧 Enviar à Fábrica'}
-                </button>`:'<div style="font-size:10px;color:#9CA3AF;">Configure o e-mail da fábrica em ⚙️ Configurações</div>'}
-              </div>`
-            :`<button class="comp-pend" onclick="anexarComprovante('${p.id}')">📎 Anexar comprovante</button>`}
+            ?`<span class="comp-ok">✅ Comprovante anexado</span>`
+            :`<span class="comp-pend">⏳ Comprovante pendente · abrir Pagamentos ›</span>`}
         </div>`:''}
       </div>`;
     }).join('');
@@ -13379,30 +13357,39 @@ function anexarComprovante(pedId){
   input.onchange=function(){
     const file=this.files[0];
     if(!file) return;
-    if(file.size>8*1024*1024){toast('Arquivo muito grande (máx 8MB)');return;}
+    if(file.size>30*1024*1024){toast('Arquivo muito grande (máx 30MB)');return;}
+    const ped=(ST.pedidos||[]).find(p=>String(p.id)===String(pedId));
+    if(!ped) return;
+    // O arquivo NÃO vai dentro do pedido (estouraria o limite de 1MB/doc do Firestore e a gravação falha em silêncio).
+    // Guarda no Storage (como os anexos do lead) e no pedido fica só a REFERÊNCIA determinística.
+    const id='comp_'+String(pedId);
     const reader=new FileReader();
     reader.onload=function(ev){
-      const ped=(ST.pedidos||[]).find(p=>String(p.id)===String(pedId));
-      if(!ped) return;
-      ped.comprovante=ev.target.result;
+      cvDB.put({id,data:ev.target.result}).catch(()=>{});                       // cache local (ver na hora nesta máquina)
+      if(_fbStorage){ _fbStorage.ref('anexos/'+id).put(file).catch(e=>console.warn('[CVP] upload comprovante:',e&&e.message)); } // Storage p/ outras máquinas
+      ped.comprovante=id;
       ped.comprovanteNome=file.name;
       ped._uAt=Date.now();
-      save(); toast('✅ Comprovante salvo!'); rPedidos();
+      save(); toast('✅ Comprovante salvo!');
+      if(_fabSubAtivo==='pagamentos' && typeof rFabPagamentos==='function') rFabPagamentos(); else if(typeof rPedidos==='function') rPedidos();
     };
     reader.readAsDataURL(file);
   };
   input.click();
 }
 
-function verComprovante(pedId){
+async function verComprovante(pedId){
   const ped=(ST.pedidos||[]).find(p=>String(p.id)===String(pedId));
   if(!ped?.comprovante){toast('Nenhum comprovante anexado');return;}
+  let src=ped.comprovante;
+  if(!/^data:/.test(src)){ src=await _anexoData(src); }   // referência (Storage/cache) → resolve p/ dataURL ou URL do Storage
+  if(!src){toast('Comprovante não encontrado (tente de novo em alguns segundos)');return;}
   const w=window.open('','_blank');
-  const isPdf=ped.comprovante.startsWith('data:application/pdf');
+  const isPdf=/^data:application\/pdf/.test(src) || (ped.comprovanteNome||'').toLowerCase().endsWith('.pdf');
   w.document.write(`<!DOCTYPE html><html><head><title>${_esc(ped.comprovanteNome||'Comprovante')}</title>
     <style>body{margin:0;background:#1E1D1D;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px;box-sizing:border-box;}
     img{max-width:100%;border-radius:8px;}embed{width:100%;height:98vh;}</style></head><body>
-    ${isPdf?`<embed src="${ped.comprovante}" type="application/pdf"/>`:`<img src="${ped.comprovante}" alt="Comprovante"/>`}
+    ${isPdf?`<embed src="${src}" type="application/pdf"/>`:`<img src="${src}" alt="Comprovante"/>`}
     </body></html>`);
   w.document.close();
 }
@@ -13909,10 +13896,14 @@ function pdAtVerComp(){
 function pdPgfabAnexarComp(input){
   const file=input.files[0];
   if(!file) return;
-  if(file.size>8*1024*1024){toast('Arquivo muito grande (máx 8MB)');return;}
+  if(file.size>30*1024*1024){toast('Arquivo muito grande (máx 30MB)');return;}
+  // Guarda no Storage (não dentro do pedido — evita estourar 1MB/doc do Firestore). No pedido fica só a referência.
+  const id='comp_'+String(_pdId||('novo_'+Date.now()));
   const reader=new FileReader();
   reader.onload=function(ev){
-    _pdPgfabCompData=ev.target.result;
+    cvDB.put({id,data:ev.target.result}).catch(()=>{});
+    if(_fbStorage){ _fbStorage.ref('anexos/'+id).put(file).catch(e=>console.warn('[CVP] upload comprovante:',e&&e.message)); }
+    _pdPgfabCompData=id;      // REFERÊNCIA (não o arquivo)
     _pdPgfabCompNome=file.name;
     const nomeEl=document.getElementById('pd-pgfab-comp-nome');
     if(nomeEl) nomeEl.textContent=file.name;
@@ -13922,14 +13913,17 @@ function pdPgfabAnexarComp(input){
   };
   reader.readAsDataURL(file);
 }
+// Resolve _pdPgfabCompData (referência OU dataURL legado) para uma src exibível/baixável.
+async function _pdPgfabCompSrc(){ const v=_pdPgfabCompData; if(!v) return null; return /^data:/.test(v)?v:await _anexoData(v); }
 
-function pdPgfabVerComp(){
-  if(!_pdPgfabCompData) return;
+async function pdPgfabVerComp(){
+  const src=await _pdPgfabCompSrc();
+  if(!src){toast('Comprovante não encontrado');return;}
   const w=window.open('','_blank');
-  const isPdf=_pdPgfabCompData.startsWith('data:application/pdf');
+  const isPdf=/^data:application\/pdf/.test(src)||(_pdPgfabCompNome||'').toLowerCase().endsWith('.pdf');
   w.document.write(`<!DOCTYPE html><html><head><title>${_esc(_pdPgfabCompNome||'Comprovante')}</title>
     <style>body{margin:0;background:#111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:20px;box-sizing:border-box;}</style></head>
-    <body>${isPdf?`<embed src="${_pdPgfabCompData}" width="100%" height="900px" type="application/pdf"/>`:`<img src="${_pdPgfabCompData}" style="max-width:100%;border-radius:8px;"/>`}</body></html>`);
+    <body>${isPdf?`<embed src="${src}" width="100%" height="900px" type="application/pdf"/>`:`<img src="${src}" style="max-width:100%;border-radius:8px;"/>`}</body></html>`);
   w.document.close();
 }
 
@@ -14262,8 +14256,8 @@ function salvarPedido(){
   // Preservar comprovante + rastrear mudança de etapa
   if(idx>=0){
     const prev=ST.pedidos[idx];
-    pedido.comprovante     = _pdPgfabCompData||prev.comprovante||'';
-    pedido.comprovanteNome = _pdPgfabCompNome||prev.comprovanteNome||'';
+    pedido.comprovante     = prev.comprovante||'';      // comprovante é gerenciado SÓ na aba Fábrica › Pagamentos (evita confusão); aqui só preserva
+    pedido.comprovanteNome = prev.comprovanteNome||'';
     // Atualiza statusChangedAt só quando a etapa realmente muda
     const hoje=_hojeLocal();
     pedido.statusChangedAt = (prev.status!==pedido.status) ? hoje : (prev.statusChangedAt||pedido.data);
@@ -15933,7 +15927,7 @@ function rFabPagamentos(){
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
       <div>
         <div style="font-size:13px;font-weight:800;color:#7E22CE;">🏭 Meta ${_esc(_fp)} · ${mesNomeStr(_bipMes,_bipAno)}</div>
-        <div style="font-size:11px;color:#9CA3AF;">Volume de compras no mês · pagamentos (financiados inclusos) + bipartido sem pagamento direto</div>
+        <div style="font-size:11px;color:#9CA3AF;">Volume de compras no mês · valorFabrica de todos os pedidos pagos (o bipartido já está dentro)</div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:22px;font-weight:800;color:#7E22CE;">${fmt(volMeta)}</div>
@@ -17421,7 +17415,7 @@ function rMetas(){
   if(isG || ST.perfil==='projetista'){
     const tiers=_getFabTiers();
     const _pagFab=_totalFabricaMes(_metMes), _bipFab=_bipartidoTotalMes(_metMes);
-    const totalFab=_pagFab+_bipFab; // pagamentos diretos + bipartido
+    const totalFab=_pagFab; // = valorFabrica de todos os pedidos pagos; o bipartido JÁ está dentro (não soma 2×)
     // Tier atingido = último cujo vol <= totalFab
     const tierAtingido=tiers.reduce((acc,t)=>totalFab>=t.vol?t:acc, null);
     // Próximo tier = primeiro cujo vol > totalFab
@@ -17478,7 +17472,7 @@ function rMetas(){
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
         <div>
           <div style="font-size:13px;font-weight:800;color:#7E22CE;">🏭 Meta Fábrica${_fabricaPrincipal()?' — '+_esc(_fabricaPrincipal()):''} · ${lbl.charAt(0).toUpperCase()+lbl.slice(1)}</div>
-          <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Volume no mês · pagamentos (financiados inclusos) ${fmt(_pagFab)} + bipartido ${fmt(_bipFab)}${_fabricaPrincipal()?'':' <span style="color:#DC2626;">⚠️ defina a fábrica principal em Config → Fábrica</span>'}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:2px;">Volume no mês · pagamentos à ${_esc(_fabricaPrincipal()||'Casimiro')} (financiados inclusos — o bipartido já está no valor)${_fabricaPrincipal()?'':' <span style="color:#DC2626;">⚠️ defina a fábrica principal em Config → Fábrica</span>'}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:22px;font-weight:800;color:#7E22CE;">${fmt(totalFab)}</div>

@@ -460,12 +460,12 @@ test('E1: pessoa sem campos sensíveis não gera doc priv', () => {
   assert(!T._cfgprivDocs().find(d => d.id === 'SoPublicoE1'), 'sem sensível → sem doc priv');
 });
 
-// ── Meta Fábrica = pagamentos diretos (fábrica principal) + bipartido do mês (por venda) ──
-test('bipartidoTotalMes/volumeFabricaMes: inclui o bipartido dos financiamentos fechados no mês', () => {
+// ── Meta Fábrica = valorFabrica de TODOS os pedidos pagos (o bipartido já está DENTRO; não soma 2×) ──
+test('volumeFabricaMes = pagamentos (valorFabrica); NÃO soma o bipartido de novo', () => {
   T.ST.leads = T.ST.leads || [];
   T.ST.leads.push({ id: 'LvolX', status: 'ganho', dataFechamento: '2030-05-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
-  assert(_close(T._bipartidoTotalMes('2030-05'), 40000), 'cliente assume → 40% de 100000');
-  assert(_close(T._volumeFabricaMes('2030-05'), T._totalFabricaMes('2030-05') + 40000), 'volume = pagamentos + bipartido');
+  assert(_close(T._bipartidoTotalMes('2030-05'), 40000), 'o helper de bipartido ainda calcula 40% (usado na aba Bipartido)');
+  assert(_close(T._volumeFabricaMes('2030-05'), T._totalFabricaMes('2030-05')), 'a META = só os pagamentos (o bipartido não é somado por fora)');
 });
 test('totalFabricaMes: pagamento direto só conta pra fábrica principal (Casimiro)', () => {
   T.ST.fabrica = { nome: 'Casimiro' };
@@ -490,14 +490,15 @@ test('E1 P0-A: overwrite pelo configs público + re-merge preserva sensível E p
   assert(T.ST.configs['FulanoLis'].cargo === 'X' && !!T.ST.configs['FulanoLis'].permissoes, 'público preservado');
 });
 
-// ── C: pedido financiado não conta 2× na Meta Fábrica (bipartido + valorFabrica) ──
-test('C: pedido financiado com valorFabrica não duplica na Meta Fábrica', () => {
+// ── C: pedido financiado PAGO conta o valorFabrica UMA vez (bipartido está dentro; não duplica) ──
+test('C: pedido financiado pago conta o valorFabrica sem duplicar o bipartido', () => {
   T.ST.fabrica = {};
   T.ST.leads = T.ST.leads || []; T.ST.pedidos = T.ST.pedidos || [];
   T.ST.leads.push({ id: 'LdcC', status: 'ganho', dataFechamento: '2032-04-10', condicoesPgto: [{ id: 'c1', forma: 'financiamento', valor: 100000, absorcao: 'cliente' }] });
-  T.ST.pedidos.push({ id: 'PdcC', leadId: 'LdcC', valorFabrica: 120000, status: 'concluido', datePgFab: '2032-04-15' });
-  assertEq(T._totalFabricaMes('2032-04'), 0);                      // financiado é excluído dos pagamentos diretos
-  assert(_close(T._volumeFabricaMes('2032-04'), 40000), 'volume = só o bipartido (40k), sem somar os 120k');
+  T.ST.pedidos.push({ id: 'PdcC', leadId: 'LdcC', valorFabrica: 120000, status: 'concluido', datePgFab: '2032-04-15', comprovante: true });
+  assertEq(T._totalFabricaMes('2032-04'), 120000);                 // financiado PAGO conta o valorFabrica total
+  assertEq(T._bipartidoTotalMes('2032-04'), 0);                    // excluído do bipartido (já contado como pagamento)
+  assert(_close(T._volumeFabricaMes('2032-04'), 120000), 'volume = 120k (valorFabrica), sem somar o bipartido de novo');
 });
 
 // ── E: receita de venda financiada/cartão entra no mês do FECHAMENTO (casa com o custo) ──
