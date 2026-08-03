@@ -7996,7 +7996,8 @@ function _calcComMontador(pedido){
   const adiantamentos=(ST.comissoes||[]).filter(c=>c.pedidoId===String(pedido.id)&&c.tipo==='adiantamento_mont');
   const totalAdiant=adiantamentos.reduce((a,c)=>a+(c.valor||0),0);
   const saldo=Math.max(0,valorCom-totalAdiant);
-  return{valorBase,valorCom,pct,visivel,liberada,semValor:valorBase===0,mesAno,totalAdiant,saldo};
+  const overpay=Math.max(0,totalAdiant-valorCom); // A2-07: adiantado a MAIOR (ex.: aditivo de retirada reduziu a comissão)
+  return{valorBase,valorCom,pct,visivel,liberada,semValor:valorBase===0,mesAno,totalAdiant,saldo,overpay};
 }
 
 // Cascata completa de rentabilidade de um projeto (pedido): PREVISTO (estimativa) × REALIZADO (efetivado até agora).
@@ -8479,6 +8480,7 @@ function _rComMontadorHtml(p, comsMan, mesStr){
            <span style="font-size:12.5px;font-weight:700;color:${cor};">${icon} ${fmt(c.valorCom)}</span>
            ${c.totalAdiant>0?`<span style="font-size:11px;color:#2563EB;">Pago: ${fmt(c.totalAdiant)}</span>`:''}
            ${c.saldo<c.valorCom&&c.valorCom>0?`<span style="font-size:11px;color:#166534;">Saldo: ${fmt(c.saldo)}</span>`:''}
+           ${c.overpay>0.05?`<span style="font-size:11px;color:#B91C1C;font-weight:700;" title="Adiantado além da comissão final (ex.: o contrato reduziu). Ajuste com o montador.">⚠️ Adiantado a maior: ${fmt(c.overpay)}</span>`:''}
            ${isG&&c.saldo>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 7px;" onclick="abrirAdiantMont('${pd.id}',${c.valorCom},${c.totalAdiant})" title="Pagamento parcial">💸 Parcial</button>
            <button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 7px;border:1px solid #16A34A;background:#fff;color:#166534;" onclick="montQuitar('${pd.id}')" title="Registrar pagamento do saldo restante">💰 Pagar</button>`:''}`}
       </div>
@@ -8571,7 +8573,7 @@ function rComissoes(){
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
             ${isG?`<button class="btn btn-s btn-sm" onclick="abrirModalVendaCom(null,'${_jsq(p.nome)}')" style="font-size:11px;">+ Lançar venda</button>`:''}
             ${isG&&totalCom>0?(pagoVendRec
-               ?`<span style="font-size:11px;color:#1D4ED8;background:#DBEAFE;padding:3px 8px;border-radius:6px;" title="Pago em ${_fmtDateBR(pagoVendRec.data)}">💰 Comissão paga</span><button onclick="comReciboAbrir('${pagoVendRec.id}')" title="Ver recibo de pagamento" style="border:1px solid #C7D2FE;background:#fff;cursor:pointer;font-size:11px;border-radius:5px;padding:2px 6px;">🧾</button><button onclick="comEstornarVendedor('${encodeURIComponent(p.nome)}','${mesStr}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`
+               ?`<span style="font-size:11px;color:#1D4ED8;background:#DBEAFE;padding:3px 8px;border-radius:6px;" title="Pago em ${_fmtDateBR(pagoVendRec.data)}">💰 Comissão paga</span>${(totalCom-(pagoVendRec.valor||0))>0.05?`<span style="font-size:11px;color:#B45309;background:#FEF3C7;padding:3px 8px;border-radius:6px;" title="Entrou venda no mês depois do pagamento — falta pagar a diferença">⚠️ +${fmt(totalCom-(pagoVendRec.valor||0))} a pagar</span>`:''}<button onclick="comReciboAbrir('${pagoVendRec.id}')" title="Ver recibo de pagamento" style="border:1px solid #C7D2FE;background:#fff;cursor:pointer;font-size:11px;border-radius:5px;padding:2px 6px;">🧾</button><button onclick="comEstornarVendedor('${encodeURIComponent(p.nome)}','${mesStr}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`
                :`<button class="btn btn-p btn-sm" onclick="comPagarVendedor('${encodeURIComponent(p.nome)}','${mesStr}')" style="font-size:11px;" title="Registra o pagamento da comissão do mês inteiro">💰 Pagar comissão</button>`
              ):''}
           </div>
@@ -11577,7 +11579,7 @@ function salvarLead(){
     const descPct=parseFloat(document.getElementById('ld-desconto')?.value)||0;
     const valorLiq=valorBruto*(1-descPct/100);
     const totalCond=_ldCondPgto.reduce((a,c)=>a+(parseFloat(c.valor)||0),0);
-    if(valorLiq>0&&Math.abs(totalCond-valorLiq)>1){
+    if(valorLiq>0&&Math.abs(totalCond-valorLiq)>0.05){ // A3-03: tolerância R$0,05 (era R$1 — mascarava diferenças reais)
       const fmtL=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const diff=totalCond-valorLiq;
       const msg=diff>0
@@ -11698,8 +11700,10 @@ function salvarLead(){
     if(!ST.pedidos) ST.pedidos=[];
     const jaTemPedido=ST.pedidos.some(p=>String(p.leadId)===String(lead.id));
     if(!jaTemPedido){
+      const _pedId='ped_'+String(lead.id); // A7-05: id determinístico → 2 dispositivos não criam 2 pedidos do mesmo lead
+      _tombClear('pedidos',_pedId);         // se o pedido foi excluído antes, vence a exclusão na união ao recriar
       ST.pedidos.push({
-        id:_newId(), _uAt:Date.now(),
+        id:_pedId, _uAt:Date.now(),
         clienteNome:lead.nome, cliente:lead.nome,
         clienteCadId:'', nContrato:'',
         responsavel:lead.responsavel||'',
@@ -12921,7 +12925,7 @@ function _validarCondPgto(conds, valorBruto, descPct){
   if(valorBruto>0){
     const valorLiq=valorBruto*(1-(descPct||0)/100);
     const totalCond=conds.reduce((a,c)=>a+(parseFloat(c.valor)||0),0);
-    if(Math.abs(totalCond-valorLiq)>1)
+    if(Math.abs(totalCond-valorLiq)>0.05) // A3-03: tolerância R$0,05
       return `⚠️ As condições somam ${fmtL(totalCond)}, mas o valor ao cliente é ${fmtL(valorLiq)}.\n\n💡 As condições devem fechar com o valor após o desconto (o que o cliente paga).\nA taxa do cartão é custo interno da loja.\n\nAjuste os valores antes de avançar.`;
   }
   return null;
@@ -14229,7 +14233,7 @@ function salvarPedido(){
     status:       document.getElementById('pd-status').value||'projeto',
     leadId:       document.getElementById('pd-lead').value||'',
     obs:          document.getElementById('pd-obs').value.trim(),
-    fornecedoresAdicionais: _pdFornsAdicionais.filter(f=>f.nome),
+    fornecedoresAdicionais: _pdFornsAdicionais.filter(f=>f.nome||(f.valor>0)).map(f=>f.nome?f:{...f,nome:'Fornecedor'}), // A5-07: valor sem nome NÃO some (recebe nome padrão)
     outrosCustos: _pdOutrosCustos.filter(c=>c.valor>0),
     itensComp:    _pdItensComp.filter(i=>(i.desc||'').trim()),
     transporteTipo:  document.getElementById('pd-transp-tipo').value||'fabrica',
@@ -15168,7 +15172,10 @@ function calcDRE(mesAno){
   const recOutra    =soma('rec_outra');
   // Impostos e Deduções = DAS previsto (automático, Simples Anexo I) + eventuais lançamentos manuais.
   const dasPrevisto =_tribCalc(mesAno).dasPrevisto;
-  const ded         =dasPrevisto+soma('ded_imposto');
+  const _dasReg     =_tribReg(mesAno);                                        // A4-07: quando o DAS já foi pago, usa o valor REALIZADO (número concreto), não o estimado
+  const _dasPagoDRE =!!(_dasReg&&_dasReg.dasPago);
+  const dasDRE      =_dasPagoDRE?(_dasReg.dasValorPago||0):dasPrevisto;
+  const ded         =dasDRE+soma('ded_imposto');
   // CPV = manual (lançamentos DRE/contas, com recorrência) + AUTO custo de produção dos pedidos do mês.
   // Auto = fábrica + fornecedores + outros custos, na competência da VENDA (fechamento do lead), alinhado à receita.
   const cpvManual   =soma('cpv');
@@ -15255,7 +15262,7 @@ function calcDRE(mesAno){
   const margemBruta=recLiq>0?lucroBruto/recLiq*100:0;
   const margemOp   =recLiq>0?resultado/recLiq*100:0;
 
-  return {recCRM,recOutra,recBruta,ded,dasPrevisto,recLiq,cpv,cpvManual,cpvPedidos,cpvAT,lucroBruto,
+  return {recCRM,recOutra,recBruta,ded,dasPrevisto,dasDRE,dasPagoDRE:_dasPagoDRE,recLiq,cpv,cpvManual,cpvPedidos,cpvAT,lucroBruto,
           despPessoal,despPessoalOp,despPrestadores,
           cfAluguel,cfEnergia,cfAgua,cfInternet,cfSistema,cfDiarista,cfHigiene,cfManutencao,cfOutras,totalCF,
           cvMkt,cvTaxas,cvOp,cvAdm,cvRH,cvOutras,cvComissao,comEffTotal,cvComProj,cvComSup,cvComMont,totalCV,
@@ -16651,8 +16658,8 @@ function rFinanceiro(){
 
     <div class="dre-sec-hdr"><span>Deduções</span></div>
     <div class="dre-row dre-indent">
-      <span class="dre-lbl sm">DAS — Simples Nacional (estimado)</span>
-      <div class="dre-right"><span class="dre-auto-tag">AUTO</span><span class="dre-val fail">${fmt(d.dasPrevisto)}</span></div>
+      <span class="dre-lbl sm">DAS — Simples Nacional (${d.dasPagoDRE?'pago':'estimado'})</span>
+      <div class="dre-right"><span class="dre-auto-tag">${d.dasPagoDRE?'PAGO':'AUTO'}</span><span class="dre-val fail">${fmt(d.dasDRE)}</span></div>
     </div>
     ${(d.ded-d.dasPrevisto)>0.005?`<div class="dre-row dre-indent">
       <span class="dre-lbl sm">Outros impostos / deduções (manuais)</span>

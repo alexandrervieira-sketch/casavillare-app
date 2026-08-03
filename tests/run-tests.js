@@ -623,6 +623,15 @@ test('A7-07: doc legado sem _uAt não sobrescreve edição local nova', () => {
   assert(T._recWins(cur, recLegado) === true, 'a edição local carimbada sobrevive');
 });
 
+// A4-07 · DRE usa o DAS realizado quando pago
+test('A4-07: DRE usa o DAS pago (realizado), não o estimado', () => {
+  T.ST.tributario = T.ST.tributario || [];
+  T.ST.tributario.push({ competencia: '2047-09', dasPago: true, dasValorPago: 1234.56, dataPagamento: '2047-10-20' });
+  const dre = T.calcDRE('2047-09');
+  assert(Math.abs(dre.dasDRE - 1234.56) < 0.01, 'usa o valor pago');
+  assertEq(dre.dasPagoDRE, true, 'flag de pago');
+});
+
 // ── relatório ──
 console.log('\n=== Testes Casa Villare — lógica crítica ===');
 console.log('Passou: ' + pass + '   Falhou: ' + fail);
