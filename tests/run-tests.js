@@ -80,7 +80,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _mergeCondPgto, _fluxoAReceberMes, _fluxoAPagarMes, _fluxoFabricaMes,
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
-  _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal
+  _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -577,6 +577,15 @@ test('A2-02: pagar o mês do vendedor 2x não duplica', () => {
   const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'vendedor_mes' && x.pessoa === 'Vera' && x.mesRef === '2043-02');
   assertEq(regs.length, 1, 'só 1 registro no mês');
   assertEq(regs[0].data, '2043-03-05', 'A2-03: data do pagamento é a escolhida');
+});
+
+// _sid · onclick seguro NÃO pode corromper id alfanumérico (ped_<leadId> da A7-05) → senão "Não encontrado" ao abrir
+test('_sid: preserva id com letras (ped_<leadId>) e ainda barra caracteres perigosos', () => {
+  assertEq(T._sid('ped_1691234567890000'), 'ped_1691234567890000', 'id de pedido vindo de lead é preservado');
+  assertEq(T._sid('1691234567890000'), '1691234567890000', 'id numérico antigo intacto');
+  assertEq(T._sid('aB3-x_9'), 'aB3-x_9', 'letras, hífen e underscore mantidos');
+  assertEq(T._sid("x')+alert(1)+('"), 'xalert1', 'remove aspas/parênteses (sem quebrar o onclick)');
+  assertEq(T._sid(null), '', 'nulo vira string vazia');
 });
 
 // A2-03 · o valor exibido do PAGO vem do recibo (congelado), não recalcula ao vivo

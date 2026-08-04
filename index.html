@@ -2954,7 +2954,10 @@ function _addMesesData(dataStr, n){
   return alvo.getFullYear()+'-'+String(alvo.getMonth()+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
 }
 // Sanitiza IDs usados em atributos onclick — permite apenas dígitos (todos os IDs são numéricos)
-function _sid(id){ return String(id||'').replace(/\D/g,''); }
+// Sanitiza o id p/ uso seguro dentro de onclick="fn('...')" — mantém o charset real de id (letras/dígitos/_/-)
+// e remove só o que poderia quebrar o atributo (aspas, espaço, <, >, barra). ANTES removia tudo que não era
+// dígito, o que corrompia ids alfanuméricos como 'ped_<leadId>' (A7-05) → "Não encontrado" ao abrir o pedido.
+function _sid(id){ return String(id||'').replace(/[^A-Za-z0-9_-]/g,''); }
 function _esc(s){
   return String(s==null?'':s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
