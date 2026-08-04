@@ -586,6 +586,10 @@ test('_sid: preserva id com letras (ped_<leadId>) e ainda barra caracteres perig
   assertEq(T._sid('aB3-x_9'), 'aB3-x_9', 'letras, hífen e underscore mantidos');
   assertEq(T._sid("x')+alert(1)+('"), 'xalert1', 'remove aspas/parênteses (sem quebrar o onclick)');
   assertEq(T._sid(null), '', 'nulo vira string vazia');
+  // Trava o invariante: nenhum id gerado pelo sistema pode ser alterado por _sid (senão volta o "Não encontrado")
+  const nid = T._newId();
+  assertEq(T._sid(nid), nid, '_newId() nunca é alterado por _sid');
+  assertEq(T._sid('ped_' + nid), 'ped_' + nid, 'id determinístico ped_<...> nunca é alterado por _sid');
 });
 
 // A2-03 · o valor exibido do PAGO vem do recibo (congelado), não recalcula ao vivo
