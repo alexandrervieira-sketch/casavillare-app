@@ -2442,6 +2442,12 @@ textarea.inp{resize:vertical;min-height:68px;}
           </div>
         </div>
       </div>
+      <div style="margin-top:12px;">
+        <label class="lbl">👷 Medidor <span style="font-weight:400;color:var(--gl);">(quem fez a medição — recebe o valor acima; pagamento na aba Comissões)</span></label>
+        <select class="inp" id="pd-medidor" style="margin:0;">
+          <option value="">— Ninguém —</option>
+        </select>
+      </div>
 
       <!-- Resumo financeiro -->
       <div id="pd-resumo-fin" style="display:none;margin-top:14px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;">
@@ -8004,6 +8010,55 @@ function _comSupPagoVal(pd,liveVal){
   return rec?(rec.valor||0):liveVal;
 }
 
+// ── Pagamento da MEDIÇÃO ao medidor (qualquer colaborador) — valor tabelado do pedido; libera ao AVANÇAR da etapa Medição ──
+function _calcComMedicao(pedido){
+  const valor=_round2(_pedMedicao(pedido));                 // p.medicao (70/100/160/outro) = o que se paga ao medidor
+  const idx=_PED_ETAPAS_ORDER.indexOf(pedido.status);
+  const liberada = idx > _PED_ETAPAS_ORDER.indexOf('medicao'); // já passou da etapa Medição (medição foi feita)
+  return {valor, semValor:valor<=0, semMedidor:!pedido.medidor, liberada};
+}
+function comMedPagar(pedId){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor registra pagamento.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p) return;
+  const c=_calcComMedicao(p);
+  if(!p.medidor){ toast('Defina o medidor no pedido antes de pagar.'); return; }
+  if(c.semValor){ toast('Medição sem valor — edite o pedido.'); return; }
+  if(!c.liberada){ toast('Medição ainda não liberada — avance da etapa Medição.'); return; }
+  if(p.medicaoPago){ toast('Medição já paga.'); return; }      // idempotência
+  _comAbrirPagData({ titulo:'💰 Pagamento — medição', sub:(p.medidor+' · '+(p.clienteNome||p.cliente||'')), fn:(dataPg)=>_comMedPagarExec(p,dataPg) });
+}
+function _comMedLedgerPush(p,hoje){
+  const c=_calcComMedicao(p);
+  if(!ST.comPagamentos) ST.comPagamentos=[];
+  const _cpId='commed_'+String(p.id);                          // id DETERMINÍSTICO → união entre dispositivos não duplica
+  _tombClear('comPagamentos',_cpId);
+  ST.comPagamentos=ST.comPagamentos.filter(x=>x.id!==_cpId);
+  ST.comPagamentos.push({ id:_cpId, pessoa:p.medidor, perfil:'medidor', escopo:'medicao',
+    pedidoId:String(p.id), cliente:(p.clienteNome||p.cliente||''),
+    mesRef:hoje.slice(0,7), valor:_round2(c.valor), data:hoje, criadoEm:new Date().toISOString(), _uAt:Date.now() });
+}
+function _comMedPagarExec(p,dataPg){
+  const hoje=dataPg||_hojeLocal();
+  p.medicaoPago=hoje;
+  _comMedLedgerPush(p,hoje);
+  p._uAt=Date.now(); save(); rComissoes();
+}
+function comMedEstornar(pedId){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p||!p.medicaoPago) return;
+  if(!confirm('Desmarcar o pagamento da medição?')) return;
+  delete p.medicaoPago;
+  const recs=(ST.comPagamentos||[]).filter(x=>x.escopo==='medicao'&&x.pedidoId===String(p.id));
+  recs.forEach(rec=>_tombAdd('comPagamentos',rec.id));
+  if(recs.length) ST.comPagamentos=ST.comPagamentos.filter(x=>!recs.some(r=>r.id===x.id));
+  p._uAt=Date.now(); save(); rComissoes();
+}
+// A2-03: valor PAGO exibido = o congelado no recibo (se houver); senão cai no cálculo ao vivo.
+function _comMedPagoVal(pd,liveVal){
+  const rec=(ST.comPagamentos||[]).find(x=>x.escopo==='medicao'&&x.pedidoId===String(pd.id));
+  return rec?(rec.valor||0):liveVal;
+}
+
 function _calcComVendaPontos(desc){
   const d=Math.max(0,Math.min(40,parseFloat(desc)||0));
   // Pontos = 3.0 − (desconto÷10) × 0.3 (fórmula fixa)
@@ -8473,6 +8528,7 @@ function comReciboAbrir(pagId){
   else if(pg.escopo==='projetista_parcela') ref='Comissão de projeto ('+(pg.parcelaLabel||'parcela')+')'+(pg.cliente?' — '+pg.cliente:'');
   else if(pg.escopo==='montador') ref='Comissão de montagem'+(pg.cliente?' — '+pg.cliente:'')+(pg.tipoPag==='parcial'?' (adiantamento)':'');
   else if(pg.escopo==='supervisor') ref='Comissão de supervisão de obras'+(pg.cliente?' — '+pg.cliente:'');
+  else if(pg.escopo==='medicao') ref='Medição do projeto'+(pg.cliente?' — '+pg.cliente:'');
   _gerarReciboDoc({
     valor: pg.valor,
     referente: ref,
@@ -8840,12 +8896,68 @@ function rComissoes(){
     </div>`;
   }
 
+  // ─── MEDIÇÕES (pagamento ao medidor — pode ser qualquer colaborador, por isso seção própria) ──────────
+  if(isG){
+    const pedsMed=(ST.pedidos||[]).filter(pd=>!_pedCancelado(pd)&&pd.medidor&&_pedMedicao(pd)>0);
+    if(pedsMed.length){
+      const porMedidor={};
+      pedsMed.forEach(pd=>{ (porMedidor[pd.medidor]=porMedidor[pd.medidor]||[]).push(pd); });
+      const cardsMed=Object.keys(porMedidor).sort((a,b)=>a.localeCompare(b)).map((nome,i)=>{
+        const lista=porMedidor[nome];
+        const aPagar =lista.filter(pd=>{const c=_calcComMedicao(pd);return c.liberada&&!pd.medicaoPago;});
+        const pagasMes=lista.filter(pd=>pd.medicaoPago&&String(pd.medicaoPago).slice(0,7)===mesStr);
+        const pend    =lista.filter(pd=>!_calcComMedicao(pd).liberada&&!pd.medicaoPago);
+        const totApagar =aPagar.reduce((a,pd)=>a+_calcComMedicao(pd).valor,0);
+        const totPagoMes=pagasMes.reduce((a,pd)=>a+_comMedPagoVal(pd,_calcComMedicao(pd).valor),0);
+        const totPend   =pend.reduce((a,pd)=>a+_calcComMedicao(pd).valor,0);
+        const _linha=(pd)=>{
+          const c=_calcComMedicao(pd), pgd=pd.medicaoPago;
+          const rec=pgd?(ST.comPagamentos||[]).find(x=>x.escopo==='medicao'&&x.pedidoId===String(pd.id)):null;
+          const valExib=pgd?(rec?(rec.valor||0):c.valor):c.valor;
+          const etapaLabel=(PED_ETAPAS.find(e=>e.id===pd.status)||{}).label||pd.status||'';
+          const icon=pgd?'💰':c.liberada?'✅':'🔒';
+          const cor =pgd?'#1D4ED8':c.liberada?'var(--ok)':'#9CA3AF';
+          const ctrl=pgd
+            ? `${rec?`<button onclick="event.stopPropagation();comReciboAbrir('${rec.id}')" title="Ver recibo de pagamento" style="border:1px solid #C7D2FE;background:#fff;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 5px;">🧾</button>`:''}<button onclick="event.stopPropagation();comMedEstornar('${_sid(pd.id)}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`
+            : (c.liberada?`<button onclick="event.stopPropagation();comMedPagar('${_sid(pd.id)}')" title="Registrar pagamento" style="border:1px solid #16A34A;background:#fff;color:#166534;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 6px;">💰 Pagar</button>`:'');
+          return`<div class="com-venda-row" onclick="abrirModalPedido('${_sid(pd.id)}')">
+            <div class="com-venda-info">
+              <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
+              <span class="com-venda-data">${_esc(pd.descricao||'')} · ${etapaLabel}${pgd?' · pago '+_fmtDateBR(pgd):''}</span>
+            </div>
+            <div class="com-venda-vals">
+              <span style="font-size:12.5px;font-weight:700;color:${cor};">${icon} ${fmt(valExib)}</span>
+              ${ctrl}
+            </div>
+          </div>`;
+        };
+        const bloco=(tit,corH,bg,arr)=>arr.length?`<div style="font-size:11px;font-weight:600;color:${corH};text-transform:uppercase;letter-spacing:.4px;padding:8px 14px 4px;background:${bg};border-top:1px solid var(--border);">${tit}</div>${arr.map(_linha).join('')}`:'';
+        return `<div class="com-card-v2">
+          <div class="com-card-top">
+            <div class="com-avatar" style="background:${avatarCor(i)};">${iniciais(nome)}</div>
+            <div style="flex:1;"><div class="com-name">📏 ${_esc(nome)}</div><div class="com-role">Medidor</div></div>
+          </div>
+          <div class="com-resumo-row">
+            <div class="com-resumo-item"><div class="com-resumo-lbl">✅ A pagar</div><div class="com-resumo-val" style="color:var(--ok);">${fmt(totApagar)}</div></div>
+            <div class="com-resumo-item"><div class="com-resumo-lbl">💰 Pago (mês)</div><div class="com-resumo-val" style="color:#1D4ED8;">${fmt(totPagoMes)}</div></div>
+            <div class="com-resumo-item"><div class="com-resumo-lbl">🔒 A liberar</div><div class="com-resumo-val" style="color:#9CA3AF;">${fmt(totPend)}</div></div>
+          </div>
+          <div class="com-vendas-list" style="margin-top:12px;">${bloco('✅ A pagar','#166534','#F0FFF4',aPagar)}${bloco('💰 Pagas — '+_comMesRefLabel(mesStr),'#1D4ED8','#EFF6FF',pagasMes)}${bloco('🔒 A liberar — aguardando avançar da Medição','#92400E','#FFFBEB',pend)}</div>
+        </div>`;
+      }).join('');
+      html+=`<div class="com-section">
+        <div class="com-section-title">📏 Medições <span style="font-weight:400;color:var(--gl);font-size:12px;">(pagamento ao medidor)</span></div>
+        <div style="display:flex;flex-direction:column;gap:16px;">${cardsMed}</div>
+      </div>`;
+    }
+  }
+
   // ─── RECIBOS DE PAGAMENTO DO MÊS (todos os papéis) ──────────
   if(isG){
     const pagsMes=(ST.comPagamentos||[]).filter(pg=>(pg.data||'').startsWith(mesStr)).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
     if(pagsMes.length){
       const totalPagsMes=pagsMes.reduce((a,pg)=>a+(pg.valor||0),0);
-      const papelIcon={vendedor:'🎯',projetista:'✏️',montador:'🔧',supervisor:'👷'};
+      const papelIcon={vendedor:'🎯',projetista:'✏️',montador:'🔧',supervisor:'👷',medidor:'📏'};
       const linhas=pagsMes.map(pg=>`<div class="com-venda-row" style="cursor:default;">
         <div class="com-venda-info">
           <span class="com-venda-cliente">${papelIcon[pg.perfil]||'💰'} ${_esc(pg.pessoa)}</span>
@@ -8892,6 +9004,7 @@ function _comReciboRefCurta(pg){
   if(pg.escopo==='projetista_parcela') return 'Projeto '+(pg.parcelaLabel||'')+(pg.cliente?' · '+pg.cliente:'');
   if(pg.escopo==='montador') return 'Montagem'+(pg.cliente?' · '+pg.cliente:'')+(pg.tipoPag==='parcial'?' (adiant.)':'');
   if(pg.escopo==='supervisor') return 'Supervisão'+(pg.cliente?' · '+pg.cliente:'');
+  if(pg.escopo==='medicao') return 'Medição'+(pg.cliente?' · '+pg.cliente:'');
   return 'Comissão';
 }
 // ── Relatório de COMISSÕES PAGAS do mês selecionado (do ledger comPagamentos) — imprimível/PDF ──
@@ -14146,6 +14259,12 @@ function abrirModalPedido(id){
   document.getElementById('pd-montador').innerHTML=
     '<option value="">— Nenhum —</option>'+
     montadores.map(p=>_mkOpt(p)).join('');
+  // Medidor = qualquer colaborador (todas as áreas da equipe), sem repetir, escondendo desligados (menos o já vinculado)
+  const _medTodos=[...(ST.equipe.obras||[]),...(ST.equipe.gestor||[]),...(ST.equipe.comercial||[]),...(ST.equipe.outros||[])];
+  const medidores=_medTodos.filter((p,i,arr)=>arr.findIndex(x=>x.nome===p.nome)===i && (!_estaDesligado(p.nome)||p.nome===_pdCur.medidor));
+  document.getElementById('pd-medidor').innerHTML=
+    '<option value="">— Ninguém —</option>'+
+    medidores.map(p=>_mkOpt(p,iconeFunc(p.perfil)+' ')).join('');
   const leadsAtivos=(ST.leads||[]).filter(l=>l.status!=='perdido');
   document.getElementById('pd-lead').innerHTML=
     '<option value="">— Sem vínculo —</option>'+
@@ -14185,6 +14304,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-resp').value           =p.responsavel||'';
     document.getElementById('pd-projetista').value     =p.projetista||'';
     document.getElementById('pd-montador').value       =p.montador||'';
+    document.getElementById('pd-medidor').value        =p.medidor||'';
     document.getElementById('pd-fornecedor').value     =p.fornecedor||'';
     document.getElementById('pd-valor-fab').value      =_fmtInputBRL(p.valorFabrica);
     document.getElementById('pd-valor').value          =_fmtInputBRL(_pedValorVendaCRM(p)); // puxa do contrato/CRM
@@ -14308,6 +14428,7 @@ function salvarPedido(){
     responsavel:  document.getElementById('pd-resp').value,
     projetista:   document.getElementById('pd-projetista').value||'',
     montador:     document.getElementById('pd-montador').value||'',
+    medidor:      document.getElementById('pd-medidor').value||'',
     fornecedor:   document.getElementById('pd-fornecedor').value.trim(),
     valorFabrica: _parseBRL(document.getElementById('pd-valor-fab').value),
     valor:        _parseBRL(document.getElementById('pd-valor').value),
@@ -14368,6 +14489,8 @@ function salvarPedido(){
     if(prev.nfe!==undefined) pedido.nfe = prev.nfe;
     if(prev.nfeHist!==undefined) pedido.nfeHist = prev.nfeHist; // preserva o histórico de notas canceladas (reabrir p/ emitir)
     if(prev.comProjPago!==undefined) pedido.comProjPago = prev.comProjPago; // preserva o registro de pagamento da comissão da projetista (o form não gerencia)
+    if(prev.comSupPago!==undefined)  pedido.comSupPago  = prev.comSupPago;  // preserva pagamento da comissão do supervisor
+    if(prev.medicaoPago!==undefined) pedido.medicaoPago = prev.medicaoPago; // preserva pagamento da medição (o form não gerencia)
     _pedBackfillMarcos(pedido); // carimba todos os marcos já atingidos (inclusive se a etapa foi pulada)
     ST.pedidos[idx]=pedido;
   } else {

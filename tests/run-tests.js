@@ -80,7 +80,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _mergeCondPgto, _fluxoAReceberMes, _fluxoAPagarMes, _fluxoFabricaMes,
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
-  _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid
+  _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
+  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -590,6 +591,40 @@ test('_sid: preserva id com letras (ped_<leadId>) e ainda barra caracteres perig
   const nid = T._newId();
   assertEq(T._sid(nid), nid, '_newId() nunca é alterado por _sid');
   assertEq(T._sid('ped_' + nid), 'ped_' + nid, 'id determinístico ped_<...> nunca é alterado por _sid');
+});
+
+// Medição · libera só ao AVANÇAR da etapa Medição; pagamento idempotente, congela valor, estorna
+test('Medição: só libera depois de avançar da etapa Medição', () => {
+  const na = { id: 'Pm1', medidor: 'Zé', medicao: 100, status: 'medicao' };
+  const ok = { id: 'Pm2', medidor: 'Zé', medicao: 100, status: 'proj_exec' };
+  assertEq(T._calcComMedicao(na).liberada, false, 'ainda em Medição = não libera');
+  assertEq(T._calcComMedicao(ok).liberada, true, 'avançou da Medição = libera');
+  assertEq(T._calcComMedicao(ok).valor, 100, 'valor = tabela da medição do pedido');
+});
+test('Medição: pagar cria 1 registro no ledger (idempotente), marca medicaoPago e congela o valor', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = []; T._tombClear('comPagamentos', 'commed_Pm3');
+  T.ST.pedidos = [{ id: 'Pm3', medidor: 'Zé Medidor', medicao: 160, status: 'proj_exec' }];
+  const _p = T.ST.pedidos.find(x => x.id === 'Pm3');
+  T._comMedPagarExec(_p, '2050-02-10'); T._comMedPagarExec(_p, '2050-02-10'); // 2× (duplo-clique)
+  const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'medicao' && x.pedidoId === 'Pm3');
+  assertEq(regs.length, 1, 'só 1 registro');
+  assertEq(regs[0].id, 'commed_Pm3', 'id determinístico');
+  assertEq(regs[0].valor, 160, 'valor congelado = medição');
+  assertEq(regs[0].pessoa, 'Zé Medidor', 'pago ao medidor');
+  assertEq(_p.medicaoPago, '2050-02-10', 'carimba medicaoPago');
+  _p.medicao = 999; // edita a medição depois de pago
+  assertEq(T._comMedPagoVal(_p, 999), 160, 'exibe o valor do recibo, não o novo');
+});
+test('Medição: estornar tombstona o ledger e limpa medicaoPago', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = []; T._tombClear('comPagamentos', 'commed_Pm4');
+  T.ST.pedidos = [{ id: 'Pm4', medidor: 'Zé', medicao: 70, status: 'concluido' }];
+  const _p = T.ST.pedidos.find(x => x.id === 'Pm4');
+  T._comMedPagarExec(_p, '2050-03-10');
+  _confirmReturn = true;
+  T.comMedEstornar('Pm4');
+  assertEq((T.ST.comPagamentos || []).filter(x => x.escopo === 'medicao' && x.pedidoId === 'Pm4').length, 0, 'ledger limpo');
+  assert(T._tombHas('comPagamentos', 'commed_Pm4'), 'tombstone gravado');
+  assert(!_p.medicaoPago, 'medicaoPago removido');
 });
 
 // A2-03 · o valor exibido do PAGO vem do recibo (congelado), não recalcula ao vivo
