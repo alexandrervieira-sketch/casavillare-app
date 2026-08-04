@@ -7894,11 +7894,9 @@ function comProjPagar(pedId,parc){
   if(p.comProjPago[parc]){ toast('Parcela já paga.'); return; } // A2-01: idempotência (não repaga/duplica)
   _comAbrirPagData({ titulo:'💰 Pagamento — projetista', sub:(p.clienteNome||p.cliente||''), fn:(dataPg)=>_comProjPagarExec(p,parc,dataPg) });
 }
-function _comProjPagarExec(p,parc,dataPg){
-  if(!p.comProjPago||typeof p.comProjPago!=='object') p.comProjPago={};
-  const hoje=dataPg||_hojeLocal();
-  p.comProjPago[parc]=hoje;
-  // Ledger p/ recibo — id DETERMINÍSTICO: 2 dispositivos geram o mesmo id → união não duplica (A2-01/A7-02)
+// Grava o recibo (ledger) da parcela — id DETERMINÍSTICO: 2 dispositivos geram o mesmo id → união não duplica (A2-01/A7-02).
+// Congela o VALOR pago no momento do pagamento (A2-03): o card e os totais passam a exibir este valor, não o recálculo ao vivo.
+function _comProjLedgerPush(p,parc,hoje){
   const c=_calcComProjetista(p), info=_PARC_PROJ_INFO[parc]||['parcela','comA'];
   if(!ST.comPagamentos) ST.comPagamentos=[];
   const _cpId='compp_'+String(p.id)+'_'+parc;
@@ -7907,6 +7905,17 @@ function _comProjPagarExec(p,parc,dataPg){
   ST.comPagamentos.push({ id:_cpId, pessoa:p.projetista, perfil:'projetista', escopo:'projetista_parcela',
     pedidoId:String(p.id), parcela:parc, parcelaLabel:info[0], cliente:(p.clienteNome||p.cliente||''),
     mesRef:hoje.slice(0,7), valor:_round2(c[info[1]]), data:hoje, criadoEm:new Date().toISOString(), _uAt:Date.now() });
+}
+// A2-03: valor PAGO exibido = o congelado no recibo (se houver); senão cai no cálculo ao vivo (parcelas legadas).
+function _comProjPagoVal(pd,parc,liveVal){
+  const rec=(ST.comPagamentos||[]).find(x=>x.escopo==='projetista_parcela'&&x.pedidoId===String(pd.id)&&x.parcela===parc);
+  return rec?(rec.valor||0):liveVal;
+}
+function _comProjPagarExec(p,parc,dataPg){
+  if(!p.comProjPago||typeof p.comProjPago!=='object') p.comProjPago={};
+  const hoje=dataPg||_hojeLocal();
+  p.comProjPago[parc]=hoje;
+  _comProjLedgerPush(p,parc,hoje);
   p._uAt=Date.now(); save(); rComissoes();
 }
 function comProjEstornar(pedId,parc){
@@ -7928,7 +7937,7 @@ function comProjQuitarTudo(encNome){
   (ST.pedidos||[]).filter(pd=>pd.projetista===nome).forEach(pd=>{
     const c=_calcComProjetista(pd);
     if(!pd.comProjPago||typeof pd.comProjPago!=='object') pd.comProjPago={};
-    [['A','libA'],['B','libB'],['C','libC']].forEach(([k,lk])=>{ if(c[lk]&&!pd.comProjPago[k]){ pd.comProjPago[k]=_hojeLocal(); n++; } });
+    [['A','libA'],['B','libB'],['C','libC']].forEach(([k,lk])=>{ if(c[lk]&&!pd.comProjPago[k]){ const hoje=_hojeLocal(); pd.comProjPago[k]=hoje; _comProjLedgerPush(pd,k,hoje); n++; } });
     pd._uAt=Date.now();
   });
   save(); rComissoes(); toast('✅ '+n+' parcela(s) marcada(s) como paga(s).');
@@ -7947,6 +7956,48 @@ function _calcComSupervisor(pedido){
   // Mês: quando ficou concluído ou data do pedido
   const mesAno=(pedido.status==='concluido'?(pedido.statusChangedAt||pedido.dateConcluido||pedido.data||''):(pedido.data||'')).substring(0,7);
   return {valorBase, valorCom, visivel, bloqueada, liberada, semValor, mesAno};
+}
+// ── Pagamento da comissão do supervisor (A2-08): 1% por pedido concluído, com DATA e recibo, por PAPEL (funciona para quem ocupar a vaga) ──
+// Guarda a data em pedido.comSupPago e grava o ledger (escopo 'supervisor'). Só o gestor registra. Espelha o fluxo da projetista.
+function comSupPagar(pedId){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor registra pagamento.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p) return;
+  const c=_calcComSupervisor(p);
+  if(!c.liberada){ toast('Comissão ainda não liberada — o pedido precisa estar Concluído.'); return; }
+  if(p.comSupPago){ toast('Comissão já paga.'); return; }           // idempotência (não repaga/duplica)
+  if(c.semValor){ toast('Pedido sem valor — edite o pedido antes.'); return; }
+  _comAbrirPagData({ titulo:'💰 Pagamento — supervisor', sub:(p.clienteNome||p.cliente||''), fn:(dataPg)=>_comSupPagarExec(p,dataPg) });
+}
+function _comSupLedgerPush(p,hoje){
+  const c=_calcComSupervisor(p);
+  if(!ST.comPagamentos) ST.comPagamentos=[];
+  const _cpId='comsup_'+String(p.id);                              // id DETERMINÍSTICO → união entre dispositivos não duplica
+  _tombClear('comPagamentos',_cpId);
+  ST.comPagamentos=ST.comPagamentos.filter(x=>x.id!==_cpId);
+  ST.comPagamentos.push({ id:_cpId, pessoa:p.responsavel, perfil:'supervisor', escopo:'supervisor',
+    pedidoId:String(p.id), cliente:(p.clienteNome||p.cliente||''),
+    mesRef:hoje.slice(0,7), valor:_round2(c.valorCom), data:hoje, criadoEm:new Date().toISOString(), _uAt:Date.now() });
+}
+function _comSupPagarExec(p,dataPg){
+  const hoje=dataPg||_hojeLocal();
+  p.comSupPago=hoje;
+  _comSupLedgerPush(p,hoje);
+  p._uAt=Date.now(); save(); rComissoes();
+}
+function comSupEstornar(pedId){
+  if(ST.perfil!=='gestor'){ toast('🔒 Só o gestor.'); return; }
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(pedId)); if(!p||!p.comSupPago) return;
+  if(!confirm('Desmarcar o pagamento da comissão do supervisor?')) return;
+  delete p.comSupPago;
+  const recs=(ST.comPagamentos||[]).filter(x=>x.escopo==='supervisor'&&x.pedidoId===String(p.id)); // tombstona TODOS
+  recs.forEach(rec=>_tombAdd('comPagamentos',rec.id));
+  if(recs.length) ST.comPagamentos=ST.comPagamentos.filter(x=>!recs.some(r=>r.id===x.id));
+  p._uAt=Date.now(); save(); rComissoes();
+}
+// A2-03: valor PAGO exibido = o congelado no recibo (se houver); senão cai no cálculo ao vivo.
+function _comSupPagoVal(pd,liveVal){
+  const rec=(ST.comPagamentos||[]).find(x=>x.escopo==='supervisor'&&x.pedidoId===String(pd.id));
+  return rec?(rec.valor||0):liveVal;
 }
 
 function _calcComVendaPontos(desc){
@@ -8417,6 +8468,7 @@ function comReciboAbrir(pagId){
   if(pg.escopo==='vendedor_mes') ref='Comissão de vendas — '+_comMesRefLabel(pg.mesRef);
   else if(pg.escopo==='projetista_parcela') ref='Comissão de projeto ('+(pg.parcelaLabel||'parcela')+')'+(pg.cliente?' — '+pg.cliente:'');
   else if(pg.escopo==='montador') ref='Comissão de montagem'+(pg.cliente?' — '+pg.cliente:'')+(pg.tipoPag==='parcial'?' (adiantamento)':'');
+  else if(pg.escopo==='supervisor') ref='Comissão de supervisão de obras'+(pg.cliente?' — '+pg.cliente:'');
   _gerarReciboDoc({
     valor: pg.valor,
     referente: ref,
@@ -8617,46 +8669,58 @@ function rComissoes(){
       const comsMan=(ST.comissoes||[]).filter(c=>c.pessoa===p.nome&&c.mesAno===mesStr);
       const totalMan=comsMan.reduce((a,c)=>a+(c.valor||0),0);
 
-      // Comissão supervisor: 1% do valor líquido (lead ou pedido.valor)
+      // Comissão supervisor: 1% do valor líquido (por pedido), com pagamento por PAPEL (A2-08)
       const isSup=p.perfil==='supervisor';
       const pedidosSup=isSup?(ST.pedidos||[]).filter(pd=>pd.responsavel===p.nome):[];
-      // Liberadas = concluídas no mês selecionado
-      const pedsLib     =pedidosSup.filter(pd=>pd.status==='concluido'&&(_calcComSupervisor(pd).mesAno===mesStr));
+      // A pagar = liberadas (Concluído) ainda NÃO pagas (persistem entre meses até serem pagas)
+      const pedsLib     =pedidosSup.filter(pd=>_calcComSupervisor(pd).liberada&&!pd.comSupPago);
+      // Pagas neste mês (pela DATA do pagamento)
+      const pedsPagasMes=pedidosSup.filter(pd=>pd.comSupPago&&String(pd.comSupPago).slice(0,7)===mesStr);
       // A receber = montagem/vistoria/assistência (bloqueadas — comprometidas, ainda não liberadas)
       const pedsBloq    =pedidosSup.filter(pd=>_calcComSupervisor(pd).bloqueada);
       // Em andamento = etapas antes de montagem
       const pedsAndamento=pedidosSup.filter(pd=>pd.status!=='concluido'&&!_calcComSupervisor(pd).bloqueada);
 
       const totalSupLib    =pedsLib.reduce((a,pd)=>a+_calcComSupervisor(pd).valorCom,0);
+      const totalSupPagoMes=pedsPagasMes.reduce((a,pd)=>a+_comSupPagoVal(pd,_calcComSupervisor(pd).valorCom),0); // A2-03: valor do recibo
       const totalAReceber  =pedsBloq.reduce((a,pd)=>a+_calcComSupervisor(pd).valorCom,0);
       const totalAndamento =pedsAndamento.reduce((a,pd)=>a+_calcComSupervisor(pd).valorCom,0);
-      const totalGeral     =totalMan+totalSupLib;
       const pedsPend       =[...pedsBloq,...pedsAndamento];
       if(!_ativoNoMes(p.nome, mesStr)) return ''; // desligado: some do mês seguinte à demissão em diante (passado preservado)
 
       const _linhasPed=(lista)=>lista.map(pd=>{
         const c=_calcComSupervisor(pd);
         const etapaLabel=(PED_ETAPAS.find(e=>e.id===pd.status)||{}).label||pd.status||'';
-        const icon=c.liberada?'✅':c.bloqueada?'🔒':'💰';
-        const cor =c.liberada?'var(--ok)':c.bloqueada?'#92400E':'#6B7280';
+        const pgd=pd.comSupPago;
+        const recSup=pgd?(ST.comPagamentos||[]).find(x=>x.escopo==='supervisor'&&x.pedidoId===String(pd.id)):null;
+        const valExib=pgd?(recSup?(recSup.valor||0):c.valorCom):c.valorCom; // A2-03: pago → valor congelado no recibo
+        const icon=pgd?'💰':c.bloqueada?'🔒':c.liberada?'✅':'💰';
+        const cor =pgd?'#1D4ED8':c.bloqueada?'#92400E':c.liberada?'var(--ok)':'#6B7280';
+        const ctrl=pgd
+          ? `${recSup?`<button onclick="event.stopPropagation();comReciboAbrir('${recSup.id}')" title="Ver recibo de pagamento" style="border:1px solid #C7D2FE;background:#fff;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 5px;">🧾</button>`:''}${isG?`<button onclick="event.stopPropagation();comSupEstornar('${_sid(pd.id)}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`:''}`
+          : (c.liberada&&isG?`<button onclick="event.stopPropagation();comSupPagar('${_sid(pd.id)}')" title="Registrar pagamento" style="border:1px solid #16A34A;background:#fff;color:#166534;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 6px;">💰 Pagar</button>`:'');
         return`<div class="com-venda-row" onclick="abrirModalPedido('${_sid(pd.id)}')">
           <div class="com-venda-info">
             <span class="com-venda-cliente">${_esc(pd.clienteNome||pd.cliente||'—')}</span>
-            <span class="com-venda-data">${_esc(pd.descricao||'')} · ${etapaLabel}</span>
+            <span class="com-venda-data">${_esc(pd.descricao||'')} · ${etapaLabel}${pgd?' · pago '+_fmtDateBR(pgd):''}</span>
           </div>
           <div class="com-venda-vals">
             ${c.semValor
               ?`<span style="font-size:11px;color:var(--fail);">⚠️ Sem valor — edite o pedido</span>`
               :`<span class="com-venda-bruto">${fmt(c.valorBase)}</span>
                <span class="com-venda-pct">1%</span>
-               <span style="font-size:12.5px;font-weight:700;color:${cor};">${icon} ${fmt(c.valorCom)}</span>`}
+               <span style="font-size:12.5px;font-weight:700;color:${cor};">${icon} ${fmt(valExib)}</span>
+               ${ctrl}`}
           </div>
         </div>`;
       }).join('');
 
       const blocoLib     =pedsLib.length?`
-        <div style="font-size:11px;font-weight:600;color:#166534;text-transform:uppercase;letter-spacing:.4px;padding:8px 14px 4px;background:#F0FFF4;border-top:1px solid var(--border);">✅ Liberadas — ${new Date(ano,mes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div>
+        <div style="font-size:11px;font-weight:600;color:#166534;text-transform:uppercase;letter-spacing:.4px;padding:8px 14px 4px;background:#F0FFF4;border-top:1px solid var(--border);">✅ A pagar — liberadas</div>
         ${_linhasPed(pedsLib)}`:'';
+      const blocoPagas   =pedsPagasMes.length?`
+        <div style="font-size:11px;font-weight:600;color:#1D4ED8;text-transform:uppercase;letter-spacing:.4px;padding:8px 14px 4px;background:#EFF6FF;border-top:1px solid var(--border);">💰 Pagas — ${new Date(ano,mes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div>
+        ${_linhasPed(pedsPagasMes)}`:'';
       const blocoBloq    =pedsBloq.length?`
         <div style="font-size:11px;font-weight:600;color:#92400E;text-transform:uppercase;letter-spacing:.4px;padding:8px 14px 4px;background:#FFFBEB;border-top:1px solid var(--border);">🔒 Bloqueadas — aguardando Concluído</div>
         ${_linhasPed(pedsBloq)}`:'';
@@ -8664,8 +8728,8 @@ function rComissoes(){
         <div style="font-size:11px;font-weight:600;color:var(--gl);text-transform:uppercase;letter-spacing:.4px;padding:8px 14px 4px;background:#F9F8F6;border-top:1px solid var(--border);">💰 Em andamento</div>
         ${_linhasPed(pedsAndamento)}`:'';
 
-      const linhasPed=isSup&&(pedsLib.length||pedsPend.length)?`
-        <div class="com-vendas-list" style="margin-top:12px;">${blocoLib}${blocoBloq}${blocoAndamento}</div>`
+      const linhasPed=isSup&&(pedsLib.length||pedsPagasMes.length||pedsPend.length)?`
+        <div class="com-vendas-list" style="margin-top:12px;">${blocoLib}${blocoPagas}${blocoBloq}${blocoAndamento}</div>`
         :(isSup?`<div style="font-size:12px;color:var(--gl);margin-top:10px;text-align:center;">Nenhum pedido atribuído.</div>`:'');
 
       // ── Projetista ──
@@ -8681,7 +8745,7 @@ function rComissoes(){
           _parcs.forEach(pa=>{ const val=c[pa[2]], lib=c[pa[3]], k=pa[0];
             if(k==='C'&&c.retidoC){ totalRetido+=val; return; }
             if(!lib){ totalPend+=val; return; }
-            if(pago[k]){ if(String(pago[k]).slice(0,7)===mesStr) totalPago+=val; return; } // pago: conta no "Pago (mês)" só se foi neste mês
+            if(pago[k]){ if(String(pago[k]).slice(0,7)===mesStr) totalPago+=_comProjPagoVal(pd,k,val); return; } // A2-03: soma o valor CONGELADO no recibo (não recalcula)
             totalApagar+=val; });
         });
         // Só mostra projetos que ainda têm parcela A PAGAR ou PENDENTE (os totalmente pagos somem)
@@ -8693,7 +8757,8 @@ function rComissoes(){
           if(k==='C'&&c.retidoC) return `<span style="font-size:11px;color:#9F1239;background:#FFE4E6;padding:2px 6px;border-radius:4px;" title="Retido — assistência técnica por Erro da Loja (setor Projetos)">🚫 ${lbl} ${fmt(val)} retido</span>`;
           if(!lib) return `<span style="font-size:11px;color:#9CA3AF;background:#F3F4F6;padding:2px 6px;border-radius:4px;">🔒 ${lbl} ${fmt(val)}</span>`;
           if(pg){ const recPg=(ST.comPagamentos||[]).find(x=>x.escopo==='projetista_parcela'&&x.pedidoId===String(pd.id)&&x.parcela===k);
-            return `<span style="font-size:11px;color:#1D4ED8;background:#DBEAFE;padding:2px 6px;border-radius:4px;" title="Pago em ${_fmtDateBR(pg)}">💰 ${lbl} ${fmt(val)}</span>${recPg?`<button onclick="event.stopPropagation();comReciboAbrir('${recPg.id}')" title="Ver recibo de pagamento" style="border:1px solid #C7D2FE;background:#fff;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 5px;">🧾</button>`:''}${isG?`<button onclick="event.stopPropagation();comProjEstornar('${_sid(pd.id)}','${k}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`:''}`; }
+            const pagoVal=recPg?(recPg.valor||0):val; // A2-03: mostra o valor do recibo (congelado), não o recálculo ao vivo
+            return `<span style="font-size:11px;color:#1D4ED8;background:#DBEAFE;padding:2px 6px;border-radius:4px;" title="Pago em ${_fmtDateBR(pg)}">💰 ${lbl} ${fmt(pagoVal)}</span>${recPg?`<button onclick="event.stopPropagation();comReciboAbrir('${recPg.id}')" title="Ver recibo de pagamento" style="border:1px solid #C7D2FE;background:#fff;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 5px;">🧾</button>`:''}${isG?`<button onclick="event.stopPropagation();comProjEstornar('${_sid(pd.id)}','${k}')" title="Desmarcar pagamento" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9CA3AF;padding:0 2px;">↩</button>`:''}`; }
           return `<span style="font-size:11px;color:#166534;background:#DCFCE7;padding:2px 6px;border-radius:4px;">✅ ${lbl} ${fmt(val)}</span>${isG?`<button onclick="event.stopPropagation();comProjPagar('${_sid(pd.id)}','${k}')" title="Registrar pagamento desta parcela" style="border:1px solid #16A34A;background:#fff;color:#166534;cursor:pointer;font-size:10px;border-radius:4px;padding:1px 6px;">💰 Pagar</button>`:''}`;
         };
         const linhasPedProj=pedsAtivos.map(pd=>{
@@ -8740,8 +8805,12 @@ function rComissoes(){
         ${isProj?projHtml:isSup?`
         <div class="com-resumo-row">
           <div class="com-resumo-item">
-            <div class="com-resumo-lbl">✅ Liberado (mês)</div>
+            <div class="com-resumo-lbl">✅ A pagar</div>
             <div class="com-resumo-val" style="color:var(--ok);">${fmt(totalSupLib)}</div>
+          </div>
+          <div class="com-resumo-item">
+            <div class="com-resumo-lbl">💰 Pago (mês)</div>
+            <div class="com-resumo-val" style="color:#1D4ED8;">${fmt(totalSupPagoMes)}</div>
           </div>
           <div class="com-resumo-item">
             <div class="com-resumo-lbl">🔒 A receber</div>
@@ -8818,6 +8887,7 @@ function _comReciboRefCurta(pg){
   if(pg.escopo==='vendedor_mes') return 'Comissão de vendas';
   if(pg.escopo==='projetista_parcela') return 'Projeto '+(pg.parcelaLabel||'')+(pg.cliente?' · '+pg.cliente:'');
   if(pg.escopo==='montador') return 'Montagem'+(pg.cliente?' · '+pg.cliente:'')+(pg.tipoPag==='parcial'?' (adiant.)':'');
+  if(pg.escopo==='supervisor') return 'Supervisão'+(pg.cliente?' · '+pg.cliente:'');
   return 'Comissão';
 }
 // ── Relatório de COMISSÕES PAGAS do mês selecionado (do ledger comPagamentos) — imprimível/PDF ──

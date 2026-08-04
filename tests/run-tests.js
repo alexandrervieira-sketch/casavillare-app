@@ -79,7 +79,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE,
   _mergeCondPgto, _fluxoAReceberMes, _fluxoAPagarMes, _fluxoFabricaMes,
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
-  _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon
+  _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
+  _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -576,6 +577,60 @@ test('A2-02: pagar o mês do vendedor 2x não duplica', () => {
   const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'vendedor_mes' && x.pessoa === 'Vera' && x.mesRef === '2043-02');
   assertEq(regs.length, 1, 'só 1 registro no mês');
   assertEq(regs[0].data, '2043-03-05', 'A2-03: data do pagamento é a escolhida');
+});
+
+// A2-03 · o valor exibido do PAGO vem do recibo (congelado), não recalcula ao vivo
+test('A2-03: valor pago do projetista fica congelado no recibo (não muda ao editar a venda)', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = [];
+  T.ST.leads = [{ id: 'Lfz', status: 'ganho', valor: 100000, desconto: 0 }];
+  T.ST.pedidos = [{ id: 'Pfz', leadId: 'Lfz', projetista: 'Ana', status: 'concluido', dateExecAssn: '2046-01-05' }];
+  const _p = T.ST.pedidos.find(x => x.id === 'Pfz');
+  T._comProjPagarExec(_p, 'A', '2046-01-20');
+  const rec = (T.ST.comPagamentos || []).find(x => x.escopo === 'projetista_parcela' && x.pedidoId === 'Pfz' && x.parcela === 'A');
+  const congelado = rec.valor;
+  assert(congelado > 0, 'gravou valor no recibo');
+  // simula edição da venda depois de pago (valor muda o cálculo ao vivo)
+  T.ST.leads[0].valor = 500000;
+  assertEq(T._comProjPagoVal(_p, 'A', 99999), congelado, 'exibe o valor do recibo, ignora o live/fallback');
+});
+
+// A2-08 · pagamento da comissão do supervisor: idempotente, com ledger e recibo, por PAPEL
+test('A2-08: pagar supervisor cria 1 registro no ledger (idempotente) e marca comSupPago', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = []; T._tombClear('comPagamentos', 'comsup_Psup');
+  T.ST.leads = [{ id: 'Lsup', status: 'ganho', valor: 200000, desconto: 0 }];
+  T.ST.pedidos = [{ id: 'Psup', leadId: 'Lsup', responsavel: 'Rodrigo', status: 'concluido', dateConcluido: '2047-04-10' }];
+  const _p = T.ST.pedidos.find(x => x.id === 'Psup');
+  T._comSupPagarExec(_p, '2047-04-15'); T._comSupPagarExec(_p, '2047-04-15'); // 2× (duplo-clique)
+  const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'supervisor' && x.pedidoId === 'Psup');
+  assertEq(regs.length, 1, 'só 1 registro no ledger');
+  assertEq(regs[0].id, 'comsup_Psup', 'id determinístico por pedido');
+  assertEq(regs[0].perfil, 'supervisor', 'escopo/perfil supervisor');
+  assertEq(regs[0].data, '2047-04-15', 'data do pagamento é a escolhida');
+  assertEq(_p.comSupPago, '2047-04-15', 'pedido carimba comSupPago');
+  assert(regs[0].valor > 0, 'valor do recibo > 0');
+});
+test('A2-08: estornar supervisor tombstona o ledger e limpa comSupPago', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = []; T._tombClear('comPagamentos', 'comsup_Pest');
+  T.ST.leads = [{ id: 'Lest', status: 'ganho', valor: 120000, desconto: 0 }];
+  T.ST.pedidos = [{ id: 'Pest', leadId: 'Lest', responsavel: 'Rodrigo', status: 'concluido', dateConcluido: '2048-05-10' }];
+  const _p = T.ST.pedidos.find(x => x.id === 'Pest');
+  T._comSupPagarExec(_p, '2048-05-15');
+  _confirmReturn = true; // gestor confirma o estorno
+  T.comSupEstornar('Pest');
+  const regs = (T.ST.comPagamentos || []).filter(x => x.escopo === 'supervisor' && x.pedidoId === 'Pest');
+  assertEq(regs.length, 0, 'ledger limpo após estorno');
+  assert(T._tombHas('comPagamentos', 'comsup_Pest'), 'tombstone gravado (não ressuscita na união)');
+  assert(!_p.comSupPago, 'comSupPago removido');
+});
+test('A2-03: valor pago do supervisor fica congelado no recibo', () => {
+  T.ST.perfil = 'gestor'; T.ST.comPagamentos = []; T._tombClear('comPagamentos', 'comsup_Pcong');
+  T.ST.leads = [{ id: 'Lcong', status: 'ganho', valor: 150000, desconto: 0 }];
+  T.ST.pedidos = [{ id: 'Pcong', leadId: 'Lcong', responsavel: 'Rodrigo', status: 'concluido', dateConcluido: '2049-06-10' }];
+  const _p = T.ST.pedidos.find(x => x.id === 'Pcong');
+  T._comSupPagarExec(_p, '2049-06-15');
+  const congelado = (T.ST.comPagamentos || []).find(x => x.id === 'comsup_Pcong').valor;
+  T.ST.leads[0].valor = 900000; // edita a venda depois de pago
+  assertEq(T._comSupPagoVal(_p, 88888), congelado, 'exibe o valor do recibo, não o live/fallback');
 });
 
 // A5-03 · CPV não conta pedido de venda que não se concretizou (lead perdido/cancelado)
