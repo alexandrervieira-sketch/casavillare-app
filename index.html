@@ -9225,7 +9225,7 @@ function rConfig(){
         const cfg=(ST.configs||{})[p.nome]||{};
         return `<div class="cfg-row">
           <div style="flex:1;">
-            <div class="cfg-name">${iconeFunc(p.perfil)} ${_esc(p.nome)}${p.perfil==='montador'&&!cfg.salarioBase?' <span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:8px;font-weight:600;" title="Montador freelance — sem salário/ajuda de custo mensal">🔧 Freelance</span>':''}</div>
+            <div class="cfg-name">${iconeFunc(p.perfil)} ${_esc(p.nome)}${(p.perfil==='montador'||p.perfil==='projetista')&&!cfg.salarioBase?' <span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:8px;font-weight:600;" title="Freelance — sem salário/ajuda de custo mensal fixo">🔧 Freelance</span>':''}</div>
             <div class="cfg-info">
               ${p.perfil}${cfg.cargo?' · '+_esc(cfg.cargo):''}${p.tel?' · '+_esc(p.tel.slice(2)):''}
               ${p.email?'<br><span style="font-size:11px;color:var(--gl);">'+_esc(p.email)+'</span>':''}
