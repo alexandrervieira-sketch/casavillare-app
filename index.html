@@ -12325,215 +12325,145 @@ function gerarOrcamentoLead(){
   const nomeArq    = nome.replace(/[^a-zA-Z0-9]/g,'_');
   const orcFilename= 'Orcamento_'+nomeArq+'_'+hoje.toISOString().slice(0,10);
 
-  // Monta linhas de ambientes — usa XML se disponível, senão linha única com valor do campo
-  let itemRows = '', totalValor = 0;
-  const xmlList = _ldXmlInfoList || [];
+  // Monta linhas de ambientes (uma linha por ambiente do XML; senão, linha única)
+  const emp=ST.empresa||{};
+  const nomeEmp=emp.nome||'Casa Villare Ambientes Planejados';
+  const cnpjEmp=emp.cnpj||'63.120.610/0001-49';
+  const endEmp=emp.endereco||'Av. Dom Nery, 540 — Valinhos/SP';
+  const _fone=emp.telefone||'(19) 3859-1999';
+  const _whats=emp.whatsapp||'(19) 9 7156-9470';
+  const _mail=emp.email||'casavillare@casavillare.com.br';
+  const _site=emp.site||'www.casavillare.com.br';
+  let itemRows='', totalValor=0;
+  const xmlList=_ldXmlInfoList||[];
   if(xmlList.length){
     let ri=0;
-    xmlList.forEach(x=>{
-      (x.ambientesData||[]).forEach(a=>{
-        ri++;
-        const v = a.valorVenda||0;
-        totalValor += v;
-        itemRows += `<tr>
-          <td style="text-align:center;">${ri}</td>
-          <td>${_esc(a.descricao||'')}</td>
-          <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(v)}</td>
-        </tr>`;
-      });
-    });
+    xmlList.forEach(x=>{(x.ambientesData||[]).forEach(a=>{ri++;const v=a.valorVenda||0;totalValor+=v;
+      itemRows+=`<tr><td class="n">${String(ri).padStart(2,'0')}</td><td class="desc">${_esc(a.descricao||'')}</td><td class="val">R$ ${fmtBRL(v)}</td></tr>`;});});
   } else {
-    totalValor = valorRaw;
-    const desc = ambiente || 'Móveis Planejados';
-    itemRows = `<tr>
-      <td style="text-align:center;">1</td>
-      <td>${desc}</td>
-      <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(valorRaw)}</td>
-    </tr>`;
+    totalValor=valorRaw;
+    itemRows=`<tr><td class="n">01</td><td class="desc">${_esc(ambiente||'Móveis planejados')}</td><td class="val">R$ ${fmtBRL(valorRaw)}</td></tr>`;
   }
+  const cliCells=[['Cliente',nome],tel?['Telefone / WhatsApp',tel]:null,email?['E-mail',email]:null,ambiente?['Ambiente(s)',ambiente]:null,metragem?['Metragem aprox.',metragem]:null,estilo?['Estilo',estilo]:null,prazo?['Prazo desejado',prazo]:null,resp?['Consultor(a)',resp]:null]
+    .filter(Boolean).map(kv=>`<div class="c"><div class="cap">${_esc(kv[0])}</div><div class="v">${_esc(kv[1])}</div></div>`).join('');
+  const valorDesconto=descontoPct>0?totalValor*(descontoPct/100):0;
+  const totalAposDesc=totalValor-valorDesconto;
+  const totalComTaxa=taxaCli?parseFloat((totalAposDesc*(1+taxaCli/100)).toFixed(2)):totalAposDesc;
+  const _tipoLabel=tipoParc==='cartao'?'Cartão de crédito':tipoParc==='financiamento'?'Financiamento':'Acréscimo';
+  const resumoHtml=`<div class="resumo">
+    <div class="r"><span>Subtotal dos ambientes</span><span>R$ ${fmtBRL(totalValor)}</span></div>
+    ${descontoPct>0?`<div class="r desc"><span>Desconto (${descontoPct}%)</span><span>− R$ ${fmtBRL(valorDesconto)}</span></div>`:''}
+    ${taxaCli?`<div class="r"><span>${_tipoLabel} (${taxaCli}%)</span><span>+ R$ ${fmtBRL(totalComTaxa-totalAposDesc)}</span></div>`:''}
+    <div class="tot"><span class="lbl">Total</span><span class="v"><span class="cur">R$</span>${fmtBRL(totalComTaxa)}</span></div>
+    ${nParcOrc>1?`<div class="parc">em até <b>${nParcOrc}x de R$ ${fmtBRL(totalComTaxa/nParcOrc)}</b></div>`:''}
+  </div>`;
+  const condHtml=(_ldCondPgto&&_ldCondPgto.length)?`<div class="stitle">Condições de pagamento</div><div class="cond">${_ldCondPgto.map(c=>{
+    const fLabel={pix:'PIX',boleto:'Boleto',avista:'À vista',cartao:'Cartão',financiamento:'Financiamento'}[c.forma]||c.forma||'';
+    const showParc=c.forma==='cartao'||c.forma==='financiamento';
+    const parcTxt=showParc&&c.parcelas>1?` ${c.parcelas}x`:'';
+    const vencTxt=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'';
+    return`<div class="row"><span class="d">${_esc(c.desc||fLabel)}${vencTxt?' · venc. '+vencTxt:''}${fLabel?' · '+fLabel+parcTxt:''}</span><span class="v">R$ ${fmtBRL(c.valor)}</span></div>`;
+  }).join('')}</div>`:'';
+  const obsHtml=obs?`<div class="obs"><div class="lbl">Observações</div>${_esc(obs)}</div>`:'';
 
-  // Linhas de info do cliente
-  const infoRows = [
-    ['Cliente', nome],
-    tel   ? ['Telefone / WhatsApp', tel]   : null,
-    email ? ['E-mail', email]               : null,
-    ambiente  ? ['Ambiente(s)', ambiente]   : null,
-    metragem  ? ['Metragem aprox.', metragem] : null,
-    estilo    ? ['Estilo preferido', estilo]  : null,
-    prazo     ? ['Prazo desejado', prazo]     : null,
-    resp      ? ['Responsável', resp]         : null,
-  ].filter(Boolean).map(([k,v])=>`
-    <tr><td style="font-weight:bold;white-space:nowrap;width:180px;">${k}</td><td>${_esc(v)}</td></tr>`).join('');
-
-  // Desconto e taxa
-  const valorDesconto   = descontoPct>0 ? totalValor*(descontoPct/100) : 0;
-  const totalAposDesc   = totalValor - valorDesconto;
-  const totalComTaxa    = taxaCli ? parseFloat((totalAposDesc*(1+taxaCli/100)).toFixed(2)) : totalAposDesc;
-  const _tipoLabel      = tipoParc==='cartao' ? 'Cartão de crédito' : tipoParc==='financiamento' ? 'Financiamento' : 'Acréscimo';
-  const _parcelasLabel  = nParcOrc>1 ? ` — ${nParcOrc}x de R$ ${fmtBRL(totalComTaxa/nParcOrc)}` : '';
-
-  const precoInfoHtml = `
-    <div style="margin-top:10px;padding:8px 12px;background:#F8F5F0;border-radius:6px;border:1px solid #E0D8CE;font-size:10.5px;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-        <span>Subtotal dos ambientes:</span><span>R$ ${fmtBRL(totalValor)}</span>
-      </div>
-      ${descontoPct>0?`
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px;color:#166534;font-weight:600;">
-        <span>Desconto (${descontoPct}%):</span><span>− R$ ${fmtBRL(valorDesconto)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px;border-top:1px solid #E0D8CE;padding-top:3px;">
-        <span>Total após desconto:</span><span style="font-weight:600;">R$ ${fmtBRL(totalAposDesc)}</span>
-      </div>`:''}
-      ${taxaCli?`
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px;color:#6B7280;">
-        <span>${_tipoLabel} (${taxaCli}%):</span><span>+ R$ ${fmtBRL(totalComTaxa-totalAposDesc)}</span>
-      </div>`:''}
-      <div style="display:flex;justify-content:space-between;font-weight:700;font-size:11.5px;border-top:1px solid #E0D8CE;padding-top:4px;margin-top:2px;">
-        <span>TOTAL${_parcelasLabel}:</span><span>R$ ${fmtBRL(totalComTaxa)}</span>
-      </div>
-    </div>`;
-
-  const obsHtml = obs ? `
-    <div style="margin-top:18px;">
-      <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Observações</div>
-      <div style="border:1px solid #ccc;border-radius:4px;padding:8px 10px;font-size:10.5px;line-height:1.65;white-space:pre-wrap;">${_esc(obs)}</div>
-    </div>` : '';
-
-  const html = `<!DOCTYPE html>
+  const html=`<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"/>
 <title>Orçamento — ${_esc(nome)}</title>
 <style>
+${_DOC_FONT_CSS}
+:root{--ink:#232019;--soft:#7A7264;--faint:#A79E8D;--gold:#A2762B;--gold2:#C9A24B;--line:#E0D9CB;--line2:#EFEADF;--paper:#FCFBF7;--serif:"Iowan Old Style",Georgia,"Times New Roman",serif;--sans:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;--brand:"Barlow","Segoe UI",sans-serif;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background:#fff;}
-.page{width:210mm;min-height:297mm;padding:14mm 14mm 12mm;margin:0 auto;}
-.header{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:10px;border:1px solid #000;padding:8px 10px;margin-bottom:0;}
-.logo-area{border-right:1px solid #000;padding-right:10px;min-height:60px;display:flex;align-items:center;justify-content:center;}
-.logo-text{font-size:22px;font-weight:900;line-height:1.1;color:#000;font-family:Georgia,serif;}
-.logo-text span{display:block;font-size:11px;font-weight:400;}
-.company-info{font-size:9.5px;line-height:1.6;text-align:center;}
-.company-info strong{font-size:11px;}
-.doc-num{border-left:1px solid #000;padding-left:10px;text-align:center;font-weight:bold;font-size:11px;white-space:nowrap;}
-table.info{width:100%;border-collapse:collapse;margin-top:-1px;}
-table.info td{border:1px solid #000;padding:5px 8px;font-size:10.5px;vertical-align:top;}
-table.items{width:100%;border-collapse:collapse;margin-top:14px;}
-table.items th,table.items td{border:1px solid #000;padding:5px 8px;font-size:10.5px;}
-table.items th{background:#f5f5f5;font-size:10px;text-align:center;}
-table.items .total-row td{font-weight:bold;background:#f0f0f0;}
-.validity{margin-top:10px;font-size:10px;color:#555;text-align:right;}
-.section-title{font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 4px;}
-.assin-wrap{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:60px;}
-.assin-line{border-top:1px solid #000;padding-top:6px;text-align:center;font-size:10px;}
-.toolbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1a2e;display:flex;align-items:center;justify-content:space-between;padding:10px 20px;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.4);}
-.toolbar .ct-title{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.toolbar .tb-btn{border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;}
-.toolbar .tb-btn:hover{opacity:.85;}
-.toolbar .tb-print{background:#e0e0e0;color:#1a1a2e;}
-.toolbar .tb-pdf{background:#c0392b;color:#fff;}
-.toolbar .tb-actions{display:flex;gap:8px;}
-body.has-toolbar{padding-top:52px;}
-@media print{
-  .toolbar{display:none!important;}
-  body{background:#fff;padding-top:0!important;}
-  .page{margin:0;padding:14mm;}
-}
+body{background:#EDEBE6;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;}
+body.has-toolbar{padding-top:54px;}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#232019;display:flex;align-items:center;justify-content:space-between;padding:9px 20px;gap:10px;}
+.toolbar span{color:#F3EFE6;font-size:13px;font-weight:600;}
+.tb-btn{border:none;border-radius:7px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+.tb-print{background:#E0D9CB;color:#232019;}
+.tb-pdf{background:#A2762B;color:#fff;}
+.sheet{position:relative;width:820px;max-width:100%;margin:26px auto;background:var(--paper);padding:50px 56px 32px;box-shadow:0 14px 40px rgba(35,32,25,.16);border:1px solid #F0ECE2;overflow:hidden;}
+.sheet::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(var(--gold),var(--gold2));}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;}
+.brand{display:flex;gap:15px;align-items:center;}
+.mono{width:54px;height:54px;border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:22px;color:var(--gold);letter-spacing:1px;flex:none;}
+.n1{font-family:var(--brand);font-weight:500;font-size:24px;letter-spacing:.3px;color:var(--ink);line-height:.95;}
+.n2{font-family:var(--brand);font-weight:500;font-size:9px;letter-spacing:4px;color:var(--soft);text-transform:uppercase;margin-top:6px;}
+.docmeta{text-align:right;flex:none;}
+.docmeta .tag{font-family:var(--brand);font-size:15px;letter-spacing:6px;color:var(--gold);text-transform:uppercase;font-weight:600;}
+.docmeta .rule{height:1px;background:var(--line);margin:9px 0;width:150px;margin-left:auto;}
+.docmeta .kv{font-size:10.5px;color:var(--soft);line-height:1.75;letter-spacing:.3px;}
+.docmeta .kv b{color:var(--ink);font-weight:600;}
+.goldrule{height:2px;background:var(--gold);margin:22px 0 4px;}
+.hair{height:1px;background:var(--line);margin-bottom:24px;}
+.stitle{font-family:var(--brand);font-size:10px;letter-spacing:.22em;color:var(--gold);text-transform:uppercase;font-weight:600;margin:22px 0 10px;}
+.cliente{display:flex;flex-wrap:wrap;gap:8px 40px;}
+.cliente .c .cap{font-size:9px;letter-spacing:.18em;color:var(--faint);text-transform:uppercase;margin-bottom:3px;}
+.cliente .c .v{font-family:var(--serif);font-size:14.5px;color:var(--ink);}
+table.items{width:100%;border-collapse:collapse;}
+table.items thead th{font-family:var(--brand);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);font-weight:600;text-align:left;padding:0 4px 9px;border-bottom:1.5px solid var(--gold);}
+table.items thead th.r{text-align:right;}
+table.items tbody td{padding:11px 4px;border-bottom:1px solid var(--line2);font-size:13px;vertical-align:top;}
+table.items tbody td.n{color:var(--faint);width:32px;font-variant-numeric:tabular-nums;}
+table.items tbody td.desc{font-family:var(--serif);color:var(--ink);}
+table.items tbody td.val{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink);}
+.resumo{margin:22px 0 0 auto;width:320px;}
+.resumo .r{display:flex;justify-content:space-between;font-size:12px;color:var(--soft);padding:5px 0;}
+.resumo .r.desc{color:#166534;font-weight:600;}
+.resumo .r span:last-child{font-variant-numeric:tabular-nums;}
+.resumo .tot{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid var(--gold);margin-top:6px;padding-top:10px;}
+.resumo .tot .lbl{font-family:var(--brand);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:600;}
+.resumo .tot .v{font-family:var(--serif);font-size:30px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1;}
+.resumo .tot .v .cur{font-size:14px;color:var(--gold);margin-right:4px;}
+.parc{text-align:right;font-size:11px;color:var(--soft);margin-top:6px;}
+.parc b{color:var(--ink);}
+.cond{margin-top:8px;border:1px solid var(--line);}
+.cond .row{display:flex;justify-content:space-between;padding:8px 14px;font-size:11.5px;border-bottom:1px solid var(--line2);}
+.cond .row:last-child{border-bottom:none;}
+.cond .row .d{color:var(--soft);}
+.cond .row .v{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600;}
+.obs{margin-top:20px;font-family:var(--serif);font-size:12.5px;line-height:1.7;color:#332F26;white-space:pre-wrap;}
+.obs .lbl{font-family:var(--brand);font-size:10px;letter-spacing:.2em;color:var(--gold);text-transform:uppercase;font-weight:600;margin-bottom:6px;}
+.valid{margin-top:20px;background:#F8F5EE;border:1px solid var(--line);border-left:3px solid var(--gold);padding:10px 14px;font-size:11.5px;color:var(--soft);}
+.valid b{color:var(--ink);}
+.assin{display:grid;grid-template-columns:1fr 1fr;gap:56px;margin-top:52px;}
+.assin .ln{border-top:1px solid var(--ink);padding-top:7px;text-align:center;}
+.assin .who{font-family:var(--serif);font-size:12px;color:var(--ink);}
+.assin .sub{font-size:9.5px;color:var(--soft);letter-spacing:.3px;margin-top:2px;text-transform:uppercase;}
+.foot{margin-top:30px;padding-top:14px;border-top:1px solid var(--line2);display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;}
+.foot .r1{font-size:9.5px;letter-spacing:.14em;color:var(--soft);text-transform:uppercase;font-weight:600;}
+.foot .r2{font-size:10px;color:var(--faint);}
+@media print{.toolbar{display:none!important;}body{background:#fff;padding-top:0!important;}.sheet{box-shadow:none;border:none;margin:0 auto;width:auto;padding:0;}@page{size:A4;margin:14mm;}}
 </style></head><body class="has-toolbar">
-
 <div class="toolbar">
-  <span class="ct-title">📄 Orçamento — ${_esc(nome)}</span>
-  <div class="tb-actions">
+  <span>📄 Orçamento — ${_esc(nome)}</span>
+  <div style="display:flex;gap:8px;">
     <button class="tb-btn tb-print" onclick="window.print()">🖨 Imprimir</button>
-    <button class="tb-btn tb-pdf" onclick="var _t=document.title;document.title='${orcFilename}';window.print();setTimeout(function(){document.title=_t;},300);">📥 Salvar PDF</button>
+    <button class="tb-btn tb-pdf" onclick="var _t=document.title;document.title='${orcFilename}';window.print();setTimeout(()=>document.title=_t,300);">📥 Salvar PDF</button>
   </div>
 </div>
-
-<div class="page">
-
-<div class="header">
-  <div class="logo-area">${_docLogoHtml()}</div>
-  <div class="company-info">${_docEmpInfoHtml()}</div>
-  <div class="doc-num">ORÇAMENTO<br><span style="font-size:11px;font-weight:400;">Data: ${fmtD(hoje)}</span></div>
-</div>
-
-<div class="section-title" style="margin-top:14px;">Dados do Cliente</div>
-<table class="info">
-  ${infoRows}
-</table>
-
-<div class="section-title" style="margin-top:14px;">Resumo dos Ambientes</div>
-<table class="items">
-  <thead>
-    <tr>
-      <th style="width:40px;">ITEM</th>
-      <th>DESCRIÇÃO AMBIENTE / PRODUTO</th>
-      <th style="width:120px;">VALOR</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${itemRows}
-    <tr class="total-row">
-      <td colspan="2" style="text-align:right;letter-spacing:.5px;">TOTAL</td>
-      <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalValor)}</td>
-    </tr>
-  </tbody>
-</table>
-
-<div class="validity">Validade deste orçamento: ${fmtD(validade)}</div>
-${precoInfoHtml}
-
-${(_ldCondPgto&&_ldCondPgto.length)?`
-<div style="margin-top:14px;">
-  <div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Condições de Pagamento</div>
-  <table style="width:100%;border-collapse:collapse;">
-    <thead>
-      <tr style="background:#f5f5f5;">
-        <th style="border:1px solid #000;padding:4px 7px;font-size:10px;text-align:center;width:30px;">#</th>
-        <th style="border:1px solid #000;padding:4px 7px;font-size:10px;text-align:left;">Descrição</th>
-        <th style="border:1px solid #000;padding:4px 7px;font-size:10px;text-align:center;width:100px;">Vencimento</th>
-        <th style="border:1px solid #000;padding:4px 7px;font-size:10px;text-align:center;width:120px;">Forma</th>
-        <th style="border:1px solid #000;padding:4px 7px;font-size:10px;text-align:right;width:110px;">Valor</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${_ldCondPgto.map((c,i)=>{
-        const fLabel={pix:'PIX',boleto:'Boleto',avista:'À vista',cartao:'Cartão',financiamento:'Financiamento'}[c.forma]||c.forma;
-        const showParc=c.forma==='cartao'||c.forma==='financiamento';
-        const parcTxt=showParc?` ${c.parcelas}x`:'';
-        const absTxt=showParc?(c.absorcao==='loja'?' (loja)':' (cliente)'):'';
-        const vencTxt=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'—';
-        return`<tr>
-          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:center;">${i+1}</td>
-          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;">${_esc(c.desc||fLabel)}</td>
-          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:center;">${vencTxt}</td>
-          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:center;">${fLabel}${parcTxt}${absTxt}</td>
-          <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:right;white-space:nowrap;">R$ ${fmtBRL(c.valor)}</td>
-        </tr>`;
-      }).join('')}
-      <tr style="background:#f0f0f0;font-weight:bold;">
-        <td colspan="4" style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:right;">TOTAL</td>
-        <td style="border:1px solid #000;padding:4px 7px;font-size:10.5px;text-align:right;white-space:nowrap;">R$ ${fmtBRL(_ldCondPgto.reduce((a,c)=>a+(parseFloat(c.valor)||0),0))}</td>
-      </tr>
-    </tbody>
-  </table>
-</div>`:''}
-
-${obsHtml}
-
-<div style="margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:60px;">
-  <div style="text-align:center;">
-    <div style="border-top:1px solid #000;padding-top:8px;font-size:10px;">
-      <div style="font-weight:bold;">${_esc((ST.empresa&&ST.empresa.nome?ST.empresa.nome:'Casa Villare Ambientes Planejados').toUpperCase())}</div>
-      <div style="color:#555;margin-top:2px;">${_esc(ST.empresa&&ST.empresa.cidade?ST.empresa.cidade:'Valinhos — SP')}, ${fmtD(hoje)}</div>
-    </div>
+<div class="sheet">
+  <div class="head">
+    <div class="brand"><div class="mono">CV</div><div><div class="n1">Casa<br>Villare</div><div class="n2">Ambientes Planejados</div></div></div>
+    <div class="docmeta"><div class="tag">Orçamento</div><div class="rule"></div><div class="kv">Data <b>${fmtD(hoje)}</b></div><div class="kv">Válido até <b>${fmtD(validade)}</b></div></div>
   </div>
-  <div style="text-align:center;">
-    <div style="border-top:1px solid #000;padding-top:8px;font-size:10px;">
-      <div style="font-weight:bold;">CLIENTE</div>
-      <div style="color:#555;margin-top:2px;">${_esc(nome)}</div>
-    </div>
+  <div class="goldrule"></div><div class="hair"></div>
+  <div class="stitle">Dados do cliente</div>
+  <div class="cliente">${cliCells}</div>
+  <div class="stitle">Ambientes</div>
+  <table class="items"><thead><tr><th>Item</th><th>Descrição do ambiente / produto</th><th class="r">Valor</th></tr></thead><tbody>${itemRows}</tbody></table>
+  ${resumoHtml}
+  ${condHtml}
+  ${obsHtml}
+  <div class="valid">🗓️ Este orçamento é válido até <b>${fmtD(validade)}</b>. Após esta data, os valores e condições podem ser revistos.</div>
+  <div class="assin">
+    <div class="ln"><div class="who">${_esc(nome)}</div><div class="sub">Cliente</div></div>
+    <div class="ln"><div class="who">${_esc(nomeEmp)}</div><div class="sub">Consultor(a) responsável</div></div>
+  </div>
+  <div class="foot">
+    <div class="r1">${_esc(nomeEmp)} · CNPJ ${_esc(cnpjEmp)}</div>
+    <div class="r2">${_esc(endEmp)} · ${_esc(_fone)} · WhatsApp ${_esc(_whats)}</div>
+    <div class="r2">${_esc(_mail)} · @casavillare · ${_esc(_site)}</div>
   </div>
 </div>
-
-</div><!-- /page -->
 </body></html>`;
 
   const w = window.open('','_blank','width=960,height=820');
