@@ -2054,18 +2054,26 @@ textarea.inp{resize:vertical;min-height:68px;}
 </div>
 
 <!-- Aviso ao sair de "Projeto Executivo" → "Executivo Assinado": lembrar de fornecedores adicionais (portas de vidro, metalon, etc.) -->
+<style>
+@keyframes fornchkPulse{0%,100%{box-shadow:0 0 0 0 rgba(180,83,9,.55);}50%{box-shadow:0 0 0 16px rgba(180,83,9,0);}}
+@keyframes fornAlertPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.6);}50%{box-shadow:0 0 0 7px rgba(245,158,11,0);}}
+#modal-fornchk .modal{border:2px solid #B45309;animation:fornchkPulse 1.4s ease-out infinite;overflow:hidden;}
+.fornalert{animation:fornAlertPulse 1.7s ease-in-out infinite;}
+</style>
 <div class="modal-bg hidden" id="modal-fornchk">
-  <div class="modal" style="max-width:440px;">
-    <div class="modal-hdr">
-      <div><div class="modal-title">🚪 Fornecedores adicionais?</div><div class="modal-sub" id="fornchk-sub"></div></div>
-      <button class="modal-close" onclick="fecharModal('modal-fornchk')">✕</button>
+  <div class="modal" style="max-width:480px;padding:0;">
+    <div style="background:#B45309;color:#fff;padding:15px 20px;display:flex;align-items:center;gap:13px;">
+      <span style="font-size:30px;line-height:1;">⚠️</span>
+      <div style="flex:1;"><div style="font-size:16px;font-weight:800;letter-spacing:.4px;">ATENÇÃO — PEDIDOS DE FORNECEDORES</div><div class="modal-sub" id="fornchk-sub" style="font-size:12px;opacity:.92;color:#fff;"></div></div>
+      <button onclick="fecharModal('modal-fornchk')" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;opacity:.85;">✕</button>
     </div>
-    <div class="modal-body">
-      <div style="font-size:13.5px;line-height:1.6;">Este projeto contém <b>pedidos de outros fornecedores</b> — <b>portas de vidro</b>, <b>metalon</b>, vidraçaria, serralheria, etc.?</div>
-      <div id="fornchk-nota" style="font-size:11.5px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:9px 11px;margin-top:10px;"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-        <button class="btn btn-s" onclick="fornCheckNao()">Não, pode avançar →</button>
-        <button class="btn btn-p" onclick="fornCheckSim()">Sim, tenho fornecedores</button>
+    <div style="padding:18px 20px 20px;">
+      <div style="font-size:15.5px;line-height:1.5;font-weight:700;">Este projeto tem <span style="color:#B45309;">pedidos de outros fornecedores</span>?</div>
+      <div style="font-size:13px;color:#4B5563;margin-top:6px;">🚪 Portas de vidro · <b>metalon</b> · vidraçaria · serralheria · marmoraria, etc.</div>
+      <div id="fornchk-nota" style="font-size:12px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-top:13px;"></div>
+      <div style="display:flex;gap:10px;margin-top:18px;">
+        <button class="btn btn-s" style="flex:1;padding:12px 10px;font-size:13.5px;" onclick="fornCheckNao()">Não tem — avançar →</button>
+        <button class="btn" style="flex:1.35;padding:12px 10px;font-size:14px;font-weight:800;background:#B45309;color:#fff;border:none;border-radius:9px;cursor:pointer;" onclick="fornCheckSim()">⚠️ SIM — lançar fornecedores</button>
       </div>
     </div>
   </div>
@@ -13342,6 +13350,7 @@ function _rPedPipe(ped,hoje,statsHtml){
         <div class="ped-card-nome" title="${nome}" style="${_pedCancelado(p)?'text-decoration:line-through;opacity:.55;':''}">${_pedShowroom(p)?'🏛️ ':''}${_pedCancelado(p)?'🚫 ':''}${nome}</div>
         <div class="ped-card-desc" title="${_esc(p.descricao||'')}">${_pedShowroom(p)?'<span style="color:#7C3AED;font-weight:600;">Showroom/Investimento · </span>':''}${_esc(p.descricao||'Sem descrição')}</div>
         ${prazoHtml}
+        ${_pedFaltaForn(p)?`<div class="fornalert" onclick="event.stopPropagation();fornAlertAbrir('${_sid(p.id)}')" title="Confirme se este pedido tem portas de vidro, metalon, etc. — e lance os fornecedores" style="margin-top:6px;padding:7px 9px;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:7px;font-size:11px;color:#92400E;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;line-height:1.3;">⚠️ Confirmar: portas de vidro / metalon?</div>`:''}
         <div class="ped-card-foot">
           <span class="ped-card-val" title="Valor venda (ao cliente)">${_pedValorVendaCRM(p)?fmt(_pedValorVendaCRM(p)):'—'}</span>
           <span class="ped-card-date" style="${atrasado?'color:var(--fail);font-weight:600;':''}">${dtLabel}</span>
@@ -13511,7 +13520,23 @@ let _fornCheckPedId=null;
 function fornCheckNao(){
   const id=_fornCheckPedId; _fornCheckPedId=null;
   fecharModal('modal-fornchk');
-  if(id) _pedAvancarExec(id);
+  const p=id?(ST.pedidos||[]).find(x=>String(x.id)===String(id)):null;
+  if(!p) return;
+  p.semFornAdic=true; // confirmou que NÃO tem fornecedores adicionais → some o selo e não pergunta de novo
+  _pedAvancarExec(id); // já salva
+}
+// Selo de alerta no card: pedido no fim do projeto (assinatura/fábrica) sem fornecedores lançados e sem confirmar que não tem
+function _pedFaltaForn(p){
+  if(!p||_pedCancelado(p)||_pedShowroom(p)) return false;
+  if(p.semFornAdic) return false;
+  if((p.fornecedoresAdicionais||[]).some(f=>(f.valor||0)>0)) return false;
+  const st=_PED_ETAPAS_ORDER.indexOf(p.status);
+  return st>=_PED_ETAPAS_ORDER.indexOf('exec_assn') && st<=_PED_ETAPAS_ORDER.indexOf('pedido');
+}
+function fornAlertAbrir(id){
+  abrirModalPedido(id);
+  if(!(_pdFornsAdicionais||[]).length) pdAddFornecedor();
+  setTimeout(()=>{ const el=document.getElementById('pd-forns-lista'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); },250);
 }
 function fornCheckSim(){
   const id=_fornCheckPedId; _fornCheckPedId=null;
@@ -14571,6 +14596,7 @@ function salvarPedido(){
     if(prev.comProjPago!==undefined) pedido.comProjPago = prev.comProjPago; // preserva o registro de pagamento da comissão da projetista (o form não gerencia)
     if(prev.comSupPago!==undefined)  pedido.comSupPago  = prev.comSupPago;  // preserva pagamento da comissão do supervisor
     if(prev.medicaoPago!==undefined) pedido.medicaoPago = prev.medicaoPago; // preserva pagamento da medição (o form não gerencia)
+    if(prev.semFornAdic!==undefined) pedido.semFornAdic = prev.semFornAdic; // preserva a confirmação de "sem fornecedores adicionais"
     _pedBackfillMarcos(pedido); // carimba todos os marcos já atingidos (inclusive se a etapa foi pulada)
     ST.pedidos[idx]=pedido;
   } else {
