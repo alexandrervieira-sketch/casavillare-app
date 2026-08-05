@@ -81,7 +81,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
-  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador
+  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador,
+  _taxaClienteConds, _calcTaxaCartaoConds
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -591,6 +592,18 @@ test('_sid: preserva id com letras (ped_<leadId>) e ainda barra caracteres perig
   const nid = T._newId();
   assertEq(T._sid(nid), nid, '_newId() nunca é alterado por _sid');
   assertEq(T._sid('ped_' + nid), 'ped_' + nid, 'id determinístico ped_<...> nunca é alterado por _sid');
+});
+
+// Taxa do cartão: quando o CLIENTE absorve, soma no total que ele paga (transparência no orçamento/contrato)
+test('_taxaClienteConds: cliente absorve = soma no total; loja absorve = não', () => {
+  T.ST.tabelaCartao = [{ parcelas: 12, taxa: 11.66 }];
+  const condCliente = [{ forma: 'cartao', parcelas: 12, valor: 114992.40, absorcao: 'cliente' }];
+  assertEq(Math.round(T._taxaClienteConds(condCliente) * 100) / 100, 13408.11, 'cliente: 114.992,40 × 11,66% = 13.408,11');
+  const condLoja = [{ forma: 'cartao', parcelas: 12, valor: 114992.40, absorcao: 'loja' }];
+  assertEq(T._taxaClienteConds(condLoja), 0, 'loja absorve → não soma no cliente');
+  // e a loja absorve corretamente no _calcTaxaCartaoConds (o oposto)
+  assertEq(Math.round(T._calcTaxaCartaoConds(condLoja) * 100) / 100, 13408.11, 'loja: entra no líquido');
+  assertEq(T._calcTaxaCartaoConds(condCliente), 0, 'cliente: não entra no líquido da loja');
 });
 
 // Margem de erro EXTRA do montador: reduz SÓ a base dele, além da geral; não afeta os outros

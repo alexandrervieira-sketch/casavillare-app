@@ -7770,6 +7770,17 @@ function _calcTaxaCartaoConds(conds){
   });
   return total;
 }
+// Taxa do cartão que o CLIENTE absorve (soma no valor que ele paga) — oposto do _calcTaxaCartaoConds (loja).
+// Usado p/ transparência no orçamento e no contrato: "valor do projeto + taxa do cartão = total a pagar".
+function _taxaClienteConds(conds){
+  if(!conds||!conds.length) return 0;
+  let total=0;
+  conds.forEach(c=>{
+    if(c.absorcao==='loja') return; // loja absorve → não soma no cliente
+    if(c.forma==='cartao'){ const e=_getTabCartao().find(x=>x.parcelas==(c.parcelas||1)); if(e&&e.taxa) total+=(c.valor||0)*(e.taxa/100); }
+  });
+  return total;
+}
 
 // Tabela financiamento "Sem Entrada" — coeficiente e retenção por prazo de carência
 // parcela = valor_liquido × coeficiente
@@ -12394,14 +12405,16 @@ function gerarOrcamentoLead(){
     .filter(Boolean).map(kv=>`<div class="c"><div class="cap">${_esc(kv[0])}</div><div class="v">${_esc(kv[1])}</div></div>`).join('');
   const valorDesconto=descontoPct>0?totalValor*(descontoPct/100):0;
   const totalAposDesc=totalValor-valorDesconto;
-  const totalComTaxa=taxaCli?parseFloat((totalAposDesc*(1+taxaCli/100)).toFixed(2)):totalAposDesc;
-  const _tipoLabel=tipoParc==='cartao'?'Cartão de crédito':tipoParc==='financiamento'?'Financiamento':'Acréscimo';
+  const taxaLegacy=taxaCli?parseFloat((totalAposDesc*(taxaCli/100)).toFixed(2)):0;
+  const taxaCliente=parseFloat((taxaLegacy+_taxaClienteConds(_ldCondPgto)).toFixed(2)); // taxa do cartão que o CLIENTE absorve
+  const totalCliente=parseFloat((totalAposDesc+taxaCliente).toFixed(2));                // o que o cliente efetivamente paga
   const resumoHtml=`<div class="resumo">
     <div class="r"><span>Subtotal dos ambientes</span><span>R$ ${fmtBRL(totalValor)}</span></div>
     ${descontoPct>0?`<div class="r desc"><span>Desconto (${descontoPct}%)</span><span>− R$ ${fmtBRL(valorDesconto)}</span></div>`:''}
-    ${taxaCli?`<div class="r"><span>${_tipoLabel} (${taxaCli}%)</span><span>+ R$ ${fmtBRL(totalComTaxa-totalAposDesc)}</span></div>`:''}
-    <div class="tot"><span class="lbl">Total</span><span class="v"><span class="cur">R$</span>${fmtBRL(totalComTaxa)}</span></div>
-    ${nParcOrc>1?`<div class="parc">em até <b>${nParcOrc}x de R$ ${fmtBRL(totalComTaxa/nParcOrc)}</b></div>`:''}
+    ${(descontoPct>0&&taxaCliente>0)?`<div class="r"><span>Valor do projeto</span><span>R$ ${fmtBRL(totalAposDesc)}</span></div>`:''}
+    ${taxaCliente>0?`<div class="r"><span>Taxa do cartão (parcelamento)</span><span>+ R$ ${fmtBRL(taxaCliente)}</span></div>`:''}
+    <div class="tot"><span class="lbl">Total a pagar</span><span class="v"><span class="cur">R$</span>${fmtBRL(totalCliente)}</span></div>
+    ${nParcOrc>1?`<div class="parc">em até <b>${nParcOrc}x de R$ ${fmtBRL(totalCliente/nParcOrc)}</b></div>`:''}
   </div>`;
   const condHtml=(_ldCondPgto&&_ldCondPgto.length)?`<div class="stitle">Condições de pagamento</div><div class="cond">${_ldCondPgto.map(c=>{
     const fLabel={pix:'PIX',boleto:'Boleto',avista:'À vista',cartao:'Cartão',financiamento:'Financiamento'}[c.forma]||c.forma||'';
@@ -12790,6 +12803,7 @@ function gerarContrato(cadId){
 
   // Condições de pagamento: usa condicoesPgto do lead vinculado (novo formato) ou parcs do cadastro (legado)
   const _condsPgto=_leadCt?.condicoesPgto;
+  const taxaClienteCt=_taxaClienteConds(_condsPgto); // taxa do cartão que o cliente absorve (transparência: soma no total a pagar)
   const pagRows=_condsPgto&&_condsPgto.length
     ?_condsPgto.map((p,i)=>{
         const fLabel={pix:'PIX',boleto:'Boleto',avista:'À vista',cartao:'Cartão',financiamento:'Financiamento'}[p.forma]||p.forma;
@@ -12950,6 +12964,15 @@ body.has-toolbar{padding-top:52px;}
     <tr class="total-row">
       <td colspan="3" style="text-align:right;font-size:11px;letter-spacing:.5px;">TOTAL DO CONTRATO</td>
       <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalAposDescCt)}</td>
+    </tr>`:''}
+    ${taxaClienteCt>0?`
+    <tr>
+      <td colspan="3" style="text-align:right;font-size:11px;color:#8a5a12;font-weight:600;">Taxa do cartão (parcelamento — cliente)</td>
+      <td style="text-align:right;white-space:nowrap;color:#8a5a12;font-weight:600;">+ R$ ${fmtBRL(taxaClienteCt)}</td>
+    </tr>
+    <tr class="total-row" style="background:#FBF3E2;">
+      <td colspan="3" style="text-align:right;font-size:11px;letter-spacing:.5px;">TOTAL A PAGAR (com taxa)</td>
+      <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalAposDescCt+taxaClienteCt)}</td>
     </tr>`:''}
   </tbody>
 </table>
