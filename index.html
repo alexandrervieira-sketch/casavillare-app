@@ -2053,6 +2053,24 @@ textarea.inp{resize:vertical;min-height:68px;}
   </div>
 </div>
 
+<!-- Aviso ao sair de "Projeto Executivo" → "Executivo Assinado": lembrar de fornecedores adicionais (portas de vidro, metalon, etc.) -->
+<div class="modal-bg hidden" id="modal-fornchk">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-hdr">
+      <div><div class="modal-title">🚪 Fornecedores adicionais?</div><div class="modal-sub" id="fornchk-sub"></div></div>
+      <button class="modal-close" onclick="fecharModal('modal-fornchk')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13.5px;line-height:1.6;">Este projeto contém <b>pedidos de outros fornecedores</b> — <b>portas de vidro</b>, <b>metalon</b>, vidraçaria, serralheria, etc.?</div>
+      <div id="fornchk-nota" style="font-size:11.5px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:9px 11px;margin-top:10px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn btn-s" onclick="fornCheckNao()">Não, pode avançar →</button>
+        <button class="btn btn-p" onclick="fornCheckSim()">Sim, tenho fornecedores</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg hidden" id="modal-cp">
   <div class="modal" style="max-width:500px;">
     <div class="modal-hdr">
@@ -13462,11 +13480,53 @@ function pedAvancar(id){
     const nome=p.status==='medicao'?'medição':'vistoria';
     if(!confirm('⚠️ O checklist de '+nome+' deste pedido não está completo.\n\nAvançar mesmo assim?\n(Dá para preencher em ✏️ Editar.)')) return;
   }
+  // Ao sair de "Projeto Executivo" → "Executivo Assinado": lembrar dos fornecedores adicionais
+  // (portas de vidro, metalon, etc.). Se SIM e ainda não lançou, bloqueia até preencher.
+  if(p.status==='proj_exec'){
+    _fornCheckPedId=String(p.id);
+    const tem=(p.fornecedoresAdicionais||[]).some(f=>(f.valor||0)>0);
+    const sub=document.getElementById('fornchk-sub'); if(sub) sub.textContent=(p.clienteNome||p.cliente||'');
+    const nota=document.getElementById('fornchk-nota');
+    if(nota) nota.textContent=tem
+      ? '✔️ Já há fornecedor(es) adicional(is) lançado(s) neste pedido. Confirme para avançar.'
+      : 'Se SIM, lance o(s) fornecedor(es) e o(s) valor(es) antes de avançar — o custo entra na rentabilidade e no financeiro.';
+    abrirModal('modal-fornchk');
+    return; // decide no modal (fornCheckSim / fornCheckNao)
+  }
+  _pedAvancarExec(id);
+}
+// Executa o avanço de fato (usado direto e após o aviso de fornecedores)
+function _pedAvancarExec(id){
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
+  if(!p) return;
+  const idx=PED_ETAPAS.findIndex(e=>e.id===p.status);
+  if(idx<0||idx>=PED_ETAPAS.length-1) return;
   p.status=PED_ETAPAS[idx+1].id;
   p.statusChangedAt=_hojeLocal();
   _pedBackfillMarcos(p); // grava as datas de marco atingidas (antes só o modal fazia, e sem cobrir pulos)
   p._uAt=Date.now(); // carimba a versão (igual pedVoltar) — sem isto o avanço pode ser revertido pela sync entre máquinas
   save(); toast(`→ ${PED_ETAPAS[idx+1].icon} ${PED_ETAPAS[idx+1].label}`); rPedidos();
+}
+let _fornCheckPedId=null;
+function fornCheckNao(){
+  const id=_fornCheckPedId; _fornCheckPedId=null;
+  fecharModal('modal-fornchk');
+  if(id) _pedAvancarExec(id);
+}
+function fornCheckSim(){
+  const id=_fornCheckPedId; _fornCheckPedId=null;
+  fecharModal('modal-fornchk');
+  const p=id?(ST.pedidos||[]).find(x=>String(x.id)===String(id)):null;
+  if(!p) return;
+  if((p.fornecedoresAdicionais||[]).some(f=>(f.valor||0)>0)){
+    _pedAvancarExec(id); // já lançou os fornecedores → pode avançar
+    return;
+  }
+  // ainda não lançou: bloqueia o avanço e abre o pedido na seção de fornecedores
+  toast('🔩 Lance o(s) fornecedor(es) adicional(is) com valor e salve — depois é só avançar.');
+  abrirModalPedido(id);
+  if(!(_pdFornsAdicionais||[]).length) pdAddFornecedor(); // já cria uma linha em branco pra preencher
+  setTimeout(()=>{ const el=document.getElementById('pd-forns-lista'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); },250);
 }
 
 // Voltar etapa do pedido — exclusivo do gestor (corrigir avanço indevido, ex.: faltou anexar comprovante)
