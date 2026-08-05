@@ -81,7 +81,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
-  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn
+  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -591,6 +591,15 @@ test('_sid: preserva id com letras (ped_<leadId>) e ainda barra caracteres perig
   const nid = T._newId();
   assertEq(T._sid(nid), nid, '_newId() nunca é alterado por _sid');
   assertEq(T._sid('ped_' + nid), 'ped_' + nid, 'id determinístico ped_<...> nunca é alterado por _sid');
+});
+
+// Valor da parcela do boleto: parse BR não pode perder o milhar (bug: 1.539,81 virava 539,81 com parseFloat cru)
+test('_parseBRL: valor com milhar não perde dígito (parcela do boleto)', () => {
+  assertEq(T._parseBRL('1.539,81'), 1539.81, 'milhar preservado');
+  assertEq(T._parseBRL('539,81'), 539.81);
+  assertEq(T._parseBRL('350.000,00'), 350000, 'centena de milhar');
+  assertEq(T._parseBRL('1.539,81'.replace(/\D/g, '')), 153981, 'só dígitos = número cru (referência)');
+  assertEq(T._parseBRL(''), 0, 'vazio = 0');
 });
 
 // Alerta de fornecedores adicionais (portas de vidro/metalon): só na janela assinatura→pedido, sem forn e sem confirmar
