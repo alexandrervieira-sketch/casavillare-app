@@ -12713,7 +12713,9 @@ function abrirCadastroDoLead(leadId){
   const c=(ST.cadastros||[]).find(c=>c.leadId===String(leadId)&&c.tipo==='cliente');
   if(c){abrirModalCadastro(c.id,'cliente');return;}
   const l=(ST.leads||[]).find(l=>String(l.id)===String(leadId));
-  if(l){navTo('tab-cad');setTimeout(()=>abrirModalCadastro(null,'cliente',l),200);}
+  // Abre o cadastro SOBRE o CRM, sem trocar de aba — ao salvar, o fluxo segue direto para o contrato
+  // (ver salvarCadastro). Antes fazia navTo('tab-cad') e "pulava" para o módulo Cadastros/Contratos ao finalizar.
+  if(l) abrirModalCadastro(null,'cliente',l);
 }
 
 function gerarContrato(cadId){
