@@ -2053,7 +2053,7 @@ textarea.inp{resize:vertical;min-height:68px;}
   </div>
 </div>
 
-<!-- Aviso ao sair de "Projeto Executivo" → "Executivo Assinado": lembrar de fornecedores adicionais (portas de vidro, metalon, etc.) -->
+<!-- Aviso ao avançar a partir de "Executivo Assinado": lembrar de fornecedores adicionais (portas de vidro, metalon, etc.) -->
 <style>
 @keyframes fornchkPulse{0%,100%{box-shadow:0 0 0 0 rgba(180,83,9,.55);}50%{box-shadow:0 0 0 16px rgba(180,83,9,0);}}
 @keyframes fornAlertPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.6);}50%{box-shadow:0 0 0 7px rgba(245,158,11,0);}}
@@ -13503,9 +13503,9 @@ function pedAvancar(id){
     const nome=p.status==='medicao'?'medição':'vistoria';
     if(!confirm('⚠️ O checklist de '+nome+' deste pedido não está completo.\n\nAvançar mesmo assim?\n(Dá para preencher em ✏️ Editar.)')) return;
   }
-  // Ao sair de "Projeto Executivo" → "Executivo Assinado": lembrar dos fornecedores adicionais
-  // (portas de vidro, metalon, etc.). Se SIM e ainda não lançou, bloqueia até preencher.
-  if(p.status==='proj_exec'){
+  // Ao avançar a partir de "Executivo Assinado" (projeto já assinado): lembrar dos fornecedores
+  // adicionais (portas de vidro, metalon, etc.). Se SIM e ainda não lançou, bloqueia até preencher.
+  if(p.status==='exec_assn'){
     _fornCheckPedId=String(p.id);
     const tem=(p.fornecedoresAdicionais||[]).some(f=>(f.valor||0)>0);
     const sub=document.getElementById('fornchk-sub'); if(sub) sub.textContent=(p.clienteNome||p.cliente||'');
