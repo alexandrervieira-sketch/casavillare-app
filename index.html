@@ -12405,23 +12405,22 @@ function gerarOrcamentoLead(){
     .filter(Boolean).map(kv=>`<div class="c"><div class="cap">${_esc(kv[0])}</div><div class="v">${_esc(kv[1])}</div></div>`).join('');
   const valorDesconto=descontoPct>0?totalValor*(descontoPct/100):0;
   const totalAposDesc=totalValor-valorDesconto;
-  const taxaLegacy=taxaCli?parseFloat((totalAposDesc*(taxaCli/100)).toFixed(2)):0;
-  const taxaCliente=parseFloat((taxaLegacy+_taxaClienteConds(_ldCondPgto)).toFixed(2)); // taxa do cartão que o CLIENTE absorve
-  const totalCliente=parseFloat((totalAposDesc+taxaCliente).toFixed(2));                // o que o cliente efetivamente paga
   const resumoHtml=`<div class="resumo">
     <div class="r"><span>Subtotal dos ambientes</span><span>R$ ${fmtBRL(totalValor)}</span></div>
     ${descontoPct>0?`<div class="r desc"><span>Desconto (${descontoPct}%)</span><span>− R$ ${fmtBRL(valorDesconto)}</span></div>`:''}
-    ${(descontoPct>0&&taxaCliente>0)?`<div class="r"><span>Valor do projeto</span><span>R$ ${fmtBRL(totalAposDesc)}</span></div>`:''}
-    ${taxaCliente>0?`<div class="r"><span>Taxa do cartão (parcelamento)</span><span>+ R$ ${fmtBRL(taxaCliente)}</span></div>`:''}
-    <div class="tot"><span class="lbl">Total a pagar</span><span class="v"><span class="cur">R$</span>${fmtBRL(totalCliente)}</span></div>
-    ${nParcOrc>1?`<div class="parc">em até <b>${nParcOrc}x de R$ ${fmtBRL(totalCliente/nParcOrc)}</b></div>`:''}
+    <div class="tot"><span class="lbl">Total do orçamento</span><span class="v"><span class="cur">R$</span>${fmtBRL(totalAposDesc)}</span></div>
   </div>`;
-  const condHtml=(_ldCondPgto&&_ldCondPgto.length)?`<div class="stitle">Condições de pagamento</div><div class="cond">${_ldCondPgto.map(c=>{
+  const condHtml=(_ldCondPgto&&_ldCondPgto.length)?`<div class="stitle">Formas de pagamento</div><div class="cond">${_ldCondPgto.map(c=>{
     const fLabel={pix:'PIX',boleto:'Boleto',avista:'À vista',cartao:'Cartão',financiamento:'Financiamento'}[c.forma]||c.forma||'';
     const showParc=c.forma==='cartao'||c.forma==='financiamento';
     const parcTxt=showParc&&c.parcelas>1?` ${c.parcelas}x`:'';
     const vencTxt=c.vencimento?new Date(c.vencimento+'T12:00').toLocaleDateString('pt-BR'):'';
-    return`<div class="row"><span class="d">${_esc(c.desc||fLabel)}${vencTxt?' · venc. '+vencTxt:''}${fLabel?' · '+fLabel+parcTxt:''}</span><span class="v">R$ ${fmtBRL(c.valor)}</span></div>`;
+    const tPct=(c.absorcao!=='loja'&&c.forma==='cartao')?(((_getTabCartao().find(x=>x.parcelas==(c.parcelas||1))||{}).taxa)||0):0; // taxa que o cliente absorve
+    const taxaCond=tPct?(c.valor||0)*(tPct/100):0;
+    const totalCond=(c.valor||0)+taxaCond;
+    const parcVal=(showParc&&c.parcelas>1)?totalCond/c.parcelas:0;
+    const extra=taxaCond>0?`<br><span style="font-size:10.5px;color:var(--faint);">valor R$ ${fmtBRL(c.valor)} + taxa de parcelamento R$ ${fmtBRL(taxaCond)}${parcVal>0?` · ${c.parcelas}x de R$ ${fmtBRL(parcVal)}`:''}</span>`:'';
+    return`<div class="row" style="align-items:flex-start;"><span class="d">${_esc(c.desc||fLabel)}${vencTxt?' · venc. '+vencTxt:''}${fLabel?' · '+fLabel+parcTxt:''}${extra}</span><span class="v">R$ ${fmtBRL(totalCond)}</span></div>`;
   }).join('')}</div>`:'';
   const obsHtml=obs?`<div class="obs"><div class="lbl">Observações</div>${_esc(obs)}</div>`:'';
 
@@ -12803,19 +12802,22 @@ function gerarContrato(cadId){
 
   // Condições de pagamento: usa condicoesPgto do lead vinculado (novo formato) ou parcs do cadastro (legado)
   const _condsPgto=_leadCt?.condicoesPgto;
-  const taxaClienteCt=_taxaClienteConds(_condsPgto); // taxa do cartão que o cliente absorve (transparência: soma no total a pagar)
   const pagRows=_condsPgto&&_condsPgto.length
     ?_condsPgto.map((p,i)=>{
         const fLabel={pix:'PIX',boleto:'Boleto',avista:'À vista',cartao:'Cartão',financiamento:'Financiamento'}[p.forma]||p.forma;
         const showParc=p.forma==='cartao'||p.forma==='financiamento';
         const parcTxt=showParc?` ${p.parcelas}x`:'';
         const absTxt=showParc?(p.absorcao==='loja'?' (loja)':' (cliente)'):'';
+        const tPct=(p.absorcao!=='loja'&&p.forma==='cartao')?(((_getTabCartao().find(x=>x.parcelas==(p.parcelas||1))||{}).taxa)||0):0; // taxa que o cliente absorve (operadora)
+        const taxaCondCt=tPct?(p.valor||0)*(tPct/100):0;
+        const totalCondCt=(p.valor||0)+taxaCondCt;
+        const parcValCt=(showParc&&p.parcelas>1)?totalCondCt/p.parcelas:0;
         return`<tr>
           <td style="text-align:center;">${i+1}</td>
-          <td>${_esc(p.desc||fLabel)}</td>
+          <td>${_esc(p.desc||fLabel)}${taxaCondCt>0?`<br><span style="font-size:9.5px;color:#666;">valor R$ ${fmtBRL(p.valor)} + taxa de parcelamento R$ ${fmtBRL(taxaCondCt)}${parcValCt>0?` · ${p.parcelas}x de R$ ${fmtBRL(parcValCt)}`:''}</span>`:''}</td>
           <td style="text-align:center;">${fmtDate(p.vencimento)}</td>
           <td style="text-align:center;">${fLabel}${parcTxt}${absTxt}</td>
-          <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(p.valor)}</td></tr>`; })
+          <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalCondCt)}</td></tr>`; })
       .join('')
     :parcs.map(p=>`
       <tr><td style="text-align:center;">${p.label}</td>
@@ -12964,15 +12966,6 @@ body.has-toolbar{padding-top:52px;}
     <tr class="total-row">
       <td colspan="3" style="text-align:right;font-size:11px;letter-spacing:.5px;">TOTAL DO CONTRATO</td>
       <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalAposDescCt)}</td>
-    </tr>`:''}
-    ${taxaClienteCt>0?`
-    <tr>
-      <td colspan="3" style="text-align:right;font-size:11px;color:#8a5a12;font-weight:600;">Taxa do cartão (parcelamento — cliente)</td>
-      <td style="text-align:right;white-space:nowrap;color:#8a5a12;font-weight:600;">+ R$ ${fmtBRL(taxaClienteCt)}</td>
-    </tr>
-    <tr class="total-row" style="background:#FBF3E2;">
-      <td colspan="3" style="text-align:right;font-size:11px;letter-spacing:.5px;">TOTAL A PAGAR (com taxa)</td>
-      <td style="text-align:right;white-space:nowrap;">R$ ${fmtBRL(totalAposDescCt+taxaClienteCt)}</td>
     </tr>`:''}
   </tbody>
 </table>
