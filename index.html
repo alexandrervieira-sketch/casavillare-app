@@ -12321,11 +12321,19 @@ function ldAtualizarTaxaPreview(){
       const valorCom      = valorLiqCom * (pct/100);
       const corPts        = desconto<=10?'#166534':desconto<=20?'#92400E':desconto<=30?'#B45309':'#991B1B';
       // No lead mostramos APENAS pontuação e valor ao cliente (combinado: sem % nem valor de comissão)
+      // Cliente paga com a taxa do cartão que o CLIENTE absorve somada (base + taxa cliente)
+      const taxaClienteConds=(_condsFull||[]).reduce((a,c)=>{
+        if(c.absorcao==='loja') return a;
+        if(c.forma==='cartao'){ const e=_getTabCartao().find(x=>x.parcelas==(c.parcelas||1)); return a+((e&&e.taxa)?(c.valor||0)*(e.taxa/100):0); }
+        return a;
+      },0);
       comEl.innerHTML =
         `🏅 Pontuação: <strong style="color:${corPts}">${pontos.toFixed(2).replace('.',',')} pts</strong>`+
         (valor?
           ` &nbsp;·&nbsp; <span style="color:var(--gl);font-size:11px;">Valor ao cliente:</span> <strong>R$ ${fmt2(valorApdesc)}</strong>`
-        :'');
+        :'')+
+        (rtPct>0?` &nbsp;·&nbsp; <span style="color:#8B5CF6;font-size:11px;">🏛️ RT especificador:</span> <strong style="color:#8B5CF6;">−R$ ${fmt2(rtValor)}</strong>`:'')+
+        (taxaClienteConds>0?`<br><span style="color:#B45309;font-size:11.5px;">👤 Cliente paga (com taxa do cartão): <strong>R$ ${fmt2(valorApdesc+taxaClienteConds)}</strong> <span style="color:var(--gl);">(base R$ ${fmt2(valorApdesc)} + taxa R$ ${fmt2(taxaClienteConds)})</span></span>`:'');
       comEl.style.display = '';
     }
   }
