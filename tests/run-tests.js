@@ -81,7 +81,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
-  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL
+  _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -591,6 +591,21 @@ test('_sid: preserva id com letras (ped_<leadId>) e ainda barra caracteres perig
   const nid = T._newId();
   assertEq(T._sid(nid), nid, '_newId() nunca é alterado por _sid');
   assertEq(T._sid('ped_' + nid), 'ped_' + nid, 'id determinístico ped_<...> nunca é alterado por _sid');
+});
+
+// Margem de erro EXTRA do montador: reduz SÓ a base dele, além da geral; não afeta os outros
+test('Margem extra do montador reduz só a base do montador', () => {
+  T.ST.configsCom = { margemErro: 0, montador: 10, margemErroMont: 10 };
+  T.ST.leads = [{ id: 'Lmm', status: 'ganho', valor: 100000, desconto: 0 }];
+  T.ST.pedidos = [{ id: 'Pmm', leadId: 'Lmm', status: 'concluido', montador: 'Zé' }];
+  const p = T.ST.pedidos[0];
+  const baseOutros = T._pedidoValorBase(p);           // base dos outros papéis (margem geral 0 aqui)
+  const baseMont = T._calcComMontador(p).valorBase;   // base do montador (−10% extra)
+  assertEq(Math.round(baseMont * 100) / 100, Math.round(baseOutros * 0.9 * 100) / 100, 'montador cai 10%');
+  assert(baseOutros > baseMont, 'a base dos outros NÃO é reduzida pela margem do montador');
+  // desativado (0) = sem efeito
+  T.ST.configsCom.margemErroMont = 0;
+  assertEq(Math.round(T._calcComMontador(p).valorBase * 100) / 100, Math.round(baseOutros * 100) / 100, 'margem 0 = base cheia');
 });
 
 // Valor da parcela do boleto: parse BR não pode perder o milhar (bug: 1.539,81 virava 539,81 com parseFloat cru)

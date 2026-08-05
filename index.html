@@ -7856,6 +7856,8 @@ function _getComMont(){ return _getCfgCom().montador??COM_DEFAULTS.montador; }
 function _getMargemErroFator(){ const m=parseFloat(_getCfgCom().margemErro)||0; return 1-(m/100); }
 // Aplica margem de erros ao valor líquido antes de calcular comissão
 function _aplicarMargemErro(valorLiq){ return valorLiq*_getMargemErroFator(); }
+// Margem de erro EXTRA, aplicada SÓ na base da comissão do montador (além da geral acima)
+function _getMargemErroMontFator(){ const m=parseFloat(_getCfgCom().margemErroMont)||0; return 1-(m/100); }
 // Arredonda a centavos — fonte única p/ a comissão bater entre rentabilidade, Comissões e folha
 function _round2(v){ return Math.round((v||0)*100)/100; }
 function _getComVend(pontos){
@@ -8200,7 +8202,7 @@ function _descEfetivoComissao(lead){
 // total do pagamento continua só na conclusão. Antes só aparecia a partir de "montagem" (tarde demais).
 const _MONT_ETAPAS_VISIVEIS=['pedido','producao','expedicao','agendamento','transporte','entregue','montagem','vistoria','assistencia','concluido'];
 function _calcComMontador(pedido){
-  const valorBase=_pedidoValorBase(pedido);
+  const valorBase=_pedidoValorBase(pedido)*_getMargemErroMontFator(); // margem EXTRA só do montador, além da geral (que já está em _pedidoValorBase)
   const pct=_getComMont();
   const valorCom=valorBase*(pct/100);
   const visivel=_MONT_ETAPAS_VISIVEIS.includes(pedido.status);
@@ -10384,6 +10386,15 @@ function rConfigComBlock(){
   });
   html+='</select>';
   html+=me>0?`<span style="font-size:12px;color:#92400E;">→ base de comissão = valor líquido × ${(100-me)}%</span>`:'';
+  html+='</div>';
+  // Margem de erro EXTRA — só do montador (além da geral acima)
+  const meM=parseFloat(cc.margemErroMont)||0;
+  html+='<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed #FED7AA;flex-wrap:wrap;">';
+  html+='<label style="font-size:13px;color:var(--dark);">Margem extra — <strong>só Montador</strong>:</label>';
+  html+='<select id="cfgcom-margem-err-mont" style="padding:5px 10px;border:1.5px solid #FED7AA;border-radius:7px;font-size:13px;background:#fff;">';
+  [0,1,2,3,4,5,6,7,8,9,10].forEach(v=>{ html+=`<option value="${v}" ${meM===v?'selected':''}>${v===0?'Desativado':v+'%'}</option>`; });
+  html+='</select>';
+  html+=meM>0?`<span style="font-size:12px;color:#92400E;">→ base do montador = líquido × ${(100-me)}% × ${(100-meM)}%</span>`:'<span style="font-size:11.5px;color:#A16207;">extra, além da margem geral — afeta só a comissão do montador</span>';
   html+='</div></div>';
 
   // Flag de visibilidade das comissões do pedido (decisão do gestor)
@@ -10419,6 +10430,7 @@ async function salvarTabelaCom(){
   ST.configsCom.projetista=[g('cfgcom-pa'),g('cfgcom-pb'),g('cfgcom-pc')];
   ST.configsCom.montador  =g('cfgcom-mont');
   ST.configsCom.margemErro=parseFloat(document.getElementById('cfgcom-margem-err')?.value)||0;
+  ST.configsCom.margemErroMont=parseFloat(document.getElementById('cfgcom-margem-err-mont')?.value)||0;
   ST.configsCom.comissaoVisivel=!!document.getElementById('cfgcom-vis')?.checked;
   _cfgTouch('configsCom'); save(); toast('Tabela de comissões salva! ✓');
 }
