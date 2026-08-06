@@ -10970,7 +10970,10 @@ function pedWhats(id){
   const p=(ST.pedidos||[]).find(x=>String(x.id)===String(id));
   if(!p){ toast('Pedido não encontrado'); return; }
   const key=_WA_ETAPA_TPL[p.status]||'followup'; // etapa sem mensagem própria (medição, projeto…) → abre com a saudação
-  _waAbrir(_pedTelefone(p), _waFill(_waTpl(key), {nome:p.clienteNome||p.cliente||''}));
+  const msg=_waFill(_waTpl(key), {nome:p.clienteNome||p.cliente||''});
+  const link=_waLink(_pedTelefone(p), msg);
+  if(link){ window.open(link,'_blank'); }                                    // tem telefone → abre a conversa direto
+  else { window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); toast('📵 Pedido sem telefone salvo — escolha o contato no WhatsApp.'); } // sem telefone → abre p/ escolher o contato
 }
 // A Receber: cobrança de uma parcela
 function crWhats(leadId, condId){
@@ -13424,7 +13427,7 @@ function _rPedPipe(ped,hoje,statsHtml){
         ${(isG||ST.configsCom?.comissaoVisivel)?comProjBadge:''}
         ${(isG||ST.configsCom?.comissaoVisivel)?comMontBadge:''}
         <div class="ped-card-btns">
-          ${_telNorm(_pedTelefone(p)).length>=10?`<button onclick="event.stopPropagation();pedWhats('${_sid(p.id)}')" title="${_WA_ETAPA_TPL[e.id]?'Avisar o cliente no WhatsApp (mensagem da etapa)':'Falar com o cliente no WhatsApp'}">💬</button>`:''}
+          <button onclick="event.stopPropagation();pedWhats('${_sid(p.id)}')" title="${_WA_ETAPA_TPL[e.id]?'Avisar o cliente no WhatsApp (mensagem da etapa)':'Falar com o cliente no WhatsApp'}">💬</button>
           <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
           ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();abrirFichaRentab('${p.id}')" title="Rentabilidade do projeto (previsto × real)">📊</button>`:''}
           ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
