@@ -82,7 +82,8 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
   _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador,
-  _taxaClienteConds, _calcTaxaCartaoConds
+  _taxaClienteConds, _calcTaxaCartaoConds,
+  _mesesNoPeriodo, _calcDREPeriodo
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -143,6 +144,30 @@ test('Cenário B: DRE receita conta o valor COM o RT embutido', () => {
   T.ST.leads = [{ id: 'Lrt', status: 'ganho', valor: 100000, desconto: 0, rtPct: 10, dataFechamento: '2051-01-15' }];
   T.ST.vendasCom = [];
   assertEq(Math.round(T._dreReceitaCRM('2051-01') * 100) / 100, 110000, 'receita = 100.000 + RT 10% = 110.000');
+});
+
+// ── Análise financeira por período (mês/trimestre/ano/12m) ──
+test('Análise: _mesesNoPeriodo cobre o intervalo (inclusive, cruzando ano)', () => {
+  assertEq(T._mesesNoPeriodo('2026-07-01', '2026-07-31').join(','), '2026-07', 'mês único');
+  assertEq(T._mesesNoPeriodo('2026-07-01', '2026-09-30').join(','), '2026-07,2026-08,2026-09', 'trimestre');
+  assertEq(T._mesesNoPeriodo('2025-11-01', '2026-02-28').join(','), '2025-11,2025-12,2026-01,2026-02', 'cruza o ano');
+  assertEq(T._mesesNoPeriodo('2026-01-01', '2026-12-31').length, 12, 'ano = 12 meses');
+});
+test('Análise: _calcDREPeriodo soma fluxos e RECALCULA a margem (nunca soma %)', () => {
+  const bak = T.ST.dre;
+  T.ST.dre = [
+    { mesAno: '2027-01', cat: 'rec_outra', valor: 30000 }, { mesAno: '2027-01', cat: 'cpv', valor: 10000 },
+    { mesAno: '2027-02', cat: 'rec_outra', valor: 60000 }, { mesAno: '2027-02', cat: 'cpv', valor: 10000 },
+  ];
+  try {
+    const d1 = T.calcDRE('2027-01'), d2 = T.calcDRE('2027-02');
+    const agg = T._calcDREPeriodo(['2027-01', '2027-02']);
+    assertEq(Math.round(agg.recLiq * 100) / 100, Math.round((d1.recLiq + d2.recLiq) * 100) / 100, 'recLiq é aditiva');
+    assertEq(Math.round(agg.lucroBruto * 100) / 100, Math.round((d1.lucroBruto + d2.lucroBruto) * 100) / 100, 'lucroBruto é aditivo');
+    const esperado = agg.recLiq > 0 ? Math.round(agg.lucroBruto / agg.recLiq * 10000) / 100 : 0;
+    assertEq(Math.round(agg.margemBruta * 100) / 100, esperado, 'margem recalculada sobre os totais do período');
+    assert(Math.abs(agg.margemBruta - (d1.margemBruta + d2.margemBruta)) > 0.5, 'margem NÃO é a soma das margens mensais');
+  } finally { T.ST.dre = bak; }
 });
 
 // ── Financiamento / retenção (tabela default): 24x, 1º venc 60 dias ──

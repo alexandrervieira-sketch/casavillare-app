@@ -15691,7 +15691,7 @@ function finSubTab(sub){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="finNavMes(-1)">‹</button><span class="mes-label" id="fin-mes-label-v">—</span><button onclick="finNavMes(1)">›</button></div>${_btnFecharMes()}<button class="btn btn-p" onclick="abrirModalDRE(null)">+ Lançamento</button>`;
       document.getElementById('fin-mes-label').textContent='';
     } else if(sub==='analise'){
-      actEl.innerHTML=`<div class="mes-nav"><button onclick="finNavMes(-1)">‹</button><span class="mes-label" id="analise-mes-label">—</span><button onclick="finNavMes(1)">›</button></div>`;
+      actEl.innerHTML=''; // o filtro de período (mês/trim/ano/12m) fica dentro do conteúdo, como na aba Vendas
     } else if(sub==='pag'){
       actEl.innerHTML=`<div class="mes-nav"><button onclick="pagNavMes(-1)">‹</button><span class="mes-label" id="pag-mes-label">—</span><button onclick="pagNavMes(1)">›</button></div><button class="btn btn-p" id="btn-nova-folha" onclick="abrirModalFolha(null)">+ Nova folha</button>`;
     } else if(sub==='cp'){
@@ -15825,16 +15825,34 @@ function salvarMargemAlvo(v){
   ST.margemLucroAlvo=n; _cfgTouch('margemLucroAlvo'); save();
   rFinAnalise();
 }
+// Filtro de período da Análise (mês/trimestre/ano/12m), no mesmo padrão da aba Relatórios › Vendas.
+let _analiseFiltro='mes_atual';
+function _analiseAplicarFiltro(k){ _analiseFiltro=k; rFinAnalise(); }
+// Lista de meses 'YYYY-MM' entre duas datas ISO (inclusive).
+function _mesesNoPeriodo(de,ate){
+  const out=[]; let y=+String(de).slice(0,4), m=+String(de).slice(5,7);
+  const ey=+String(ate).slice(0,4), em=+String(ate).slice(5,7); let guard=0;
+  while((y<ey||(y===ey&&m<=em)) && guard++<400){ out.push(y+'-'+String(m).padStart(2,'0')); m++; if(m>12){m=1;y++;} }
+  return out;
+}
+// Soma os DREs mensais do período. Todos os campos do calcDRE são fluxos aditivos; os % derivados
+// (margemBruta/margemOp) são recalculados sobre os totais — nunca somados.
+function _calcDREPeriodo(meses){
+  if(!meses||meses.length<=1) return calcDRE((meses&&meses[0])||mesAnoStr(_finMes,_finAno));
+  const acc={};
+  meses.forEach(ma=>{ const d=calcDRE(ma); for(const k in d){ if(typeof d[k]==='number') acc[k]=(acc[k]||0)+(d[k]||0); } });
+  acc.margemBruta=acc.recLiq>0?acc.lucroBruto/acc.recLiq*100:0;
+  acc.margemOp   =acc.recLiq>0?acc.resultado/acc.recLiq*100:0;
+  return acc;
+}
 function rFinAnalise(){
   const el=document.getElementById('fin-content');
   if(!el) return;
 
-  const mesAno=mesAnoStr(_finMes,_finAno);
-  const lbl=mesNomeStr(_finMes,_finAno);
-  const lbEl=document.getElementById('analise-mes-label');
-  if(lbEl) lbEl.textContent=lbl;
-
-  const d=calcDRE(mesAno);
+  const per=_convGetPeriodo(_analiseFiltro);
+  const meses=_mesesNoPeriodo(per.de, per.ate);
+  const umMes=meses.length<=1;
+  const d=_calcDREPeriodo(meses);
 
   // Margem de Contribuição = Receita Líq - CV - CPV
   // (o que "sobra" para pagar os fixos + lucro)
@@ -15899,23 +15917,30 @@ function rFinAnalise(){
   // Insight textual
   let insightTxt='';
   if(!d.recLiq){
-    insightTxt='Sem receitas lançadas neste mês. Lance as vendas no DRE para ativar a análise.';
+    insightTxt='Sem receitas lançadas '+(umMes?'neste mês':'neste período')+'. Lance as vendas no DRE para ativar a análise.';
   } else if(!pe){
     insightTxt='Lance os custos fixos e variáveis no DRE para calcular o ponto de equilíbrio.';
   } else if(acimaPE){
     const folga=d.recLiq-pe;
-    insightTxt=`✅ A loja está <strong>acima do ponto de equilíbrio</strong> este mês — com folga de ${fmt(folga)}. ${acimaPEE?'Meta de lucro também atingida — excelente!':'Para atingir também a meta de '+margemAlvoPct+'% de lucro, faltam '+fmt(Math.max(0,pee-d.recLiq))+' em vendas.'}`;
+    insightTxt=`✅ A loja está <strong>acima do ponto de equilíbrio</strong> ${umMes?'este mês':'neste período'} — com folga de ${fmt(folga)}. ${acimaPEE?'Meta de lucro também atingida — excelente!':'Para atingir também a meta de '+margemAlvoPct+'% de lucro, faltam '+fmt(Math.max(0,pee-d.recLiq))+' em vendas.'}`;
   } else {
-    insightTxt=`⚠️ A loja ainda está <strong>abaixo do ponto de equilíbrio</strong>. Faltam ${fmt(peRestante)} em receita para cobrir todos os custos fixos do mês.`;
+    insightTxt=`⚠️ A loja ainda está <strong>abaixo do ponto de equilíbrio</strong>. Faltam ${fmt(peRestante)} em receita para cobrir todos os custos fixos do ${umMes?'mês':'período'}.`;
   }
+
+  const FILTROS=[['mes_atual','Mês atual'],['mes_passado','Mês passado'],['trim_atual','Trimestre'],['ano_atual','Ano'],['ult_12','Últ. 12 meses']];
+  const filtroBtns=FILTROS.map(([k,l])=>`<button class="btn ${_analiseFiltro===k?'btn-p':'btn-s'} btn-sm" onclick="_analiseAplicarFiltro('${k}')" style="font-size:11px;">${l}</button>`).join('');
 
   el.innerHTML=`
   <div style="padding:8px 0 16px;">
 
+    <!-- Filtro de período (mês/trimestre/ano/12m) -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">${filtroBtns}</div>
+    <div style="font-size:12px;color:var(--gl);margin-bottom:16px;">Período: <strong>${per.label}</strong></div>
+
     <!-- 🎯 META DE VENDA (destaque, em português claro) -->
     <div style="background:var(--card);border:2px solid #C8A97A;border-radius:14px;padding:16px 20px;margin-bottom:20px;">
       <div style="font-size:12px;font-weight:800;color:#8A6D3B;text-transform:uppercase;letter-spacing:.5px;">
-        🎯 Meta de venda do mês para lucrar
+        🎯 Meta de venda ${umMes?'do mês':'do período'} para lucrar
         <input type="number" min="0" max="90" step="1" value="${margemAlvoPct}"
           onchange="salvarMargemAlvo(this.value)" title="Ajuste o % de lucro desejado"
           style="width:54px;padding:2px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;text-align:center;color:var(--dark);"/> %
@@ -15924,8 +15949,8 @@ function rFinAnalise(){
       <div style="font-size:12.5px;color:#6B7280;margin-top:3px;">
         ${pee>0
           ? (acimaPEE
-              ? '✅ Meta já atingida este mês — você faturou '+fmt(d.recLiq)
-              : 'Faltam <strong style="color:#B45309;">'+fmt(Math.max(0,pee-d.recLiq))+'</strong> em vendas para lucrar '+margemAlvoPct+'% este mês')
+              ? '✅ Meta já atingida '+(umMes?'este mês':'neste período')+' — você faturou '+fmt(d.recLiq)
+              : 'Faltam <strong style="color:#B45309;">'+fmt(Math.max(0,pee-d.recLiq))+'</strong> em vendas para lucrar '+margemAlvoPct+'% '+(umMes?'este mês':'neste período'))
           : (mcPct>0
               ? 'Sua margem de contribuição ('+mcPct.toFixed(1).replace('.',',')+'%) ainda não cobre '+margemAlvoPct+'% de lucro — reduza custos ou baixe a meta'
               : 'Lance as receitas e os custos do mês no DRE para calcular a meta')}
