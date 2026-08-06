@@ -2600,8 +2600,9 @@ textarea.inp{resize:vertical;min-height:68px;}
       </div>
 
       <div class="form-actions">
+        <button class="btn btn-s btn-sm" id="pd-btn-cancelar" onclick="pedCancelarDoModal()" style="display:none;border-color:#B45309;color:#B45309;">🚫 Cancelar pedido</button>
         <button class="btn btn-danger btn-sm" id="pd-btn-delete" onclick="excluirPedido()" style="display:none;margin-right:auto;">🗑 Excluir</button>
-        <button class="btn btn-s" onclick="fecharModal('modal-pedido')">Cancelar</button>
+        <button class="btn btn-s" onclick="fecharModal('modal-pedido')">Fechar</button>
         <button class="btn btn-p" onclick="salvarPedido()">Salvar pedido</button>
       </div>
     </div>
@@ -13428,10 +13429,8 @@ function _rPedPipe(ped,hoje,statsHtml){
         ${(isG||ST.configsCom?.comissaoVisivel)?comMontBadge:''}
         <div class="ped-card-btns">
           <button onclick="event.stopPropagation();pedWhats('${_sid(p.id)}')" title="${_WA_ETAPA_TPL[e.id]?'Avisar o cliente no WhatsApp (mensagem da etapa)':'Falar com o cliente no WhatsApp'}">💬</button>
-          <button onclick="event.stopPropagation();abrirModalPedido('${_sid(p.id)}')">✏️ Editar</button>
           ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();abrirFichaRentab('${p.id}')" title="Rentabilidade do projeto (previsto × real)">📊</button>`:''}
           ${ST.perfil==='gestor'&&e.id!=='venda_prog'?`<button onclick="event.stopPropagation();pedVoltar('${p.id}')" title="Voltar uma etapa (só gestor)">←</button>`:''}
-          ${ST.perfil==='gestor'?`<button onclick="event.stopPropagation();${_pedCancelado(p)?`pedReativar('${p.id}')`:`pedCancelar('${p.id}')`}" title="${_pedCancelado(p)?'Reativar pedido':'Cancelar pedido (sai de CPV/meta/comissão/fiscal)'}">${_pedCancelado(p)?'↩️':'🚫'}</button>`:''}
           ${e.id!=='concluido'&&!_pedCancelado(p)?`<button class="pb-adv" onclick="event.stopPropagation();pedAvancar('${p.id}')">→ Avançar</button>`:''}
         </div>
         ${e.id==='proj_exec'&&!p.valorFabrica
@@ -14492,6 +14491,8 @@ function abrirModalPedido(id){
     document.getElementById('pd-obs').value            =p.obs||'';
     _pdCheck=p.checklists?_deepClone(p.checklists):{};  // checklist medição/vistoria
     document.getElementById('pd-btn-delete').style.display='';
+    { const cbtn=document.getElementById('pd-btn-cancelar'); // cancelar/reativar pedido movido pro modal (só gestor)
+      if(cbtn){ if(ST.perfil==='gestor'){ cbtn.style.display=''; cbtn.textContent=_pedCancelado(p)?'↩️ Reativar pedido':'🚫 Cancelar pedido'; } else cbtn.style.display='none'; } }
     // Campos AT
     _pdAtCompData=p.atComprovante||null;
     _pdAtCompNome=p.atComprovanteNome||null;
@@ -14552,6 +14553,7 @@ function abrirModalPedido(id){
     document.getElementById('pd-lead').value='';
     document.getElementById('pd-obs').value='';
     document.getElementById('pd-btn-delete').style.display='none';
+    { const cbtn=document.getElementById('pd-btn-cancelar'); if(cbtn) cbtn.style.display='none'; } // pedido novo → sem cancelar
     document.getElementById('pd-datas-real').style.display='none';
     pdRenderChecklist();
   }
@@ -14662,6 +14664,14 @@ function salvarPedido(){
   fecharModal('modal-pedido'); rPedidos();
 }
 
+// Cancelar/Reativar pedido a partir do modal (o botão saiu do card e veio pra cá). Reusa pedCancelar/pedReativar.
+function pedCancelarDoModal(){
+  if(!_pdId) return;
+  const p=(ST.pedidos||[]).find(x=>String(x.id)===String(_pdId));
+  if(!p) return;
+  fecharModal('modal-pedido');
+  if(_pedCancelado(p)) pedReativar(p.id); else pedCancelar(p.id);
+}
 function excluirPedido(){
   if(!_gestorPodeExcluir()) return;
   if(!_pdId)return;
