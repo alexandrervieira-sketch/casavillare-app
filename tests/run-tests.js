@@ -83,7 +83,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
   _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador,
   _taxaClienteConds, _calcTaxaCartaoConds,
-  _mesesNoPeriodo, _calcDREPeriodo
+  _mesesNoPeriodo, _calcDREPeriodo, _drePessoalDetalhe
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -152,6 +152,31 @@ test('Análise: _mesesNoPeriodo cobre o intervalo (inclusive, cruzando ano)', ()
   assertEq(T._mesesNoPeriodo('2026-07-01', '2026-09-30').join(','), '2026-07,2026-08,2026-09', 'trimestre');
   assertEq(T._mesesNoPeriodo('2025-11-01', '2026-02-28').join(','), '2025-11,2025-12,2026-01,2026-02', 'cruza o ano');
   assertEq(T._mesesNoPeriodo('2026-01-01', '2026-12-31').length, 12, 'ano = 12 meses');
+});
+test('DRE drill-down: _drePessoalDetalhe soma exatamente o total do DRE (op e prestadores)', () => {
+  const bak = { equipe: T.ST.equipe, folhas: T.ST.folhas, configs: T.ST.configs, comissoes: T.ST.comissoes };
+  T.ST.equipe = {
+    gestor: [], comercial: [],
+    obras: [{ nome: 'Montador X', perfil: 'montador' }],
+    outros: [{ nome: 'Prestador Y', perfil: 'prestador' }, { nome: 'Prestador Z', perfil: 'prestador' }],
+  };
+  T.ST.configs = { 'Prestador Z': { salarioBase: 1500 } }; // Z sem folha → entra automático
+  T.ST.comissoes = [];
+  T.ST.folhas = [
+    { mesAno: '2099-03', pessoa: 'Montador X', salarioBase: 2000 }, // obras → equipe operacional
+    { mesAno: '2099-03', pessoa: 'Prestador Y', salarioBase: 3000 }, // outros → prestador
+  ];
+  try {
+    const det = T._drePessoalDetalhe('2099-03');
+    const d = T.calcDRE('2099-03');
+    const somaOp = det.op.reduce((a, i) => a + i.valor, 0);
+    const somaPrest = det.prest.reduce((a, i) => a + i.valor, 0);
+    assertEq(Math.round(somaOp * 100) / 100, 2000, 'equipe operacional = 2.000 (Montador X)');
+    assertEq(Math.round(somaPrest * 100) / 100, 4500, 'prestadores = 3.000 (Y folha) + 1.500 (Z salário)');
+    assertEq(Math.round(somaOp * 100) / 100, Math.round(d.despPessoalOp * 100) / 100, 'op fecha com o DRE');
+    assertEq(Math.round(somaPrest * 100) / 100, Math.round(d.despPrestadores * 100) / 100, 'prestadores fecham com o DRE');
+    assert(det.prest.some(i => i.nome === 'Prestador Z' && i.auto), 'Z marcado como salário cadastrado (auto)');
+  } finally { Object.assign(T.ST, bak); }
 });
 test('Análise: _calcDREPeriodo soma fluxos e RECALCULA a margem (nunca soma %)', () => {
   const bak = T.ST.dre;

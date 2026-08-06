@@ -15644,6 +15644,43 @@ function calcDRE(mesAno){
           totalDesp,resultado,margemBruta,margemOp};
 }
 
+// Detalhamento de PESSOAL do DRE (drill-down): quem compõe "Equipe operacional" e "Prestadores".
+// Espelha EXATAMENTE a partição de calcDRE (parte fixa da folha → Pessoal; comissão → Custo Variável).
+function _drePessoalDetalhe(mesAno){
+  const folhasMes=(ST.folhas||[]).filter(f=>f.mesAno===mesAno);
+  const _areasPrestador=['outros'];
+  const _despFolha=f=>(f.status==='pago'&&f.valorPago>0)?f.valorPago:liquidoFolha(f);
+  const _comEmbFolha=f=>{
+    const info=infoFunc(f.pessoa); let com;
+    if(info.area==='comercial'){
+      const base=(f.comissaoBase!=null)?f.comissaoBase:(f.vendas||[]).reduce((a,v)=>a+(v.valor||0)-(v.taxas||0),0)*((f.pct||0)/100);
+      com=base+(f.recuperados||0)+(f.bonus||0)-(f.desconto||0);
+    } else {
+      com=(ST.comissoes||[]).filter(c=>c.pessoa===f.pessoa&&c.mesAno===f.mesAno).reduce((a,c)=>a+(c.valor||0),0);
+    }
+    return Math.max(0,com);
+  };
+  const op=[], prest=[];
+  folhasMes.forEach(f=>{
+    if(_areasPrestador.includes(infoFunc(f.pessoa).area)){ prest.push({nome:f.pessoa, valor:_despFolha(f)}); }
+    else { const tot=_despFolha(f), comEff=Math.min(_comEmbFolha(f),tot); op.push({nome:f.pessoa, valor:tot-comEff}); }
+  });
+  const nomesComFolha=new Set(folhasMes.map(f=>f.pessoa));
+  ((ST.equipe&&ST.equipe.outros)||[]).filter(p=>!nomesComFolha.has(p.nome)).forEach(p=>{
+    const sal=(ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0;
+    prest.push({nome:p.nome, valor:sal, auto:true});
+  });
+  return { op:op.filter(i=>i.valor>0.005), prest:prest.filter(i=>i.valor>0.005) };
+}
+// Toggle do drill-down de pessoal no DRE.
+function _dreDrill(which){
+  const el=document.getElementById('dre-drill-'+which), car=document.getElementById('dre-caret-'+which);
+  if(!el) return;
+  const show=el.style.display==='none';
+  el.style.display=show?'':'none';
+  if(car) car.textContent=show?'▾':'▸';
+}
+
 let _finSubAtivo='dre';
 // ── FECHAMENTO MENSAL (trava de integridade) — só o gestor fecha/reabre ──
 function _mesFechado(mesAno){ return (ST.mesesFechados&&ST.mesesFechados[mesAno])||null; }
@@ -17063,6 +17100,13 @@ function rFinanceiro(){
   if(_finLblEl) _finLblEl.textContent=mesNomeStr(_finMes,_finAno);
   const mesAno=mesAnoStr(_finMes,_finAno);
   const d=calcDRE(mesAno);
+  const det=_drePessoalDetalhe(mesAno);
+  const _drillRows=(arr,vazio)=>arr.length
+    ? arr.map(i=>`<div class="dre-row dre-indent" style="padding-left:66px;">
+        <span class="dre-lbl sm" style="color:var(--gl);font-size:12px;">${_esc(i.nome)}${i.auto?' <span style="font-size:10px;color:#9CA3AF;">(salário cadastrado)</span>':''}</span>
+        <div class="dre-right"><span class="dre-val fail" style="font-size:12px;">${fmt(i.valor)}</span></div>
+      </div>`).join('')
+    : `<div class="dre-row dre-indent" style="padding-left:66px;"><span class="dre-lbl sm" style="color:#9CA3AF;font-size:12px;">${vazio}</span></div>`;
   const _fech=_mesFechado(mesAno);
   const _fechadoBanner=_fech?`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:9px 14px;margin-bottom:14px;font-size:13px;">
     <span>🔒 <strong>Mês fechado</strong>${_fech.por?' por '+_esc(_fech.por):''}${_fech.em?' em '+_fmtDateBR(_fech.em):''} — lançamentos deste mês estão bloqueados para edição.</span>
@@ -17128,14 +17172,16 @@ function rFinanceiro(){
       <span class="dre-lbl sm" style="font-weight:600;">Custo com Pessoal — total</span>
       <div class="dre-right"><span class="dre-auto-tag">AUTO</span><span class="dre-val fail" style="font-weight:700;">${fmt(d.despPessoal)}</span></div>
     </div>
-    <div class="dre-row dre-indent" style="padding-left:48px;">
-      <span class="dre-lbl sm" style="color:var(--gl);">👥 Equipe operacional (folhas)</span>
+    <div class="dre-row dre-indent" style="padding-left:48px;cursor:pointer;" onclick="_dreDrill('op')" title="Ver quem entra aqui">
+      <span class="dre-lbl sm" style="color:var(--gl);"><span id="dre-caret-op" style="display:inline-block;width:12px;color:#9CA3AF;">▸</span> 👥 Equipe operacional (folhas)</span>
       <div class="dre-right"><span class="dre-val fail" style="font-size:12px;">${fmt(d.despPessoalOp)}</span></div>
     </div>
-    <div class="dre-row dre-indent" style="padding-left:48px;">
-      <span class="dre-lbl sm" style="color:var(--gl);">🤝 Prestadores de serviço</span>
+    <div id="dre-drill-op" style="display:none;">${_drillRows(det.op,'Nenhuma folha da equipe operacional neste mês.')}${det.op.length?`<div class="dre-row dre-indent" style="padding-left:66px;"><span class="dre-lbl sm" style="color:#9CA3AF;font-size:11px;">ℹ️ Só a parte fixa das folhas entra aqui; a comissão da equipe vai em Custos Variáveis.</span></div>`:''}</div>
+    <div class="dre-row dre-indent" style="padding-left:48px;cursor:pointer;" onclick="_dreDrill('prest')" title="Ver quem entra aqui">
+      <span class="dre-lbl sm" style="color:var(--gl);"><span id="dre-caret-prest" style="display:inline-block;width:12px;color:#9CA3AF;">▸</span> 🤝 Prestadores de serviço</span>
       <div class="dre-right"><span class="dre-val fail" style="font-size:12px;">${fmt(d.despPrestadores)}</span></div>
     </div>
+    <div id="dre-drill-prest" style="display:none;">${_drillRows(det.prest,'Nenhum prestador com custo neste mês.')}</div>
 
     <div class="dre-sec-hdr"><span>Custos Fixos</span></div>
     ${[
