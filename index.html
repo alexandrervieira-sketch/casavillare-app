@@ -16193,6 +16193,33 @@ function excluirCP(){
   ST.contasPagar=(ST.contasPagar||[]).filter(c=>String(c.id)!==String(_cpId));
   save(); fecharModal('modal-cp'); toast('Excluída'); rFinCP();
 }
+// ── FASE 1 da Central de Pagamentos: panorama READ-ONLY de tudo que há a pagar no mês.
+// Não cria baixa nem toca no DRE — só junta o que já existe (salários, prestadores, comissões, DAS, contas).
+// Salário/prestador = salarioBase cadastrado (o que entra por competência no DRE); status "pago" = existe folha PAGA no mês.
+function _pagaveisMes(mesStr){
+  const _sal=nome=>(ST.configs&&ST.configs[nome]&&ST.configs[nome].salarioBase)||0;
+  const _folhaPaga=nome=>(ST.folhas||[]).some(f=>f.pessoa===nome&&f.mesAno===mesStr&&f.status==='pago');
+  const pick=areas=>areas.flatMap(a=>ST.equipe[a]||[])
+    .filter(p=>_ativoNoMes(p.nome,mesStr)&&_sal(p.nome)>0)
+    .map(p=>({nome:p.nome, valor:_sal(p.nome), pago:_folhaPaga(p.nome)}))
+    .sort((a,b)=>b.valor-a.valor);
+  const salarios=pick(['gestor','comercial','obras']);
+  const prestadores=pick(['outros']);
+  // Comissões: a Central ESPELHA a aba Comissões (decisão D1) — mostra o PAGO no mês (ledger comPagamentos por data).
+  const comPagoMes=(ST.comPagamentos||[]).filter(x=>String(x.data||'').slice(0,7)===mesStr)
+    .reduce((a,x)=>a+(x.valor||0),0);
+  // DAS: previsto + status realizado (Fiscal › Tributário).
+  const trReg=(typeof _tribReg==='function')?_tribReg(mesStr):null;
+  const das={ previsto:(typeof _tribCalc==='function')?(_tribCalc(mesStr).dasPrevisto||0):0,
+              pago:!!(trReg&&trReg.dasPago), valorPago:(trReg&&trReg.dasValorPago)||0 };
+  // Contas a pagar (fixas/variáveis) já lançadas no mês.
+  const contas=(ST.contasPagar||[]).filter(c=>c.mesAno===mesStr);
+  const contasObj={ previsto:contas.reduce((a,c)=>a+(c.valor||0),0),
+                    pago:contas.filter(c=>c.pago).reduce((a,c)=>a+(c.valor||0),0) };
+  const totSal=salarios.reduce((a,i)=>a+i.valor,0), totPrest=prestadores.reduce((a,i)=>a+i.valor,0);
+  const totalPrevisto=totSal+totPrest+das.previsto+contasObj.previsto; // comissão não soma aqui (paga na aba Comissões)
+  return { salarios, prestadores, totSal, totPrest, comPagoMes, das, contas:contasObj, totalPrevisto };
+}
 function rFinCP(){
   if(!_temPermFC('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
   const mesStr=`${_cpAno}-${String(_cpMes+1).padStart(2,'0')}`;
@@ -16246,7 +16273,43 @@ function rFinCP(){
     </div></td>
   </tr>`; };
 
+  const pv=_pagaveisMes(mesStr);
+  const _panItens=(itens)=>itens.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);font-size:12.5px;">
+      <span style="color:var(--txt);">${_esc(i.nome)} ${i.pago?'<span style="font-size:10px;color:#166534;font-weight:700;">✅ pago (folha)</span>':'<span style="font-size:10px;color:#B45309;font-weight:700;">⏳ a pagar</span>'}</span>
+      <span style="font-weight:600;color:var(--gl);">${fmtL(i.valor)}</span></div>`).join('');
+  const _panGrupo=(which,titulo,itens,prev)=>`<div style="border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;${itens.length?'cursor:pointer;':''}" ${itens.length?`onclick="_dreDrill('${which}')"`:''}>
+        ${itens.length?`<span id="dre-caret-${which}" style="display:inline-block;width:12px;color:#9CA3AF;font-size:12px;">▸</span>`:'<span style="display:inline-block;width:12px;"></span>'}
+        <span style="font-size:13px;font-weight:600;color:var(--txt);flex:1;">${titulo} <span style="font-weight:400;color:var(--gl);font-size:12px;">· ${itens.length}</span></span>
+        <span style="font-size:14px;font-weight:700;color:${prev>0?'#B45309':'var(--gl)'};">${fmtL(prev)}</span>
+        <button class="btn btn-s btn-sm" style="font-size:10px;margin-left:6px;" onclick="event.stopPropagation();finSubTab('pag')">Folha →</button>
+      </div>
+      ${itens.length?`<div id="dre-drill-${which}" style="display:none;padding:0 16px 8px 38px;">${_panItens(itens)}</div>`:''}
+    </div>`;
+  const _panLinha=(titulo,valorHtml,atalhoLabel,atalhoOnclick)=>`<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);">
+      <span style="display:inline-block;width:12px;"></span>
+      <span style="font-size:13px;font-weight:600;color:var(--txt);flex:1;">${titulo}</span>
+      <span style="font-size:14px;font-weight:700;">${valorHtml}</span>
+      <button class="btn btn-s btn-sm" style="font-size:10px;margin-left:6px;" onclick="${atalhoOnclick}">${atalhoLabel}</button>
+    </div>`;
+  const panoramaHtml=`<div class="dre-card" style="padding:0;overflow:hidden;margin-bottom:16px;border:1.5px solid #C8A97A;">
+    <div style="padding:13px 16px;background:rgba(200,169,122,.12);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <span style="font-weight:800;font-size:13px;color:#8A6D3B;">📋 Panorama de pagamentos — ${mesNomeStr(_cpMes,_cpAno)}</span>
+      <span style="font-size:12px;color:var(--gl);">Total previsto: <strong style="color:#B45309;font-size:14px;">${fmtL(pv.totalPrevisto)}</strong></span>
+    </div>
+    ${_panGrupo('pansal','👥 Salários — equipe operacional',pv.salarios,pv.totSal)}
+    ${_panGrupo('panprest','🤝 Prestadores de serviço',pv.prestadores,pv.totPrest)}
+    ${_panLinha('💰 Comissões <span style="font-weight:400;color:var(--gl);font-size:12px;">· pagas no mês</span>',`<span style="color:#166534;">${fmtL(pv.comPagoMes)}</span>`,'Comissões →',"navTo('tab-comissoes')")}
+    ${_panLinha('🧾 DAS — Simples Nacional',`<span style="color:${pv.das.pago?'#166534':'#B45309'};">${fmtL(pv.das.previsto)} ${pv.das.pago?'✅':'⏳'}</span>`,'Tributário →',"navTo('tab-fiscal');setTimeout(()=>fiscalSubTab('tributario'),100)")}
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;">
+      <span style="display:inline-block;width:12px;"></span>
+      <span style="font-size:13px;font-weight:600;color:var(--txt);flex:1;">🏢 Contas fixas / variáveis <span style="font-weight:400;color:var(--gl);font-size:12px;">· detalhe abaixo</span></span>
+      <span style="font-size:14px;font-weight:700;color:${pv.contas.previsto>0?'#B45309':'var(--gl)'};">${fmtL(pv.contas.previsto)}</span>
+    </div>
+    <div style="padding:8px 16px;background:rgba(200,169,122,.10);font-size:11px;color:var(--gl);border-top:1px solid var(--border);">👁️ Só leitura — cada item é pago no seu lugar (Folha, Comissões, Tributário, ou nas contas abaixo). Dar baixa e recibo direto daqui vem na próxima fase.</div>
+  </div>`;
   document.getElementById('fin-content').innerHTML=`
+  ${panoramaHtml}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
     <div class="dre-card" style="padding:16px 20px;">
       <div style="font-size:11px;color:var(--gl);text-transform:uppercase;font-weight:700;margin-bottom:4px;">⏳ A Pagar no mês</div>

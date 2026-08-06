@@ -83,7 +83,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
   _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador,
   _taxaClienteConds, _calcTaxaCartaoConds,
-  _mesesNoPeriodo, _calcDREPeriodo, _drePessoalDetalhe
+  _mesesNoPeriodo, _calcDREPeriodo, _drePessoalDetalhe, _pagaveisMes
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -176,6 +176,24 @@ test('DRE drill-down: _drePessoalDetalhe soma exatamente o total do DRE (op e pr
     assertEq(Math.round(somaOp * 100) / 100, Math.round(d.despPessoalOp * 100) / 100, 'op fecha com o DRE');
     assertEq(Math.round(somaPrest * 100) / 100, Math.round(d.despPrestadores * 100) / 100, 'prestadores fecham com o DRE');
     assert(det.prest.some(i => i.nome === 'Prestador Z' && i.auto), 'Z marcado como salário cadastrado (auto)');
+  } finally { Object.assign(T.ST, bak); }
+});
+test('Central Fase 1: _pagaveisMes junta salários, prestadores, comissões pagas, DAS e contas', () => {
+  const bak = { equipe: T.ST.equipe, folhas: T.ST.folhas, configs: T.ST.configs, comPagamentos: T.ST.comPagamentos, contasPagar: T.ST.contasPagar };
+  T.ST.equipe = { gestor: [], comercial: [{ nome: 'Vend B', perfil: 'vendedor' }], obras: [{ nome: 'Marc A', perfil: 'marceneiro' }], outros: [{ nome: 'Prest Y', perfil: 'prestador' }] };
+  T.ST.configs = { 'Vend B': { salarioBase: 1500 }, 'Marc A': { salarioBase: 2500 }, 'Prest Y': { salarioBase: 3000 } };
+  T.ST.folhas = [{ mesAno: '2099-07', pessoa: 'Marc A', salarioBase: 2500, status: 'pago', valorPago: 2500 }]; // Marc A pago via folha
+  T.ST.comPagamentos = [{ escopo: 'vendedor_mes', pessoa: 'Vend B', valor: 800, data: '2099-07-10' }, { escopo: 'x', pessoa: 'z', valor: 200, data: '2099-06-30' }];
+  T.ST.contasPagar = [{ id: 'c1', mesAno: '2099-07', cat: 'cf_aluguel', valor: 4000, pago: false, vencimento: '2099-07-05' }];
+  try {
+    const pv = T._pagaveisMes('2099-07');
+    assertEq(Math.round(pv.totSal * 100) / 100, 4000, 'salários op = 1500 (B) + 2500 (A)');
+    assertEq(Math.round(pv.totPrest * 100) / 100, 3000, 'prestadores = 3000 (Y)');
+    assert(pv.salarios.find(s => s.nome === 'Marc A').pago === true, 'Marc A marcado pago (folha paga)');
+    assert(pv.salarios.find(s => s.nome === 'Vend B').pago === false, 'Vend B pendente (sem folha paga)');
+    assertEq(Math.round(pv.comPagoMes * 100) / 100, 800, 'comissões pagas em julho = 800 (junho fora)');
+    assertEq(Math.round(pv.contas.previsto * 100) / 100, 4000, 'contas previsto = 4000');
+    assertEq(Math.round(pv.totalPrevisto * 100) / 100, Math.round((4000 + 3000 + 4000 + pv.das.previsto) * 100) / 100, 'total = salários+prest+contas+DAS (comissão não soma)');
   } finally { Object.assign(T.ST, bak); }
 });
 test('DRE: salário fixo da equipe operacional entra automático (ativo) e para no desligamento', () => {
