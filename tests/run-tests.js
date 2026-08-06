@@ -76,7 +76,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _vendaComExib, _pctVenda, _bipartidoLead, _bipartidoPed, _custoFabPed, _getComVend, _pedBackfillMarcos,
   _cfgConflCapture, _cfgConflOk, _dataPlausivel, _bipartidoCond, _calcTaxaCartaoConds,
   _configsPublica, _cfgprivDocs, _cfgprivMerge,
-  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE,
+  _bipartidoTotalMes, _volumeFabricaMes, _totalFabricaMes, calcDRE, _dreReceitaCRM, _leadValorVenda,
   _mergeCondPgto, _fluxoAReceberMes, _fluxoAPagarMes, _fluxoFabricaMes,
   comProjPagar, comProjEstornar, comPagarVendedor, _comVendedorMes, _comPagVendedor,
   _comProjPagarExec, _comPagVendedorExec, _stampUAt, _recWins, _canon,
@@ -115,21 +115,35 @@ test('pedidoValorBase sem lead = valor', () => { T.ST.configsCom = {}; assertEq(
 // Fonte ÚNICA do valor líquido da venda = base de comissão de TODOS (− desconto − taxa − RT)
 const _close = (a, b) => Math.abs(a - b) < 0.01;
 test('valorLiquidoVenda só desconto', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, desconto: 10 }), 45000), 'aposDesc'));
-test('valorLiquidoVenda RT sem desconto', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, rtPct: 3 }), 48500), '50000 − 1500'));
-test('valorLiquidoVenda desconto + RT', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, desconto: 10, rtPct: 3 }), 43650), '45000 − 1350'));
-test('vendaLiquido detalha taxa/rt/liquido', () => {
+// Cenário B: o RT SAI da base de comissão (comissão sobre o líquido SEM o RT)
+test('valorLiquidoVenda RT sem desconto (RT fora da comissão)', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, rtPct: 3 }), 50000), 'líquido = 50.000 (RT não desconta)'));
+test('valorLiquidoVenda desconto + RT (RT fora)', () => assert(_close(T._valorLiquidoVenda({ valor: 50000, desconto: 10, rtPct: 3 }), 45000), 'líquido = 45.000 (só desconto)'));
+test('vendaLiquido: líquido s/ RT (comissão) + valorCliente c/ RT (receita)', () => {
   const r = T._vendaLiquido({ valor: 50000, desconto: 10, rtPct: 3 });
-  assert(_close(r.aposDesc, 45000) && _close(r.taxa, 0) && _close(r.rt, 1350) && _close(r.liquido, 43650), 'breakdown');
+  assert(_close(r.aposDesc, 45000) && _close(r.taxa, 0) && _close(r.rt, 1350), 'breakdown');
+  assert(_close(r.liquido, 45000), 'comissão sobre 45.000 (RT fora)');
+  assert(_close(r.valorCliente, 46350), 'cliente paga 46.350 (45.000 + RT 1.350)');
 });
-// Cascata desconto→taxa→RT (exemplo exato do gestor): 200k −20% −16% −10% = 120.960
-test('vendaLiquido em cascata (desconto→taxa→RT)', () => {
+// Cenário B: 200k −20% −16%(loja) → base de COMISSÃO 134.400; +10% RT → cliente paga 173.440
+test('vendaLiquido cascata Cenário B (RT infla o cliente, sai da comissão)', () => {
   const r = T._vendaLiquido({ valor: 200000, desconto: 20, absorcao: 'loja', taxaLoja: 16, rtPct: 10 });
   assert(_close(r.aposDesc, 160000), 'após desconto = 160.000');
   assert(_close(r.taxa, 25600), 'taxa 16% de 160.000 = 25.600');
   assert(_close(r.rt, 13440), 'RT 10% de 134.400 = 13.440');
-  assert(_close(r.liquido, 120960), 'líquido final = 120.960');
+  assert(_close(r.liquido, 134400), 'comissão sobre 134.400 (RT fora)');
+  assert(_close(r.valorCliente, 173440), 'cliente paga 173.440 (160.000 + RT 13.440)');
 });
 test('vendaLiquido lead nulo = zeros', () => { const r = T._vendaLiquido(null); assertEq(r.liquido, 0); });
+// Cenário B: valor ao cliente = com RT (receita); DRE conta a receita com RT
+test('Cenário B: _leadValorVenda inclui o RT (valor ao cliente = receita)', () => {
+  assertEq(Math.round(T._leadValorVenda({ valor: 114992.40, rtPct: 10 }) * 100) / 100, 126491.64, 'cliente paga 126.491,64 (114.992,40 + RT 11.499,24)');
+  assertEq(Math.round(T._leadValorVenda({ valor: 114992.40 }) * 100) / 100, 114992.40, 'sem RT = 114.992,40');
+});
+test('Cenário B: DRE receita conta o valor COM o RT embutido', () => {
+  T.ST.leads = [{ id: 'Lrt', status: 'ganho', valor: 100000, desconto: 0, rtPct: 10, dataFechamento: '2051-01-15' }];
+  T.ST.vendasCom = [];
+  assertEq(Math.round(T._dreReceitaCRM('2051-01') * 100) / 100, 110000, 'receita = 100.000 + RT 10% = 110.000');
+});
 
 // ── Financiamento / retenção (tabela default): 24x, 1º venc 60 dias ──
 test('coefFin 24x d60 = 0.05933 (coeficiente da parcela)', () => {
