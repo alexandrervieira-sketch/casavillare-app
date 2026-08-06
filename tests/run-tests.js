@@ -178,6 +178,30 @@ test('DRE drill-down: _drePessoalDetalhe soma exatamente o total do DRE (op e pr
     assert(det.prest.some(i => i.nome === 'Prestador Z' && i.auto), 'Z marcado como salário cadastrado (auto)');
   } finally { Object.assign(T.ST, bak); }
 });
+test('DRE: salário fixo da equipe operacional entra automático (ativo) e para no desligamento', () => {
+  const bak = { equipe: T.ST.equipe, folhas: T.ST.folhas, configs: T.ST.configs, comissoes: T.ST.comissoes };
+  T.ST.equipe = {
+    gestor: [],
+    comercial: [{ nome: 'Vendedor B', perfil: 'vendedor' }],
+    obras: [{ nome: 'Marceneiro A', perfil: 'marceneiro' }, { nome: 'Saiu C', perfil: 'montador' }],
+    outros: [],
+  };
+  T.ST.configs = {
+    'Marceneiro A': { salarioBase: 2500 },
+    'Vendedor B': { salarioBase: 1500 },
+    'Saiu C': { salarioBase: 3000, situacao: 'desligado', dataDemissao: '2099-03-20' },
+  };
+  T.ST.folhas = []; T.ST.comissoes = [];
+  try {
+    const d = T.calcDRE('2099-05'); // maio: A e B ativos; C desligado desde março → fora
+    assertEq(Math.round(d.despPessoalOp * 100) / 100, 4000, 'op auto = 2.500 (A) + 1.500 (B); C desligado não entra');
+    const det = T._drePessoalDetalhe('2099-05');
+    assert(det.op.some(i => i.nome === 'Marceneiro A' && i.auto), 'A aparece no detalhamento como auto');
+    assert(!det.op.some(i => i.nome === 'Saiu C'), 'C (desligado) não aparece em maio');
+    const dFev = T.calcDRE('2099-02'); // antes do corte de março: C ainda conta
+    assertEq(Math.round(dFev.despPessoalOp * 100) / 100, 7000, 'antes da saída, C ainda entra (2.500+1.500+3.000)');
+  } finally { Object.assign(T.ST, bak); }
+});
 test('Análise: _calcDREPeriodo soma fluxos e RECALCULA a margem (nunca soma %)', () => {
   const bak = T.ST.dre;
   T.ST.dre = [

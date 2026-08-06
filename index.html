@@ -15535,11 +15535,18 @@ function calcDRE(mesAno){
     despPessoalOp+=tot-comEff; comEffTotal+=comEff;
   });
   const despPrestadoresFolha=folhasMes.filter(f=>_areasPrestador.includes(infoFunc(f.pessoa).area)).reduce((a,f)=>a+_despFolha(f),0);
-  // Prestadores sem folha no mês: inclui salarioBase cadastrado automaticamente
+  // Colaboradores SEM folha no mês: inclui o salário fixo cadastrado automaticamente (competência),
+  // só para quem está ATIVO no mês (desligado para de contar após a saída). Vale p/ equipe operacional
+  // (gestor/comercial/obras → Pessoal) e prestadores (outros → Prestadores). A comissão, quando houver,
+  // entra por outros caminhos (folha / comissões auto) — aqui é só o fixo.
   const nomesComFolha=new Set(folhasMes.map(f=>f.pessoa));
+  const _salBaseCfg=nome=>(ST.configs&&ST.configs[nome]&&ST.configs[nome].salarioBase)||0;
+  const _semFolhaAtivo=p=>!nomesComFolha.has(p.nome)&&_ativoNoMes(p.nome,mesAno);
+  const despPessoalOpAuto=['gestor','comercial','obras'].flatMap(a=>ST.equipe[a]||[])
+    .filter(_semFolhaAtivo).reduce((a,p)=>a+_salBaseCfg(p.nome),0);
+  despPessoalOp+=despPessoalOpAuto;
   const despPrestadoresAuto=(ST.equipe.outros||[])
-    .filter(p=>!nomesComFolha.has(p.nome))
-    .reduce((a,p)=>a+((ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0),0);
+    .filter(_semFolhaAtivo).reduce((a,p)=>a+_salBaseCfg(p.nome),0);
   const despPrestadores  =despPrestadoresFolha+despPrestadoresAuto;
   const despPessoal      =despPessoalOp+despPrestadores;
 
@@ -15666,10 +15673,12 @@ function _drePessoalDetalhe(mesAno){
     else { const tot=_despFolha(f), comEff=Math.min(_comEmbFolha(f),tot); op.push({nome:f.pessoa, valor:tot-comEff}); }
   });
   const nomesComFolha=new Set(folhasMes.map(f=>f.pessoa));
-  ((ST.equipe&&ST.equipe.outros)||[]).filter(p=>!nomesComFolha.has(p.nome)).forEach(p=>{
-    const sal=(ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0;
-    prest.push({nome:p.nome, valor:sal, auto:true});
-  });
+  const _sal=nome=>(ST.configs&&ST.configs[nome]&&ST.configs[nome].salarioBase)||0;
+  const _semFolhaAtivo=p=>!nomesComFolha.has(p.nome)&&_ativoNoMes(p.nome,mesAno);
+  ['gestor','comercial','obras'].flatMap(a=>ST.equipe[a]||[]).filter(_semFolhaAtivo)
+    .forEach(p=>op.push({nome:p.nome, valor:_sal(p.nome), auto:true}));
+  ((ST.equipe&&ST.equipe.outros)||[]).filter(_semFolhaAtivo)
+    .forEach(p=>prest.push({nome:p.nome, valor:_sal(p.nome), auto:true}));
   return { op:op.filter(i=>i.valor>0.005), prest:prest.filter(i=>i.valor>0.005) };
 }
 // Toggle do drill-down de pessoal no DRE.
