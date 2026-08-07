@@ -8314,7 +8314,7 @@ function _cascataProjeto(p){
   // Imposto s/ venda = alíquota efetiva do Simples × valor ao cliente. É a fatia do DAS daquela
   // venda (o DAS mensal do DRE é a SOMA disso de todas as vendas). Base = valor ao cliente (mesma do DRE).
   const impEfetiva=_efetivaVenda(lead);
-  const imposto=_round2((vendaBruta-desconto)*impEfetiva);
+  const imposto=_round2((vendaBruta-desconto+rt)*impEfetiva); // base = valor ao cliente (aposDesc + RT), igual ao DRE/pedido
   const base={vendaBruta,desconto,taxa,rt,liquido,comVend,custoFab,custoFabBip,custoForn,custoOutros,transporte,medicao,imposto,impEfetiva};
   const monta=(comProj,comMont,comSup)=>{
     // Arredonda cada comissão a centavos (como comVend) — evita drift de fração no lucro/margem vs. as fichas.
@@ -15853,11 +15853,18 @@ function _fluxoAPagarMes(mes, primeiroMes){
   const explicUnpaid=(ST.contasPagar||[]).filter(e=>!e.pago && efMes(e)===mes);
   const ult=new Map(); // ÚLTIMO lançamento por conta (qualquer tipo) — projeta só se o mais recente for 'mensal' (encerra com 'única')
   (ST.contasPagar||[]).filter(e=>e.mesAno<mes).sort((a,b)=>a.mesAno.localeCompare(b.mesAno)).forEach(e=>ult.set(e.cat+'|'+(e.fornecedor||e.descricao||''),e));
-  const ek=new Set(explicAll.map(c=>c.cat+'|'+(c.fornecedor||c.descricao||'')));
+  // A6-05: inclui também as VENCIDAS remapeadas p/ este mês (explicUnpaid) — senão uma conta mensal vencida em aberto
+  // era contada como VENCIDA e projetada de novo como RECORRENTE (dobrava a saída no mês atual).
+  const ek=new Set([...explicAll,...explicUnpaid].map(c=>c.cat+'|'+(c.fornecedor||c.descricao||'')));
   const rec=[...ult.values()].filter(e=>e.recorrencia==='mensal'&&!ek.has(e.cat+'|'+(e.fornecedor||e.descricao||'')));
   return explicUnpaid.reduce((a,e)=>a+(e.valor||0),0)+rec.reduce((a,e)=>a+(e.valor||0),0);
 }
-function _fluxoFolhaMes(){ return todosFunc().filter(p=>!_estaDesligado(p.nome)).reduce((a,p)=>a+((ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0),0); }
+// Salário fixo (salarioBase) dos ativos A PAGAR no mês. Se `mes` informado, exclui quem já tem folha PAGA no mês
+// (esse salário já saiu do caixa) — corte POR PESSOA, alinhado ao Panorama/DRE (antes zerava a folha inteira se 1 folha existisse).
+function _fluxoFolhaMes(mes){
+  const folhaPaga=mes?new Set((ST.folhas||[]).filter(f=>f.mesAno===mes&&f.status==='pago').map(f=>f.pessoa)):new Set();
+  return todosFunc().filter(p=>!_estaDesligado(p.nome)&&!folhaPaga.has(p.nome)).reduce((a,p)=>a+((ST.configs&&ST.configs[p.nome]&&ST.configs[p.nome].salarioBase)||0),0);
+}
 function _fluxoFabricaMes(mes, primeiroMes){
   return (ST.pedidos||[]).reduce((t,p)=>{
     const vf=p.valorFabrica||0;
@@ -15879,18 +15886,16 @@ function _fluxoImpostosMes(mes, ehAtual){
   if(reg&&reg.dasPago) return ehAtual?0:(reg.dasValorPago||0);
   return _tribCalc(comp).dasPrevisto;
 }
-// A6-03: folha já processada no mês (sinal de que o salário já foi pago) — no mês atual não desconta de novo.
-function _folhaProcessadaMes(mes){ return (ST.folhas||[]).some(f=>f.mesAno===mes); }
 function rFinFluxo(){
   const el=document.getElementById('fin-content'); if(!el) return;
   if(!_temPermFC('fin')){ el.innerHTML='<div class="empty"><p>Acesso restrito.</p></div>'; return; }
   const now=new Date(), meses=[];
   for(let i=0;i<_fluxoMeses;i++){ const d=new Date(now.getFullYear(),now.getMonth()+i,1); meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
-  const folha=_fluxoFolhaMes(), saldoIni=ST.fluxoSaldoIni||0, primeiroMes=meses[0];
+  const saldoIni=ST.fluxoSaldoIni||0, primeiroMes=meses[0];
   let acum=saldoIni, pior={mes:meses[0],val:Infinity};
   const linhas=meses.map((mes,i)=>{
-    const ehAtual=(i===0); // A6-03: saldo inicial = "hoje" → no mês atual não desconta folha/DAS já pagos (já refletidos no saldo)
-    const folhaMes=(ehAtual && _folhaProcessadaMes(mes))?0:folha;
+    const ehAtual=(i===0); // A6-03: saldo inicial = "hoje" → no mês atual não desconta DAS já pago (já refletido no saldo)
+    const folhaMes=_fluxoFolhaMes(mes); // corte por pessoa: exclui quem já tem folha paga no mês (antes zerava tudo)
     const ent=_fluxoAReceberMes(mes,primeiroMes), cp=_fluxoAPagarMes(mes,primeiroMes), fab=_fluxoFabricaMes(mes,primeiroMes), imp=_fluxoImpostosMes(mes,ehAtual), sai=cp+folhaMes+fab+imp, saldoMes=ent-sai;
     acum+=saldoMes; if(acum<pior.val) pior={mes,val:acum};
     return {mes,ent,cp,folha:folhaMes,fab,imp,saldoMes,acum};
