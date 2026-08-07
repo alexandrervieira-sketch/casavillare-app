@@ -83,7 +83,7 @@ const EPILOGUE = `;try{ globalThis.__T = {
   _comProjPagoVal, _calcComSupervisor, _comSupPagarExec, comSupEstornar, _comSupPagoVal, _sid,
   _calcComMedicao, _comMedPagarExec, comMedEstornar, _comMedPagoVal, _pedFaltaForn, _parseBRL, _calcComMontador,
   _taxaClienteConds, _calcTaxaCartaoConds,
-  _mesesNoPeriodo, _calcDREPeriodo, _drePessoalDetalhe, _pagaveisMes
+  _mesesNoPeriodo, _calcDREPeriodo, _drePessoalDetalhe, _pagaveisMes, _fabMetaStatus
 }; }catch(e){ globalThis.__T_ERR = String(e && e.stack || e); }`;
 
 try { vm.runInContext(js + EPILOGUE, ctx, { filename: 'index.inline.js' }); }
@@ -177,6 +177,23 @@ test('DRE drill-down: _drePessoalDetalhe soma exatamente o total do DRE (op e pr
     assertEq(Math.round(somaPrest * 100) / 100, Math.round(d.despPrestadores * 100) / 100, 'prestadores fecham com o DRE');
     assert(det.prest.some(i => i.nome === 'Prestador Z' && i.auto), 'Z marcado como salário cadastrado (auto)');
   } finally { Object.assign(T.ST, bak); }
+});
+test('Fábrica: _fabMetaStatus classifica o tier da Casimiro pelo volume', () => {
+  const bak = T.ST.fabrica;
+  T.ST.fabrica = {}; // usa os defaults: 70k=4%, 150k=6%, 200k=8%
+  try {
+    const s0 = T._fabMetaStatus(50000);
+    assertEq(s0.atual, null, 'abaixo de 70k = sem tier');
+    assertEq(s0.prox.desc, 4, 'próximo = bronze 4%');
+    assertEq(s0.falta, 20000, 'faltam 20k pro bronze');
+    const s1 = T._fabMetaStatus(160000);
+    assertEq(s1.atual.desc, 6, 'entre 150k e 200k = prata 6%');
+    assertEq(s1.prox.desc, 8, 'próximo = ouro 8%');
+    assertEq(s1.falta, 40000, 'faltam 40k pro ouro');
+    const s2 = T._fabMetaStatus(250000);
+    assertEq(s2.atual.desc, 8, 'acima de 200k = ouro 8%');
+    assertEq(s2.prox, null, 'sem próximo (topo atingido)');
+  } finally { T.ST.fabrica = bak; }
 });
 test('Central Fase 1: _pagaveisMes junta salários, prestadores, comissões pagas, DAS e contas', () => {
   const bak = { equipe: T.ST.equipe, folhas: T.ST.folhas, configs: T.ST.configs, comPagamentos: T.ST.comPagamentos, contasPagar: T.ST.contasPagar };

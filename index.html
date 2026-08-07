@@ -6554,7 +6554,7 @@ function _termoGarantiaEmail(pedId){
 }
 
 // ── Custos Fábrica ──────────────────────────────────────
-let _chartFabBar=null, _chartFabLine=null;
+let _chartFabBar=null, _chartFabLine=null, _chartFabMeta=null;
 
 function rRelCustosFabrica(tgt){
   const el=document.getElementById(tgt||'rel-content'); // reutilizável (Relatórios e aba Fábrica)
@@ -6610,6 +6610,20 @@ function rRelCustosFabrica(tgt){
   const dadosBarAt=porMes.map(m=>m.totalAt);
   const dadosLine=porMes.map(m=>m.pct);
 
+  // ── Meta da Casimiro: volume de compras por mês + tiers 4/6/8% ──
+  const _fabTiers=_getFabTiers();
+  const metaMeses=meses.map(m=>{ const ma=m.ano+'-'+String(m.mes+1).padStart(2,'0'); return {ma, label:m.label, vol:_totalFabricaMes(ma)}; });
+  const metaLabels=metaMeses.map(m=>m.label);
+  const metaVals=metaMeses.map(m=>m.vol);
+  const _mesAtual=metaMeses[metaMeses.length-1]||{vol:0,label:''};
+  const _metaSt=_fabMetaStatus(_mesAtual.vol);          // tier atual/próximo/falta do MÊS corrente
+  const metaBarColors=metaVals.map(v=>{
+    if(v>=_fabTiers[2].vol) return 'rgba(126,34,206,.80)'; // 🥇 ouro
+    if(v>=_fabTiers[1].vol) return 'rgba(29,78,216,.80)';  // 🥈 prata
+    if(v>=_fabTiers[0].vol) return 'rgba(194,65,12,.80)';  // 🥉 bronze
+    return 'rgba(156,163,175,.55)';                        // sem tier
+  });
+
   // Tabela unificada — custo fábrica + AT (nosso), top 20 por custo
   const subLabels={projetos:'Projetos',medicao:'Medição',supervisao:'Supervisão',montagem:'Montagem'};
   const itensTabela=[
@@ -6637,6 +6651,26 @@ function rRelCustosFabrica(tgt){
 
   el.innerHTML=`
   <div style="padding:16px 0 8px;">
+    <!-- META DA CASIMIRO -->
+    <div style="margin-bottom:22px;">
+      <div style="font-size:14px;font-weight:800;color:var(--dark);margin-bottom:10px;">🎯 Meta da Casimiro — volume de compras por mês</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;max-width:320px;background:${_metaSt.atual?_metaSt.atual.bg:'#F9FAFB'};border:1.5px solid ${_metaSt.atual?_metaSt.atual.brd:'#E5E7EB'};border-radius:12px;padding:16px 18px;">
+          <div style="font-size:11px;color:var(--gl);text-transform:uppercase;letter-spacing:.5px;">${_esc(_mesAtual.label)} · volume Casimiro</div>
+          <div style="font-size:26px;font-weight:800;color:${_metaSt.atual?_metaSt.atual.cor:'#6B7280'};margin:2px 0 8px;">${fmt(_mesAtual.vol)}</div>
+          ${_metaSt.atual
+            ? `<div style="font-size:13px;font-weight:700;color:${_metaSt.atual.cor};">${_metaSt.atual.icon} ${_metaSt.atual.label} — ${_metaSt.atual.desc}% de desconto</div>`
+            : `<div style="font-size:13px;color:#9CA3AF;">Ainda sem tier neste mês</div>`}
+          ${_metaSt.prox
+            ? `<div style="font-size:12px;color:var(--gl);margin-top:6px;">Faltam <strong style="color:${_metaSt.prox.cor};">${fmt(_metaSt.falta)}</strong> pro ${_metaSt.prox.icon} ${_metaSt.prox.label} (${_metaSt.prox.desc}%)</div>`
+            : `<div style="font-size:12px;color:#7E22CE;margin-top:6px;font-weight:700;">🥇 Tier máximo atingido!</div>`}
+        </div>
+        <div style="flex:2;min-width:280px;background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:16px;">
+          <canvas id="chartFabMeta" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px;">
       <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:14px 16px;">
@@ -6764,6 +6798,25 @@ function rRelCustosFabrica(tgt){
   // Renderizar gráficos
   if(_chartFabBar){ _chartFabBar.destroy(); _chartFabBar=null; }
   if(_chartFabLine){ _chartFabLine.destroy(); _chartFabLine=null; }
+  if(_chartFabMeta){ _chartFabMeta.destroy(); _chartFabMeta=null; }
+
+  const ctxMeta=document.getElementById('chartFabMeta');
+  if(ctxMeta){
+    _chartFabMeta=new Chart(ctxMeta,{
+      type:'bar',
+      data:{ labels:metaLabels, datasets:[
+        {label:'Volume Casimiro', data:metaVals, backgroundColor:metaBarColors, borderRadius:4, order:3},
+        {type:'line', label:_fabTiers[0].icon+' '+_fabTiers[0].desc+'%', data:metaVals.map(()=>_fabTiers[0].vol), borderColor:_fabTiers[0].cor, borderWidth:1.5, borderDash:[5,4], pointRadius:0, fill:false, order:1},
+        {type:'line', label:_fabTiers[1].icon+' '+_fabTiers[1].desc+'%', data:metaVals.map(()=>_fabTiers[1].vol), borderColor:_fabTiers[1].cor, borderWidth:1.5, borderDash:[5,4], pointRadius:0, fill:false, order:1},
+        {type:'line', label:_fabTiers[2].icon+' '+_fabTiers[2].desc+'%', data:metaVals.map(()=>_fabTiers[2].vol), borderColor:_fabTiers[2].cor, borderWidth:1.5, borderDash:[5,4], pointRadius:0, fill:false, order:1},
+      ]},
+      options:{
+        responsive:true,
+        plugins:{legend:{display:true,labels:{boxWidth:12,font:{size:10},usePointStyle:true}},tooltip:{callbacks:{label:ctx=>ctx.dataset.type==='line'?` ${ctx.dataset.label}`:` Volume: ${fmt(ctx.raw)}`}}},
+        scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)},grid:{color:'rgba(0,0,0,.05)'}},x:{grid:{display:false}}}
+      }
+    });
+  }
 
   const ctxBar=document.getElementById('chartFabBar');
   if(ctxBar){
@@ -10258,6 +10311,13 @@ function _getFabTiers(){
     {vol:f.metaTier2Vol||150000, desc:f.metaTier2Desc!=null?f.metaTier2Desc:6,  label:'Prata',  icon:'🥈', cor:'#1D4ED8', bg:'#EFF6FF', brd:'#BFDBFE'},
     {vol:f.metaTier3Vol||200000, desc:f.metaTier3Desc!=null?f.metaTier3Desc:8,  label:'Ouro',   icon:'🥇', cor:'#7E22CE', bg:'#FDF4FF', brd:'#E9D5FF'},
   ];
+}
+// Dado um volume de compras, retorna o tier ATINGIDO, o PRÓXIMO e quanto falta (Meta Casimiro).
+function _fabMetaStatus(vol){
+  const tiers=_getFabTiers();
+  let atual=null; tiers.forEach(t=>{ if(vol>=t.vol) atual=t; });
+  const prox=tiers.find(t=>vol<t.vol)||null;
+  return { atual, prox, falta:prox?Math.max(0,prox.vol-vol):0, tiers };
 }
 function cfgSalvarOrcValidade(){
   const v=parseInt(document.getElementById('cfg-orc-validade')?.value)||15;
