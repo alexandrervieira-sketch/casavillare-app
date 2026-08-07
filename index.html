@@ -16257,6 +16257,11 @@ function salvarCP(){
     dataPagamento:pago?document.getElementById('cp-data-pag').value||_hojeLocal():null,
     obs:document.getElementById('cp-obs').value.trim()
   };
+  // Decisão I: o DAS já é automático (Fiscal › Tributário) e entra sozinho no DRE/Fluxo.
+  // Lançar imposto à mão aqui pode contar o DAS EM DOBRO — avisa antes.
+  if(conta.cat==='ded_imposto' && typeof _tribCalc==='function' && (_tribCalc(mesAno).dasPrevisto||0)>0){
+    if(!confirm('⚠️ O DAS deste mês já é calculado automaticamente (Fiscal › Tributário) e entra no DRE e no Fluxo sozinho.\n\nLançar um imposto aqui como conta pode CONTAR O DAS EM DOBRO. Deseja continuar mesmo assim?')) return;
+  }
   if(!ST.contasPagar) ST.contasPagar=[];
   const idx=ST.contasPagar.findIndex(c=>String(c.id)===String(_cpId));
   if(idx>=0) ST.contasPagar[idx]=conta; else ST.contasPagar.push(conta);
@@ -16294,8 +16299,13 @@ function _pagaveisMes(mesStr){
   const contasObj={ previsto:contas.reduce((a,c)=>a+(c.valor||0),0),
                     pago:contas.filter(c=>c.pago).reduce((a,c)=>a+(c.valor||0),0) };
   const totSal=salarios.reduce((a,i)=>a+i.valor,0), totPrest=prestadores.reduce((a,i)=>a+i.valor,0);
-  const totalPrevisto=totSal+totPrest+das.previsto+contasObj.previsto; // comissão não soma aqui (paga na aba Comissões)
-  return { salarios, prestadores, totSal, totPrest, comPagoMes, das, contas:contasObj, totalPrevisto };
+  const totalPrevisto=totSal+totPrest+das.previsto+contasObj.previsto; // obrigação total do mês (comissão não soma — paga na aba Comissões)
+  // Decisão H: "falta pagar" = só o que ainda NÃO saiu (exclui folha paga, DAS pago e contas pagas).
+  const totalAPagar = salarios.filter(s=>!s.pago).reduce((a,i)=>a+i.valor,0)
+                    + prestadores.filter(s=>!s.pago).reduce((a,i)=>a+i.valor,0)
+                    + (das.pago?0:das.previsto)
+                    + Math.max(0, contasObj.previsto - contasObj.pago);
+  return { salarios, prestadores, totSal, totPrest, comPagoMes, das, contas:contasObj, totalPrevisto, totalAPagar };
 }
 function rFinCP(){
   if(!_temPermFC('fin')){document.getElementById('fin-content').innerHTML='<div class="empty"><p>Acesso restrito.</p></div>';return;}
@@ -16372,7 +16382,7 @@ function rFinCP(){
   const panoramaHtml=`<div class="dre-card" style="padding:0;overflow:hidden;margin-bottom:16px;border:1.5px solid #C8A97A;">
     <div style="padding:13px 16px;background:rgba(200,169,122,.12);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <span style="font-weight:800;font-size:13px;color:#8A6D3B;">📋 Panorama de pagamentos — ${mesNomeStr(_cpMes,_cpAno)}</span>
-      <span style="font-size:12px;color:var(--gl);">Total previsto: <strong style="color:#B45309;font-size:14px;">${fmtL(pv.totalPrevisto)}</strong></span>
+      <span style="font-size:12px;color:var(--gl);">Falta pagar: <strong style="color:#B45309;font-size:14px;">${fmtL(pv.totalAPagar)}</strong> <span style="font-weight:400;font-size:11px;">de ${fmtL(pv.totalPrevisto)}</span></span>
     </div>
     ${_panGrupo('pansal','👥 Salários — equipe operacional',pv.salarios,pv.totSal)}
     ${_panGrupo('panprest','🤝 Prestadores de serviço',pv.prestadores,pv.totPrest)}

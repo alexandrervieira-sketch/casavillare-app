@@ -211,6 +211,8 @@ test('Central Fase 1: _pagaveisMes junta salários, prestadores, comissões paga
     assertEq(Math.round(pv.comPagoMes * 100) / 100, 800, 'comissões pagas em julho = 800 (junho fora)');
     assertEq(Math.round(pv.contas.previsto * 100) / 100, 4000, 'contas previsto = 4000');
     assertEq(Math.round(pv.totalPrevisto * 100) / 100, Math.round((4000 + 3000 + 4000 + pv.das.previsto) * 100) / 100, 'total = salários+prest+contas+DAS (comissão não soma)');
+    // Decisão H: "falta pagar" exclui Marc A (folha paga) → só Vend B 1500 + Prest Y 3000 + conta 4000 + DAS
+    assertEq(Math.round(pv.totalAPagar * 100) / 100, Math.round((1500 + 3000 + 4000 + (pv.das.pago ? 0 : pv.das.previsto)) * 100) / 100, 'falta pagar exclui o salário já pago via folha');
   } finally { Object.assign(T.ST, bak); }
 });
 test('DRE: salário fixo da equipe operacional entra automático (ativo) e para no desligamento', () => {
